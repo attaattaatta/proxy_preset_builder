@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # fixing paths
 export PATH=$PATH:/usr/sbin:/usr/sbin:/usr/local/sbin
@@ -45,7 +45,7 @@ NGINX_SSL_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts-ssl.template"
 PROXY_PREFIX="proxy_to_"
 
 # show script version
-self_current_version="1.0"
+self_current_version="1.0.1"
 printf "\n${YCV}Hello, my version is $self_current_version${NCV}\n"
 
 # check panel version and release name
@@ -58,7 +58,7 @@ panel_release_name=$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w
 
 if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]
 then
-	printf "\n${LRV}Cannot get ISP Manager panel version or release name.\nPlease check "$MGRCTL license.info" command${NCV}"
+	printf "\n${LRV}Cannot get ISP Manager panel version or release name.\nPlease check \"$MGRCTL license.info\" command${NCV}"
 	exit 1
 fi
 
@@ -220,11 +220,11 @@ then
 	else
 		printf "\n${GCV}There is no existing presets in the ISP panel${NCV}\n"
 	fi
-	printf "\n${GCV}Example for 1 preset:${NCV} .$BASH_SOURCE add wordpress_fpm OR .$BASH_SOURCE add 127.0.0.1:8088\n"
-	printf "${GCV}Example for 5 presets:${NCV} .$BASH_SOURCE add bitrix_fpm wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
-	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} .$BASH_SOURCE del all_$PROXY_PREFIX"
-	printf "\n${GCV}Delete one existing preset and inject:${NCV} .$BASH_SOURCE del proxy_to_bitrix_fpm"
-	printf "\n${GCV}Restore default templates and delete all presets:${NCV} .$BASH_SOURCE reset\n"
+	printf "\n${GCV}Example for 1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
+	printf "${GCV}Example for 5 presets:${NCV} $BASH_SOURCE add bitrix_fpm wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
+	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} $BASH_SOURCE del all_$PROXY_PREFIX"
+	printf "\n${GCV}Delete one existing preset and inject:${NCV} $BASH_SOURCE del proxy_to_bitrix_fpm"
+	printf "\n${GCV}Restore default templates and delete all presets:${NCV} $BASH_SOURCE reset\n"
 	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm (soon bitrix_fpm, opencart_fpm, magento_fpm, passenger_ruby)\n"
 	printf "\n\n${LRV}ERROR - Not enough arguments, please specify proxy target/targets${NCV}\n"
 	exit 1
@@ -233,7 +233,7 @@ fi
 # check $NGINX_TEMPLATE and $NGINX_SSL_TEMPLATE exists, copy. If not, error on no default template files exist
 if [[ ! -f "$NGINX_TEMPLATE" ]]
 then
-	if [ ! -f "$NGINX_DEFAULT_TEMPLATE" ]
+	if [[ ! -f "$NGINX_DEFAULT_TEMPLATE" ]]
 	then
 		printf "\n${LRV}No NGINX default template exists in $MGR_PATH/etc/templates/default/.\nExiting.${NCV}\n"
 		exit 1
@@ -512,8 +512,8 @@ XEOF
 						exit 1
 					fi
 				else
-					#backward_comapbility test succeeded
-					printf "\n${GCV}Backward comapbility test succeed ${NCV}\n"
+					#backward_compatibility test succeeded
+					printf "\n${GCV}Backward compatibility test succeed ${NCV}\n"
 					# $NGINX_TEMPLATE
 					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE"
 					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
