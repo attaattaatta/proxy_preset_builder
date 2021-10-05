@@ -112,6 +112,57 @@ fastcgi_pass_format_func() {
 seo_fix_ssl_port_func() {
 	sed -i -E 's@(.*return 301 https:\/\/\$host)\:\{\% \$SSL_PORT \%\}(\$request_uri;)@\1\2@gi' $NGINX_TEMPLATE
 }
+
+# backward compatibility injection and check
+backward_copmat_func() {
+
+# NGINX_TEMPLATE injection 
+perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE" 
+perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
+perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_TEMPLATE"
+perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_TEMPLATE"		
+# NGINX_SSL_TEMPLATE injection
+perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE" 
+perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
+perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_SSL_TEMPLATE"
+perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_SSL_TEMPLATE"
+
+# check for success backward comaptibility injection, restore from backup and exit
+EXIT_STATUS=0
+trap 'EXIT_STATUS=1' ERR
+
+grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
+grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
+grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+
+grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
+grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
+grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+
+if test $EXIT_STATUS != 0
+then
+	printf "${LRV}Test of backward compatibility has failed.\nCheck script's perl injections.\nor (default) nginx template edits\n\nRemoving preset $PROXY_PREFIX$proxy_target\nRestoring last backup and exiting.${NCV}\n"
+	rm -f "$NGINX_TEMPLATE" "$NGINX_SSL_TEMPLATE"
+	$MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target
+	printf "\n${GCV}$PROXY_PREFIX$proxy_target - was removed successfuly ${NCV}\n"
+	
+	if [[ -f "$NGINX_TEMPLATE_BACKUP" ]] || [[ -f "$NGINX_SSL_TEMPLATE_BACKUP" ]]
+	then
+		cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+		cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+		exit 1
+	else 
+		printf "\n${LRV}$current_ispmgr_backup_directory/nginx-vhosts.template\n$current_ispmgr_backup_directory/nginx-vhosts-ssl.template\nNot exists."
+		exit 1
+	fi
+fi
+}
   
 # removing presets if defined
 if [[ $1 = "del" ]]
@@ -221,11 +272,11 @@ then
 		printf "\n${GCV}There is no existing presets in the ISP panel${NCV}\n"
 	fi
 	printf "\n${GCV}Example for 1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
-	printf "${GCV}Example for 5 presets:${NCV} $BASH_SOURCE add bitrix_fpm wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
+	printf "${GCV}Example for 5 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
 	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} $BASH_SOURCE del all_$PROXY_PREFIX"
-	printf "\n${GCV}Delete one existing preset and inject:${NCV} $BASH_SOURCE del proxy_to_bitrix_fpm"
+	printf "\n${GCV}Delete one existing preset and inject:${NCV} $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
 	printf "\n${GCV}Restore default templates and delete all presets:${NCV} $BASH_SOURCE reset\n"
-	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm (soon bitrix_fpm, opencart_fpm, magento_fpm, passenger_ruby)\n"
+	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm (soon bitrix_fpm, opencart_fpm, magento_fpm, passenger_ruby, gitlab_fpm)\n"
 	printf "\n\n${LRV}ERROR - Not enough arguments, please specify proxy target/targets${NCV}\n"
 	exit 1
 fi
@@ -298,10 +349,17 @@ do
 	
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF="s,(\{#\\} php_off_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE),\$1\n\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_IF_PHPOFF_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target %\}\n\tlocation / \{\n\{% if \\\$PHP == off %\}\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@backend;\n\{% endif %\}\n\\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\tlocation ~ \[^/\]\\\.ph\(p\\\d*|tml\)\\\$ \{\n\t\t\ttry_files /does_not_exists \@php;\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation ~ \[^/\]\\\\.ph\(p\\\\d*|tml\)\\\$ \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\{% if \\\$PHP == on %\}\n\t\tlocation ~* ^.+\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\{% endif %\}\n\t\t\}\n{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation / \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\\{% endif %\}\n\{% if \\\$ANALYZER != off and \\\$ANALYZER !=  %\}\n\t\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\t\tcharset \[% \\\$WEBSTAT_ENCODING %\];\n\t\t\tindex index.html;\n\t\t\tlocation ~ \[^/\].ph\(pd*|tml\)\\\$ \{\n\t\t\t\ttry_files \\\$uri \\\$uri/ \@backend;\n\t\t\t\}\n\t\t\}\n\{% endif %\}\n\t\}\n\{% if \\\$PHP == off %\}\n\tlocation \@backend \{\n\t\tproxy_pass http://$proxy_target;\n\t\tproxy_redirect http://$proxy_target /;\n\t\tproxy_set_header Host \\\$host;\n\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\tproxy_set_header X-Forwarded-Proto \\\$scheme;\n\t\tproxy_set_header X-Forwarded-Port \\\$server_port;\n\t}\n\{% endif %\}\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_IF_PHPOFF_STOP_DO_NOT_REMOVE\n,gi"
 
+	SPECIAL_INJECTIONS_VAR="\{% if THIS_BLOCK_FOR_REMOVE_EXPIRES %\}\n\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n"
+
 	# wordpress_fpm nginx templates injections variables
-	WORDPRESS_FPM_NGINX_PERL_INJECTION="s,(\tlocation / \{\n\{% if \\\$PHP == on %\}\n)\t\t,\$1\\{#\\}WORDPRESS_FPM_NGINX_PERL_INJECTION_START\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\{% if \\\$PRESET == proxy_to_wordpress_fpm %\}\n\t\ttry_files \\\$uri \\\$uri/ /index.php?\\\$args;\n\{% endif %\}\n{% endif %}\n\\{#\\}#WORDPRESS_FPM_NGINX_PERL_INJECTION_STOP\n\t\t,gi"
+	WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS="s,($SPECIAL_INJECTIONS_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == proxy_to_wordpress_fpm %\}\n\tlocation / \{\n\{% if \\\$PHP == on %\}\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\ttry_files \\\$uri \\\$uri/ /index.php?\\\$args;\n\{% endif %\}\n\t\tlocation ~ \[^/\]\\\\.ph(p\d*|tml)\\\$ \{\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\t\tlocation ~* ^.+\\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\{% endif %\}\n\t\t\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation / {\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% if \\\$ANALYZER != off and \\\$ANALYZER != "" %\}\n\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\tcharset \[% $WEBSTAT_ENCODING %\];\n\t\tindex index.html;\n\{% if \\\$PHP == on %\}\n\t\tlocation ~ \[^/\]\\\\.ph\(p\d*|tml\)\\\$ {\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation ~* ^.+\\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\t\t\}\n\t\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% endif %\}\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n\n\t\t,gi"
 	
-	WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION="s,(\tlocation / \{\n\{% if \\\$PHP == on %\}\n)\t\t,\$1\\{#\\}#WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_START\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\{% if \\\$PRESET == proxy_to_wordpress_fpm %\}\n\t\ttry_files \\\$uri \\\$uri/ /index.php?\\\$args;\n\{% endif %\}\n\{% endif %\}\n\\{#\\}#WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_STOP\n\t\t,gi"
+	WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS="$WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS"
+	
+	WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_APACHE == on %\}\n\t\tproxy_pass \\{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_STOP_DO_NOT_REMOVE\n,gi"
+	
+	WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
+	
 
 	# bitrix_fpm nginx templates injections variables
 	BITRIX_PROXY_NGINX_HTTP_CONTEXT="/etc/nginx/conf.d/proxy_to_bitrix_fpm_http_context.conf"
@@ -315,19 +373,30 @@ do
 			#if wordpress_fpm in preset name create special template
 			if [[ $proxy_target = "wordpress_fpm" ]]
 			then
+				# create & check comaptibility
+				backward_copmat_func
+				
 				# wordpress_fpm nginx-vhosts.template
 				printf "\n${YCV}Injecting SPECIAL $PROXY_PREFIX$proxy_target template in $NGINX_TEMPLATE ${NCV}\n"
-				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION" "$NGINX_TEMPLATE"
+				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS" "$NGINX_TEMPLATE"
+				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND" "$NGINX_TEMPLATE"
+				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_TEMPLATE"
 				
 				# wordpress_fpm nginx-vhosts-ssl.template
 				printf "\n${YCV}Injecting SPECIAL $PROXY_PREFIX$proxy_target template in $NGINX_SSL_TEMPLATE ${NCV}\n"
-				perl -i -p0e "$WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_SSL_TEMPLATE"
 				
 				continue
 				
 			#if bitrix_fpm in preset name create special template
 			elif [[ $proxy_target = "bitrix_fpm" ]]
 			then
+			
+				# create & check comaptibility
+				backward_copmat_func
+				
 				# bitrix_fpm nginx map include
 				printf "\n${YCV}Writing bitrix nginx maps in $BITRIX_PROXY_NGINX_HTTP_CONTEXT ${NCV}\n"
 				cat <<XEOF > $BITRIX_PROXY_NGINX_HTTP_CONTEXT
@@ -465,66 +534,21 @@ XEOF
 			else
 				#no special injections comes here
 				printf "\n${GCV}Injecting $PROXY_PREFIX$proxy_target ${NCV}\n"
-				# NGINX_TEMPLATE
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE" 
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_TEMPLATE"
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_TEMPLATE"		
-				# NGINX_SSL_TEMPLATE
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE" 
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_SSL_TEMPLATE"
-				perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_SSL_TEMPLATE"	
 				
+				# create & check comaptibility
+				backward_copmat_func
+				printf "\n${GCV}Backward compatibility test succeed ${NCV}\n"
 				
-				# check for success backward comaptibility injection, restore from backup and exit
-				EXIT_STATUS=0
-				trap 'EXIT_STATUS=1' ERR
+				# $NGINX_TEMPLATE injection
+				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE"
+				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
+				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF" "$NGINX_TEMPLATE"
 				
-				grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
-				grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
-				grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-				grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-				grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-				grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-				
-				grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
-				grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
-				grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-				grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-				grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-				grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-				
-				if test $EXIT_STATUS != 0
-				then
-					printf "${LRV}Test of backward compatibility has failed.\nCheck script's perl injections.\nor (default) nginx template edits\n\nRemoving preset $PROXY_PREFIX$proxy_target\nRestoring last backup and exiting.${NCV}\n"
-					rm -f "$NGINX_TEMPLATE" "$NGINX_SSL_TEMPLATE"
-					$MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target
-					printf "\n${GCV}$PROXY_PREFIX$proxy_target - was removed successfuly ${NCV}\n"
-					
-					if [[ -f "$NGINX_TEMPLATE_BACKUP" ]] || [[ -f "$NGINX_SSL_TEMPLATE_BACKUP" ]]
-					then
-						cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-						cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-						exit 1
-					else 
-						printf "\n${LRV}$current_ispmgr_backup_directory/nginx-vhosts.template\n$current_ispmgr_backup_directory/nginx-vhosts-ssl.template\nNot exists."
-						exit 1
-					fi
-				else
-					#backward_compatibility test succeeded
-					printf "\n${GCV}Backward compatibility test succeed ${NCV}\n"
-					# $NGINX_TEMPLATE
-					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE"
-					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
-					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF" "$NGINX_TEMPLATE"
-					
-					# $NGINX_SSL_TEMPLATE
-					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE"
-					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
-					perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF" "$NGINX_SSL_TEMPLATE"
-					printf "${GCV}Successfuly injected - $PROXY_PREFIX$proxy_target ${NCV}\n"
-				fi	
+				# $NGINX_SSL_TEMPLATE injection
+				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF" "$NGINX_SSL_TEMPLATE"
+				printf "${GCV}Successfuly injected - $PROXY_PREFIX$proxy_target ${NCV}\n"
 			fi
 	else
 		printf "\n${LRV}Error on adding preset - $PROXY_PREFIX$proxy_target${NCV}\n"
