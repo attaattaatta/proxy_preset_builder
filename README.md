@@ -59,7 +59,7 @@ bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) a
 ```
 Настройка проксирования на 1.1.1.1:80 + проксирования на 127.0.0.1:8088
 ```
-bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add 127.0.0.1:5000 127.0.0.1:8088
+bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add 1.1.1.1:80 127.0.0.1:8088
 ```
 Добавление шаблона для bitrix
 ```
