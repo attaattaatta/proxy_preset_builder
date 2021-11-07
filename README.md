@@ -25,7 +25,7 @@ bash proxy_preset_builder.sh
 
 ## Пример запуска без параметров:
 ```
-# bash /tmp/proxy_preset_builder.sh
+bash /tmp/proxy_preset_builder.sh
 
 Hello, my version is 1.0.2
 
@@ -52,4 +52,20 @@ Current specials list: wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm
 
 ERROR - Not enough arguments, please specify proxy target/targets
 ```
-
+## Пример использования:
+Настройка проксирования на 127.0.0.1:5000
+```
+bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add 127.0.0.1:5000
+```
+Настройка проксирования на 1.1.1.1:80 + проксирования на 127.0.0.1:8088
+```
+bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add 127.0.0.1:5000 127.0.0.1:8088
+```
+Добавление шаблона для bitrix
+```
+bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add bitrix_fpm
+```
+Сброс всех добавленных шаблонов и инъекций и добавление следом проксирования на 127.0.0.1:9000
+```
+echo y | bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) reset && bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add 127.0.0.1:9000
+```
