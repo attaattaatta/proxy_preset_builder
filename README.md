@@ -4,6 +4,7 @@
 2. Добавление уже предустановленных (в скрипте) шаблонов wordpress, bitrix, opencart (в оновном для связки nginx + php-fpm, но также оставлена совместимость с другими связками)
 3. Резервное копирование /etc и текущих шаблонов с автоматическим восстановлением если вдруг что-то пошло не так
 4. Оптимизация основных параметров для всех установленных версий PHP и MySQL средствами API панели после установки спец. шаблонов (wordpress, bitrix и др.). Список изменяемых параметров выводится при работе скрипта.
+5. Сброс всех шаблонов панели (возврат на настройки по умолчанию для панели управления)
 
 ## Запуск:
 1. Напрямую из репозитория:
@@ -40,7 +41,7 @@ proxy_to_opencart_fpm
 ---------------
 
 Example for 1 preset: /tmp/proxy_preset_builder.sh add wordpress_fpm OR /tmp/proxy_preset_builder.sh add 127.0.0.1:8088
-Example for 5 presets: /tmp/proxy_preset_builder.sh add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket
+Example for 4 presets: /tmp/proxy_preset_builder.sh add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket
 
 Delete all existing %proxy_to_*% presets and injects: /tmp/proxy_preset_builder.sh del all proxy_to_
 Delete one existing preset and inject: /tmp/proxy_preset_builder.sh del proxy_to_wordpress_fpm OR /tmp/proxy_preset_builder.sh del proxy_to_127.0.0.1:8000
