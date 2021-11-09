@@ -24,20 +24,14 @@ server {
     error_page 504 /504.html;
 
     # Custom pages for BitrixEnv errors
-    location ^~ /500.html    { root /etc/nginx/vhosts-includes/bitrix; }
-    location ^~ /502.html    { root /etc/nginx/vhosts-includes/bitrix; }
-    location ^~ /503.html    { root /etc/nginx/vhosts-includes/bitrix; }
-    location ^~ /504.html    { root /etc/nginx/vhosts-includes/bitrix; }
-    location ^~ /403.html    { root /etc/nginx/vhosts-includes/bitrix; }
-    location ^~ /404.html    { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /500.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /502.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /503.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /504.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /403.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /404.html { root /etc/nginx/vhosts-includes/bitrix; }
 
     #### bx/conf/im_subscriber.conf
-    # Location for long-polling connections
-    location ^~ /bitrix/sub {
-        # we don't use callback and drop it (XSS)
-        if ( $arg_callback ) {
-            return 400;
-        }
 
         push_stream_subscriber long-polling;
         push_stream_allowed_origins "*";
@@ -60,5 +54,87 @@ server {
         push_stream_message_template '#!NGINXNMS!#{"id":~id~,"channel":"~channel~","tag":"~tag~","time":"~time~","eventid":"~event-id~","text":~text~}#!NGINXNME!#';
     }
 
-    location  / { deny all; }
+	location  / { 
+		#### bx/conf/im_subscriber.conf
+		# Location for long-polling connections
+		location ^~ /bitrix/sub {
+			# we don't use callback and drop it (XSS)
+			if ( $arg_callback ) {
+				return 400;
+			}
+		}
+		deny all;
+	}
+}
+
+# SSL enabled server for reading personal channels
+server {
+    listen 8894 ssl;
+    server_name _;
+    error_page 497 https://$host$request_uri;
+    keepalive_timeout 70;
+    keepalive_requests 150;
+
+    #### bx/conf/errors.conf
+    #proxy_intercept_errors on;
+    # Set error handlers
+    error_page 403 /403.html;
+    error_page 404 = @fallback;
+    error_page 500 /500.html;
+    error_page 502 /502.html;
+    error_page 503 /503.html;
+    error_page 504 /504.html;
+
+    # Custom pages for BitrixEnv errors
+    location ^~ /500.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /502.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /503.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /504.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /403.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /404.html { root /etc/nginx/vhosts-includes/bitrix; }
+	location  / { 
+		#### bx/conf/im_subscriber.conf
+		# Location for long-polling connections
+		location ^~ /bitrix/sub {
+			# we don't use callback and drop it (XSS)
+			if ( $arg_callback ) {
+				return 400;
+			}
+		}
+		deny all;
+	}
+}
+
+# Server to push messages to user channels
+server {
+    listen 127.0.0.1:8895;
+    server_name _;
+
+    location ^~ /bitrix/pub/ {
+        push_stream_publisher admin;
+        push_stream_channels_path $arg_CHANNEL_ID;
+        push_stream_store_messages on;
+        allow 127.0.0.0/8;
+        deny all;
+    }
+
+    location / { deny all; }
+
+    #### bx/conf/errors.conf
+    #proxy_intercept_errors on;
+    # Set error handlers
+    error_page 403 /403.html;
+    error_page 404 /404.html;
+    error_page 500 /500.html;
+    error_page 502 /502.html;
+    error_page 503 /503.html;
+    error_page 504 /504.html;
+
+    # Custom pages for BitrixEnv errors
+    location ^~ /500.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /502.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /503.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /504.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /403.html { root /etc/nginx/vhosts-includes/bitrix; }
+    location ^~ /404.html { root /etc/nginx/vhosts-includes/bitrix; }
 }
