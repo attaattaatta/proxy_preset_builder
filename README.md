@@ -41,12 +41,14 @@ proxy_to_bitrix_fpm
 proxy_to_opencart_fpm
 ---------------
 
-Example for 1 preset: /tmp/proxy_preset_builder.sh add wordpress_fpm OR /tmp/proxy_preset_builder.sh add 127.0.0.1:8088
-Example for 4 presets: /tmp/proxy_preset_builder.sh add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket
+Example for 1 preset: /tmp/111 add wordpress_fpm OR /tmp/111 add 127.0.0.1:8088
+Example for 4 presets: /tmp/111 add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket
 
-Delete all existing %proxy_to_*% presets and injects: /tmp/proxy_preset_builder.sh del all proxy_to_
-Delete one existing preset and inject: /tmp/proxy_preset_builder.sh del proxy_to_wordpress_fpm OR /tmp/proxy_preset_builder.sh del proxy_to_127.0.0.1:8000
-Restore default templates and delete all presets: /tmp/proxy_preset_builder.sh reset
+Delete all existing %proxy_to_*% presets and injects: /tmp/111 del all proxy_to_
+Delete one existing preset and inject: /tmp/111 del proxy_to_wordpress_fpm OR /tmp/111 del proxy_to_127.0.0.1:8000
+Restore default templates and delete all presets: /tmp/111 reset
+
+Tweak some PHP and MySQL options: /tmp/111 tweak
 
 Current specials list: wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)
 
