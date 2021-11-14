@@ -87,8 +87,9 @@ then
         printf " - ${LRV}FAIL${NCV}";
 	EXIT_STATUS=1
         check_exit_code
+else
+	printf " - ${GCV}OK${NCV}\n"
 fi
-printf " - ${GCV}OK${NCV}\n"
 }
 
 # nginx conf sanity check function
