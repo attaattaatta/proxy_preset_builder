@@ -318,21 +318,24 @@ else
 					printf "\nRunning"
 					EXIT_STATUS=0
 					trap 'EXIT_STATUS=1' ERR
-					$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=180 memory_limit=256  post_max_size=256 upload_max_filesize=256 sok=ok  &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok &> /dev/null
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=imagick elname=imagick sok=ok &> /dev/null
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok &> /dev/null
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcache elname=memcache sok=ok &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok &> /dev/null
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok &> /dev/null
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=xsl sok=ok &> /dev/null
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=xsl sok=ok &> /dev/null
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok &> /dev/null
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=15000 cgi_value=15000 fpm_value=15000 sok=ok &> /dev/null
+					{
+					$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=180 memory_limit=256  post_max_size=256 upload_max_filesize=256 sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=imagick elname=imagick sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcache elname=memcache sok=ok 
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=xsl sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=xsl sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=15000 cgi_value=15000 fpm_value=15000 sok=ok
+					} &> /dev/null
+					
 					# todo
 					#check_exit_and_restore_func
 					printf " - ${GCV}DONE${NCV}\n"
@@ -375,11 +378,13 @@ else
 					printf "\nRunning"
 					EXIT_STATUS=0
 					trap 'EXIT_STATUS=1' ERR
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok &> /dev/null
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok &> /dev/null
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok &> /dev/null
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 str_value=2 sok=ok &> /dev/null
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok &> /dev/null
+					{
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 str_value=2 sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
+					} &> /dev/null
 					#todo
 					#check_exit_and_restore_func
 					printf " - ${GCV}DONE${NCV}\n"
@@ -624,20 +629,6 @@ then
 	fi
 fi
 
-# run tweak function
-if [[ $1 = "tweak" ]]
-then
-	ispmanager_tweak_php_and_mysql_settings_func
-	exit 0
-fi
-
-# run recompile nginx function
-if [[ $1 = "recompile" ]]
-then
-	recompile_nginx_func
-	exit 0
-fi
-
 # delete all presets and injects and restore defaults
 if [[ $1 = "reset" ]]
 then
@@ -769,10 +760,46 @@ fi
 # fpm
 }
 
+# recompile nginx function
+recompile_nginx_func() {
+
+# check gits
+git_check
+
+# download recompilation script
+if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
+then
+	# execute recompilation script
+	bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" 
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+	exit 0
+else
+	printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+	EXIT_STATUS=1
+	exit 1
+fi
+}
+
 # run set up web servers set status pages function
 if [[ $1 = "setstatus" ]]
 then
 	set_status_pages
+	exit 0
+fi
+
+
+# run tweak function
+if [[ $1 = "tweak" ]]
+then
+	ispmanager_tweak_php_and_mysql_settings_func
+	exit 0
+fi
+
+# run recompile nginx function
+if [[ $1 = "recompile" ]]
+then
+	recompile_nginx_func
 	exit 0
 fi
 
@@ -795,7 +822,8 @@ then
 	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} $BASH_SOURCE del all $PROXY_PREFIX"
 	printf "\n${GCV}Delete one existing preset and inject:${NCV} $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
 	printf "\n${GCV}Restore default templates and delete all presets:${NCV} $BASH_SOURCE reset\n"
-	printf "\n${GCV}Tweak some PHP and MySQL options:${NCV} $BASH_SOURCE tweak\n"
+	printf "\n${GCV}Tweak some PHP and MySQL options:${NCV} $BASH_SOURCE tweak"
+	printf "\n${GCV}Recompile nginx (add/remove modules | update/change SSL):${NCV} $BASH_SOURCE recompile\n"
 	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)\n"
 	printf "\n\n${LRV}ERROR - Not enough arguments, please specify proxy target/targets${NCV}\n"
 	exit 1
@@ -1003,7 +1031,7 @@ do
 						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf.disabled"
 					else
 						# recompilation of nginx was selected
-						printf "\n${GCV}You have chosen to recompile nginx with modules needed\nDo not forget manually uncomment the more_clear_input_headers directives in bitrix nginx configuration if recompilation succeed like so:\nsed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_TEMPLATE && sed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_SSL_TEMPLATE${NCV}"
+						printf "\n${GCV}You have chosen to recompile nginx with modules needed\nDo not forget manually uncomment the more_clear_input_headers directives in bitrix nginx configuration if recompilation succeed like this:\nsed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_TEMPLATE && sed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_SSL_TEMPLATE${NCV}"
 						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf"
 						EXIT_STATUS=0
 						trap 'EXIT_STATUS=1' ERR

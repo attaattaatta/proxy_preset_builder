@@ -50,6 +50,7 @@ Delete one existing preset and inject: /tmp/111 del proxy_to_wordpress_fpm OR /t
 Restore default templates and delete all presets: /tmp/111 reset
 
 Tweak some PHP and MySQL options: /tmp/111 tweak
+Recompile nginx (add/remove modules | update/change SSL): /tmp/111 recompile
 
 Current specials list: wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)
 
