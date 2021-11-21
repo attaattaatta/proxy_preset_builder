@@ -1,4 +1,8 @@
-#!/usr/bin/bash
+#!/bin/bash
+# enable debug
+#set -x -v
+#set -e -o verbose
+#pipefail | verbose
 
 # fixing paths
 export PATH=$PATH:/usr/sbin:/usr/sbin:/usr/local/sbin
@@ -9,21 +13,25 @@ LRV="\033[1;91m"
 YCV="\033[01;33m"
 NCV="\033[0m"
 
+# show script version
+self_current_version="1.0.2"
+printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
+
 # check privileges
 if [[ $EUID -ne 0 ]]
 then
-	printf "\n${LRV}This script must be run as root.${NCV}" 
+	printf "\n${LRV}ERROR - This script must be run as root.${NCV}" 
 	exit 1
 fi
 
 #check tools
-WE_NEED=('/usr/local/mgr5/sbin/mgrctl' 'nginx' 'sed' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test')
+WE_NEED=('/usr/local/mgr5/sbin/mgrctl' 'nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir')
 
 for needitem in "${WE_NEED[@]}"
 do
 	if ! command -v $needitem &> /dev/null
 	then 
-		printf "\n${LRV}$needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
+		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
 	exit 1
 	fi
 done
@@ -33,32 +41,67 @@ MGR_PATH="/usr/local/mgr5"
 MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
 
 # allowed script actions
-ALLOWED_ACTIONS="(^add$|^del$|^reset$)"
+ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
 
 # paths to ISP manager nginx templates
 NGINX_DEFAULT_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts.template"
 NGINX_DEFAULT_SSL_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts-ssl.template"
 NGINX_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts.template"
 NGINX_SSL_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts-ssl.template"
+NGINX_MAIN_CONF_FILE="/etc/nginx/nginx.conf"
+NGX_RECOMPILE_SCRIPT_NAME="recompile_nginx.sh"
+
+# global randrom number
+RANDOM_N=$RANDOM
 
 # proxy prefix may be changed here
 PROXY_PREFIX="proxy_to_"
 
-# show script version
-self_current_version="1.0.1"
-printf "\n${YCV}Hello, my version is $self_current_version${NCV}\n"
+# GIT repo 
+SCRIPT_GIT_REPO="https://github.com/attaattaatta/proxy_preset_builder"
+SCRIPT_GIT_BACKUP_REPO="https://gitlab.hoztnode.net/admins/scripts"
+
+# GIT script raw path to proxy_preset_builder.sh folder
+SCRIPT_GIT_PATH="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/master"
+SCRIPT_GIT_BACKUP_PATH="https://gitlab.hoztnode.net/admins/scripts/-/raw/master"
+
+# extract domain names of GIT urls
+GIT_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
+GIT_BACKUP_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
+
+# extract request uri of GIT urls
+GIT_REQ_URI="${SCRIPT_GIT_PATH#https://*/}"
+GIT_BACKUP_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
+
+# show script version and check gits
+self_current_version="1.0.2"
+script_git_name="proxy_preset_builder.sh"
+git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
+git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
+
+if [[ $git_version ]] && [[ $self_current_version < $git_version ]]
+then
+	printf "\nVersion ${YCV}$git_version${NCV} at $SCRIPT_GIT_PATH/$script_git_name \n"
+	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
+fi
+
+if [[ $git_backup_version ]] && [[ $self_current_version < $git_backup_version ]]
+then
+	printf "\nVersion ${YCV}$git_backup_version${NCV} at $SCRIPT_GIT_BACKUP_PATH/$script_git_name\n"
+	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_BACKUP_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_BACKUP_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
+fi
 
 # check panel version and release name
 printf "\n${GCV}ISP Manager version checking${NCV}\n"
 
-panel_required_version="6.24.0"
+panel_required_version="6.26.0"
 
-panel_current_version=$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+')
-panel_release_name=$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')
+panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+')"
+panel_release_name="$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
 
 if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]
 then
-	printf "\n${LRV}Cannot get ISP Manager panel version or release name.\nPlease check \"$MGRCTL license.info\" command${NCV}"
+	printf "\n${LRV}ERROR - Cannot get ISP Manager panel version or release name.\nPlease check \"$MGRCTL license.info\" command${NCV}\n"
 	exit 1
 fi
 
@@ -66,18 +109,18 @@ fi
 shopt -s nocasematch
 if [[ $panel_release_name =~ .*busines.* ]]
 then 
-	printf "\n${LRV}ISP Manager Business detected. Not yet supported.${NCV}"
+	printf "\n${LRV}ISP Manager Business detected. Not yet supported.${NCV}\n"
 	shopt -u nocasematch
 	exit 1
 else
 	if [[ $panel_current_version < $panel_required_version ]]
 	then 
-		printf "\n${LRV}ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/12c70d7c370959f9f8a2c45b3b72c0a9aade914c/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}"
+		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/12c70d7c370959f9f8a2c45b3b72c0a9aade914c/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}"
 		exit 1
 	else
-		printf "\n${GCV}ISP Manager version ($panel_current_version) suits.${NCV}\n"
+		printf "ISP Manager version ($panel_current_version) suits\n"
 	fi
-		printf "\n${GCV}ISP Manager release ($panel_release_name) suits.${NCV}\n"
+		printf "ISP Manager release ($panel_release_name) suits\n"
 fi
 # unset case insence for regexp
 shopt -u nocasematch
@@ -89,17 +132,35 @@ then
 	exit 1
 fi
 
+# restart ISP panel
+isp_panel_graceful_restart_func() {
+
+printf "\n${LRV}ISP panel restarting${NCV}"
+EXIT_STATUS=0
+trap 'EXIT_STATUS=1' ERR
+$MGRCTL -R
+check_exit_and_restore_func
+printf " - ${GCV}OK${NCV}\n"
+exit 0
+
+}
+
 # backing up /etc and existing presets
 backup_func() {
-	printf "\n${GCV}Backing up etc and templates${NCV}\n"
-	if ! [ -e /root/support ]; then mkdir /root/support; fi
+	BACKUP_ROOT_DIR="/root/support"
 	current_ispmgr_backup_directory="/root/support/ispmgr_templates.$(date '+%d-%b-%Y-%H-%M')"
 	current_etc_backup_directory="/root/support/etc_preset_builder_$(date '+%d-%b-%Y-%H-%M')"
-	cp -rp $MGR_PATH/etc/templates $current_ispmgr_backup_directory
-	cp -rp /etc $current_etc_backup_directory
+
 	NGINX_TEMPLATE_BACKUP="$current_ispmgr_backup_directory/nginx-vhosts.template"
 	NGINX_SSL_TEMPLATE_BACKUP="$current_ispmgr_backup_directory/nginx-vhosts-ssl.template"
-	printf "\n${GCV}/etc and templates are backed up to $current_ispmgr_backup_directory and $current_etc_backup_directory${NCV}\n"
+	NGINX_MAIN_CONF_BACKUP_PATH="${NGINX_MAIN_CONF_FILE#*etc/}"
+	NGINX_MAIN_CONF_BACKUP_FILE="$current_etc_backup_directory/$NGINX_MAIN_CONF_BACKUP_PATH"
+	
+	printf "\n${GCV}Backing up etc and templates${NCV}\n"
+	\mkdir -p "$BACKUP_ROOT_DIR"
+	\cp -rp "$MGR_PATH/etc/templates" "$current_ispmgr_backup_directory"
+	\cp -rp "/etc" "$current_etc_backup_directory"
+	printf "/etc and templates are backed up to $current_ispmgr_backup_directory and $current_etc_backup_directory\n"
 }
   
 # if proxy target to fastcgi format fastcgi_pass string
@@ -110,58 +171,378 @@ fastcgi_pass_format_func() {
 
 # remove ssl port number from 301 redirect
 seo_fix_ssl_port_func() {
-	sed -i -E 's@(.*return 301 https:\/\/\$host)\:\{\% \$SSL_PORT \%\}(\$request_uri;)@\1\2@gi' $NGINX_TEMPLATE
+	sed -i -E 's@(.*return 301 https:\/\/\$host)\:\{\% \$SSL_PORT \%\}(\$request_uri;)@{% if $PRESET == proxy_to_bitrix_fpm %}\n\tif ($request_uri !~ ^\(/robots.txt|/bitrix/admin/site_checker.*|/bitrix/admin/1c_exchange.*\)\) {\n\t\1\2\n\t}\n{% else %}\n\1\2\n{% endif %}@gi' $NGINX_TEMPLATE
+}
+
+# set ssl tune options
+ssl_tune_func() {
+	# todo (isp manager 6 bug / ignoring ssl server { ... }  at nginx ssl template parsing if  ssl_prefer_server_ciphers not exists or off /)
+	#sed -i -E 's@^.*ssl_prefer_server_ciphers.*on;@\tssl_session_timeout 10m;\n\tssl_session_cache shared:SSL:10m;@gi' $NGINX_SSL_TEMPLATE 
+	sed -i '/ssl_protocols/a \\tssl_session_timeout 10m;\n \tssl_session_cache shared:SSL:10m;' $NGINX_SSL_TEMPLATE 
+}
+
+# git availability check and set the choosen one
+git_check() {
+	printf "\n\n${YCV}Here we need some network for download${NCV}"
+	
+	# resolve 
+	if [[ ! -z $GIT_DOMAIN_NAME ]] || [[ ! -z $GIT_BACKUP_DOMAIN_NAME ]]
+	then
+		EXIT_STATUS=0
+		trap 'EXIT_STATUS=1' ERR
+		
+		getent hosts $GIT_DOMAIN_NAME &> /dev/null || getent hosts $GIT_BACKUP_DOMAIN_NAME &> /dev/null
+		
+		# check result and restore if error
+		printf "\nResolving $GIT_DOMAIN_NAME and $GIT_BACKUP_DOMAIN_NAME"
+		if [[ $1 == "no_check_exit" ]] 
+		then
+			exit 1
+		else
+			check_exit_and_restore_func
+		fi
+		printf " - ${GCV}OK${NCV}\n"
+	else
+		printf "\n${LRV}ERROR - Variables \$GIT_DOMAIN_NAME or \$GIT_BACKUP_DOMAIN_NAME are empty\n${NCV}"
+		EXIT_STATUS=1
+		if [[ $1 == "no_check_exit" ]] 
+		then
+			exit 1
+		else
+			check_exit_and_restore_func
+		fi
+		exit 1
+	fi
+	
+	# choosing which git to use
+	if [[ $git_version ]]
+	then
+		GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_REPO"
+		GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_PATH"
+		GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
+		GIT_THE_CHOSEN_ONE_REQ_URI="${SCRIPT_GIT_PATH#https://*/}"
+		
+		printf "$GIT_THE_CHOSEN_ONE_REPO will be used\n"
+	else
+		if [[ $git_backup_version ]]
+		then
+			GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_BACKUP_REPO"
+			GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_BACKUP_PATH"
+			GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
+			GIT_THE_CHOSEN_ONE_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
+			
+			printf "$GIT_THE_CHOSEN_ONE_REPO will be used\n"
+		else
+			printf "\n${LRV}ERROR - $SCRIPT_GIT_PATH and $SCRIPT_GIT_BACKUP_PATH both not available\n${NCV}"
+			EXIT_STATUS=1
+			if [[ $1 == "no_check_exit" ]] 
+			then
+				exit 1
+			else
+				check_exit_and_restore_func
+			fi
+			exit 1
+		fi
+	fi
+}
+
+# check last exit code =>1 and restore panel nginx configuration templates
+check_exit_and_restore_func() {
+	if test $EXIT_STATUS != 0
+	then
+		printf "\n${LRV}Last command(s) has failed.\nRemoving preset $PROXY_PREFIX$proxy_target${NCV}"
+		
+		{
+		\rm -f "$NGINX_TEMPLATE" "$NGINX_SSL_TEMPLATE"
+		\rm -f /etc/nginx/vhosts-includes/apache_status_[0-9]*.conf
+		\rm -f /etc/nginx/vhosts-includes/nginx_status_[0-9]*.conf
+		} &> /dev/null
+		
+		if $MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  &> /dev/null
+		then
+			printf " - ${GCV}OK${NCV}\n"
+		else
+			printf " - ${LRV}FAIL${NCV}\n"
+		fi
+		
+		printf "\n${LRV}Restoring last templates backup${NCV}\n"
+		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]
+		then
+			\cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" &> /dev/null && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
+			exit 1
+		else 
+			printf "\n${LRV}ERROR - $current_etc_backup_directory or $current_ispmgr_backup_directory was not found\n"
+			exit 1
+		fi
+	fi
+}
+
+# tweaking all installed php versions and mysql through ISP Manager panel API
+ispmanager_tweak_php_and_mysql_settings_func() {
+
+read -p "Skip PHP and MySQL tweak? [Y/n]" -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+then
+	# user chose not to tweak PHP nor MySQL
+	EXIT_STATUS=0
+	printf "Tweak was canceled by user choice\n"
+else
+	printf "\n${GCV}PHP${NCV}\n"
+	# get isp panel installed php versions into the array phpversions
+	IFS=$'\n' read -r -d '' -a phpversions < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
+	phpversions+=('Skip')
+	
+	# check that array not empty
+	if [[ ${#phpversions[@]} -eq 0 ]]
+	then
+		EXIT_STATUS=1
+		printf "\n${LRV}ERROR - Array phpversions empty. Check that PHP versions exists in ISP Manager panel.${NCV}\n"
+	else
+		# generating menu from array and user choosen php version to $php_choosen_version and apply
+		PS3='Choose PHP version to tweak:'
+		select php_choosen_version in "${phpversions[@]}"
+		do
+			if [[ $php_choosen_version == Skip ]] 
+			then
+				break
+			else
+				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 15000\nand enable PHP extensions: opcache, memcache, memcached, ioncube, imagick, bcmath, xsl\n"
+				printf "${GCV}"
+				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
+				printf "${NCV}"
+				if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+				then
+					printf "\nRunning"
+					EXIT_STATUS=0
+					trap 'EXIT_STATUS=1' ERR
+					{
+					$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=180 memory_limit=256  post_max_size=256 upload_max_filesize=256 sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=imagick elname=imagick sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcache elname=memcache sok=ok 
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=xsl sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=xsl sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=15000 cgi_value=15000 fpm_value=15000 sok=ok
+					} &> /dev/null
+					
+					# todo
+					#check_exit_and_restore_func
+					printf " - ${GCV}DONE${NCV}\n"
+					break
+				else
+					printf "\n${YCV}PHP tweaking canceled${NCV}\n"
+					EXIT_STATUS=1
+					break
+				fi
+			fi
+		done
+	fi
+
+	# get isp panel installed mysql versions into the array mysqlversions
+	IFS=$'\n' read -r -d '' -a mysqlversions < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
+	mysqlversions+=('Skip')
+	
+	# check that array not empty
+	if [[ ${#mysqlversions[@]} -eq 0 ]]
+	then
+		EXIT_STATUS=1
+		printf "\n${LRV}ERROR - Array mysqlversions empty. Check that MySQL versions exists in ISP Manager panel.${NCV}\n"
+	else
+		printf "\n${GCV}MySQL${NCV}\n"
+	
+		# generating menu from array and user choosen mysql version to $mysql_choosen_version and apply
+		PS3='Choose MySQL version to tweak:'
+		select mysql_choosen_version in "${mysqlversions[@]}"
+		do
+			if [[ $mysql_choosen_version == Skip ]] 
+			then
+				break
+			else
+				printf "I can tweak MySQL - $mysql_choosen_version:\ninnodb_strict_mode to OFF, sql_mode to '', innodb_flush_method to O_DIRECT, transaction_isolation to READ-COMMITTED, innodb_flush_log_at_trx_commit to 2\n"
+				printf "${GCV}"
+				read -p "Should I tweak these MySQL settings? [Y/n]" -n 1 -r
+				printf "${NCV}"
+				if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+				then
+					printf "\nRunning"
+					EXIT_STATUS=0
+					trap 'EXIT_STATUS=1' ERR
+					{
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 str_value=2 sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
+					} &> /dev/null
+					#todo
+					#check_exit_and_restore_func
+					printf " - ${GCV}DONE${NCV}\n"
+					break
+				else
+					printf "\n${YCV}MySQL tweaking canceled${NCV}\n"
+					EXIT_STATUS=1
+					break
+				fi
+			fi
+		done
+	fi
+fi
+}
+
+# check nginx conf and reload configuration
+nginx_conf_sanity_check_and_reload_func() {
+printf "\n${YCV}Making nginx configuration check${NCV}"
+if nginx_test_output=$({ nginx -t; } 2>&1)
+then
+	printf " - ${GCV}OK${NCV}\n"
+	nginx -s reload &> /dev/null
+else
+	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
+	EXIT_STATUS=1
+	for file in "${BITRIX_REQ_NGINX_HTTP_FILES[@]}"
+	do
+	\rm -f "$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file"
+	done
+	for file in "${BITRIX_REQ_NGINX_SERVER_FILES[@]}"
+	do
+	\rm -f "$BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file"
+	done
+	check_exit_and_restore_func
+fi
+}
+
+# detecting nginx push & pull support
+nginx_push_pull_module_support() {
+
+if 2>&1 nginx -V | grep -i "push-stream" &> /dev/null
+then 
+	NGINX_HAVE_PUSH_PULL=1
+else
+	NGINX_HAVE_PUSH_PULL=0
+fi
+
+}
+
+# bitrix_fpm special inject download nginx conf files function
+bitrix_fpm_download_files_func() {
+
+BITRIX_REQ_NGINX_HTTP_FILES=("$BITRIX_NGX_PUSH" "nginx_bitrix_http_context.conf")
+BITRIX_REQ_NGINX_SERVER_FILES=("nginx_bitrix_server_context.conf")
+
+# http context
+printf "\n${YCV}Downloading bitrix nginx http context files to $BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR${NCV}\n"
+for file in "${BITRIX_REQ_NGINX_HTTP_FILES[@]}"
+do
+	EXIT_STATUS=0
+	trap 'EXIT_STATUS=1' ERR
+	printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file"
+	# check download result and restore if error
+	printf "Verifying download status of $BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file"
+	check_exit_and_restore_func
+	if [[ -f "$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file" ]]
+	then
+		# file exists after download and total size more than 30 bytes
+		FILE_SIZE=$(ls -l "$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file" | awk '{print $5}' 2> /dev/null)
+		if [[ $FILE_SIZE -gt 30 ]]
+		then 
+			printf " - ${GCV}OK${NCV}\n"
+		else
+			# file size less than 30 bytes
+			printf " - ${LRV}FAIL (Filesize less than 30 bytes)${NCV}\n"
+			EXIT_STATUS=1
+			check_exit_and_restore_func
+		fi
+	else
+		# file doesnt exists after download
+		printf " - ${LRV}FAIL (File not exist after download)${NCV}\n"
+		EXIT_STATUS=1
+		check_exit_and_restore_func
+	fi
+done
+
+# server context
+printf "\n${YCV}Downloading bitrix nginx server context files to $BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR${NCV}\n"
+for file in "${BITRIX_REQ_NGINX_SERVER_FILES[@]}"
+do
+	EXIT_STATUS=0
+	trap 'EXIT_STATUS=1' ERR
+	printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file"
+	# check download result and restore if error
+	printf "Verifying download status of $BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file"
+	check_exit_and_restore_func
+	if [[ -f "$BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file" ]]
+	then
+		# file exists after download and total size more than 30 bytes
+		FILE_SIZE=$(ls -l "$BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file" | awk '{print $5}' 2> /dev/null)
+		if [[ $FILE_SIZE -gt 30 ]]
+		then 
+			printf " - ${GCV}OK${NCV}\n"
+		else
+			# file size less than 30 bytes
+			printf " - ${LRV}FAIL (Filesize less than 30 bytes)${NCV}\n"
+			EXIT_STATUS=1
+			check_exit_and_restore_func
+		fi
+	else
+		# file doesnt exists after download
+		printf " - ${LRV}FAIL (File not exist after download)${NCV}\n"
+		EXIT_STATUS=1
+		check_exit_and_restore_func
+	fi
+done
+
+# run nginx conf sanity check
+nginx_conf_sanity_check_and_reload_func
+
 }
 
 # backward compatibility injection and check
 backward_copmat_func() {
 
-# NGINX_TEMPLATE injection 
-perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE" 
-perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
-perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_TEMPLATE"
-perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_TEMPLATE"		
-# NGINX_SSL_TEMPLATE injection
-perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE" 
-perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
-perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_SSL_TEMPLATE"
-perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_SSL_TEMPLATE"
+	# NGINX_TEMPLATE injection 
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE" 
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_TEMPLATE"
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_TEMPLATE"
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_TEMPLATE"		
+	# NGINX_SSL_TEMPLATE injection
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE" 
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN" "$NGINX_SSL_TEMPLATE"
+	perl -i -p0e "$BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END" "$NGINX_SSL_TEMPLATE"
 
-# check for success backward comaptibility injection, restore from backup and exit
-EXIT_STATUS=0
-trap 'EXIT_STATUS=1' ERR
+	# check for success backward comaptibility injection, restore from backup and exit
+	EXIT_STATUS=0
+	trap 'EXIT_STATUS=1' ERR
 
-grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
-grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
-grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
-grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+	grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
+	grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_TEMPLATE"
+	grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+	grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+	grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
+	grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_TEMPLATE"
 
-grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
-grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
-grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
-grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+	grep -q 'apache_backward_compatibility_condition_start_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
+	grep -q 'apache_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE' "$NGINX_SSL_TEMPLATE"
+	grep -q "phpfpm_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+	grep -q "phpfpm_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+	grep -q "php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
+	grep -q "php_off_backward_compatibility_condition_stop_DO_NOT_(RE)MOVE" "$NGINX_SSL_TEMPLATE"
 
-if test $EXIT_STATUS != 0
-then
-	printf "${LRV}Test of backward compatibility has failed.\nCheck script's perl injections.\nor (default) nginx template edits\n\nRemoving preset $PROXY_PREFIX$proxy_target\nRestoring last backup and exiting.${NCV}\n"
-	rm -f "$NGINX_TEMPLATE" "$NGINX_SSL_TEMPLATE"
-	$MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target
-	printf "\n${GCV}$PROXY_PREFIX$proxy_target - was removed successfuly ${NCV}\n"
-	
-	if [[ -f "$NGINX_TEMPLATE_BACKUP" ]] || [[ -f "$NGINX_SSL_TEMPLATE_BACKUP" ]]
-	then
-		cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-		cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-		exit 1
-	else 
-		printf "\n${LRV}$current_ispmgr_backup_directory/nginx-vhosts.template\n$current_ispmgr_backup_directory/nginx-vhosts-ssl.template\nNot exists."
-		exit 1
-	fi
-fi
+	# check result and restore if error
+	printf "Backward comatibility injection verification"
+	check_exit_and_restore_func
+	printf " - ${GCV}OK${NCV}"
 }
   
 # removing presets if defined
@@ -169,52 +550,69 @@ if [[ $1 = "del" ]]
 then
 	if [[ $2 = "all" ]]
 	then
-		read -p "This will delete all $PROXY_PREFIX presets. Are you sure? " -n 1 -r
 		echo
-		if [[ $REPLY =~ ^[Yy]$ ]]
+		printf "${LRV}"
+		read -p "This will delete all $PROXY_PREFIX presets. Are you sure? [Y/n]" -n 1 -r
+		echo
+		printf "${NCV}"
+		if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
 		then
+			# backup
 			backup_func
+			
 			# removing all $PROXY_PREFIX presets
 			preset_list=$($MGRCTL preset | awk -F '=' '{print $3}' | grep -E 'proxy_to_.+')
 			for plist in $preset_list; do $MGRCTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel %%$PROXY_PREFIX%% presets was removed${NCV}\n"
 		
 			# removing all $PROXY_PREFIX  injects
-			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE 
+			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE
 			sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE
-			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE 
+			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE
 			sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE
+			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE
+			sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE
 			
-			# panel graceful restart and exit
-			$MGRCTL -R
-			printf "\n${LRV}ISP panel restarted${NCV}\n"
-			exit 0
+			# panel graceful restart
+			isp_panel_graceful_restart_func
 		else
 			printf "\n${LRV}Deletion canceled${NCV}\n"
 			exit 0
 		fi
-	# check that this preset exists in panel, and if exists dlete it with inject
+	# check that this preset exists in panel, and if exists delete it with inject
 	elif [[ ! -z "$2"  ]]  && [[  ! -z $($MGRCTL preset | awk -F '=' '{print $3}' | grep -E "$2") ]]
 		then
-			read -p "This will delete $2 preset. Are you sure? " -n 1 -r
 			echo
-			if [[ $REPLY =~ ^[Yy]$ ]]
+			printf "${LRV}"
+			read -p "This will delete $2 preset. Are you sure? [Y/n]" -n 1 -r
+			echo
+			printf "${NCV}"
+			if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
 			then
+				# backup
 				backup_func
+				
 				# removing $2 preset
 				printf "\n${LRV}Deleting preset $2 ${NCV}\n"
-				$MGRCTL preset.delete elid=$2 elname=$2
+				
+				EXIT_STATUS=0
+				trap 'EXIT_STATUS=1' ERR
+				
+				$MGRCTL preset.delete elid=$2 elname=$2 &> /dev/null
 				
 				# removing $2 inject
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE
-				sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE
-				sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE &> /dev/null
+				sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE &> /dev/null
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE &> /dev/null
+				sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE &> /dev/null
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE &> /dev/null
+				sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE &> /dev/null
 				
-				# restart panel
-				$MGRCTL -R
-				printf "\n${LRV}ISP panel restarted${NCV}\n"
-				exit 0
+				#check result
+				check_exit_and_restore_func
+				
+				# panel graceful restart
+				isp_panel_graceful_restart_func
 			else
 				printf "\n${LRV}Deletion canceled${NCV}\n"
 				exit 0
@@ -222,11 +620,11 @@ then
 	# del was supplied without preset
 	elif [[ ! -z "$1"  ]] && [[ -z "$2"  ]]
 		then
-			printf "\n${LRV}Preset not defined.\n\nExample: $BASH_SOURCE del $PROXY_PREFIXwordpress_fpm${NCV}\n"
+			printf "\n${LRV}ERROR - Preset not defined.\n\nExample: $BASH_SOURCE del $PROXY_PREFIXwordpress_fpm${NCV}\n"
 			exit 1
 	
 	else	
-		printf "\n${LRV}Preset $2 not found in panel.\nNothing to delete.${NCV}\n"
+		printf "\n${LRV}ERROR - Preset $2 not found in panel.\nNothing to delete.${NCV}\n"
 		exit 1
 	fi
 fi
@@ -234,9 +632,12 @@ fi
 # delete all presets and injects and restore defaults
 if [[ $1 = "reset" ]]
 then
-	read -p "This will delete all presets. Are you sure? " -n 1 -r
 	echo
-	if [[ $REPLY =~ ^[Yy]$ ]]
+	printf "${LRV}"
+	read -p "This will delete all presets. Are you sure? [Y/n]" -n 1 -r
+	echo
+	printf "${NCV}"
+	if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
 		then
 			backup_func
 			# removing all presets 
@@ -244,17 +645,162 @@ then
 			for plist in $preset_list; do $MGRCTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel presets removed${NCV}\n"
 			# removing nginx templates
-			rm -f $NGINX_SSL_TEMPLATE
-			rm -f $NGINX_TEMPLATE
+			\rm -f $NGINX_SSL_TEMPLATE &> /dev/null
+			\rm -f $NGINX_TEMPLATE &> /dev/null
 			printf "\n${LRV}Custom nginx templates removed${NCV}\n"
+			# removing injects in $NGINX_MAIN_CONF_FILE
+			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE &> /dev/null
+			sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE &> /dev/null
 			# panel graceful restart
-			$MGRCTL -R
-			printf "\n${LRV}ISP panel restarted${NCV}\n"
-			exit 0
+			isp_panel_graceful_restart_func
 		else
 			printf "\n${LRV}Reset canceled${NCV}\n"
 			exit 0
 		fi
+fi
+
+# set web servers status pages func
+set_status_pages() {
+
+#todo
+#FPM_POOL=
+printf "\n${GCV}This option will try to set up status pages for the web servers:\nnginx - /nginx-status-$RANDOM_N\napache - /apache-status-$RANDOM_N and /apache-info-$RANDOM_N\n${NCV}\n"
+#todo
+#php-fpm - /fpm-status-$FPM_POOL$RANDOM_N
+
+# nginx
+NGX_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/nginx_status_$RANDOM_N.conf"
+APACHE_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/apache_status_$RANDOM_N.conf"
+#todo
+#FPM_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/fpm_status.conf"
+
+if nginx -t &> /dev/null
+then
+	printf "\n${GCV}Injecting nginx status page at\n$NGX_STATUS_PAGE_FILE\n$APACHE_STATUS_PAGE_FILE\n$FPM_STATUS_PAGE_FILE${NCV}\n"
+	if 
+
+	{
+	if [[ -z BITRIX_FPM_STATUS_SET ]]
+	then
+		printf "\nlocation ^~ /nginx-status-$RANDOM_N { stub_status on; allow all; }\n" > "$NGX_STATUS_PAGE_FILE"
+		printf "\nlocation ~* /apache-(status|info)-$RANDOM_N { allow all; proxy_pass http://127.0.0.1:8080; }\n" > "$APACHE_STATUS_PAGE_FILE"
+		#todo
+		#printf "\nlocation ~* /fpm-status-$RANDOM_N { allow all; fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name; include fastcgi_params; fastcgi_pass unix:/replace_with_fpm_pool_socket_file_path }\n" > "$FPM_STATUS_PAGE_FILE"
+	fi
+	} &> /dev/null
+	
+	then
+		if nginx -t &> /dev/null
+		then
+			printf "\n${GCV}OK${NCV}\n"
+			nginx -s reload &> /dev/null
+		else
+			printf "\n${LRV}FAIL (nginx -t)${NCV}\n"
+			\rm -f "$NGX_STATUS_PAGE_FILE"
+			exit 1
+		fi
+	else
+		printf " - ${LRV}Cannot write $NGX_STATUS_PAGE_FILE${NCV}\n"
+		exit 1
+	fi
+else
+	printf "n${LRV}Nginx configtest failed${NCV}\n"
+	exit 1
+fi
+
+# apache
+APACHE_STATUS_PAGE_INJECT="<Location \"/apache-status-$RANDOM_N\">\nSetHandler server-status\n</Location>\n<Location \"/apache-info-$RANDOM_N\">\nSetHandler server-info\n</Location>\nExtendedStatus On\n"
+APACHE_STATUS_PAGE_INJECT_FILE_DEB="/etc/apache2/apache2.conf"
+APACHE_STATUS_PAGE_INJECT_FILE_RHEL="/etc/httpd/conf/httpd.conf"
+
+if [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" ]] && [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL" ]]
+then
+	printf "\n${LRV}Something strange.\n $APACHE_STATUS_PAGE_INJECT_FILE_DEB and $APACHE_STATUS_PAGE_INJECT_FILE_RHEL co-exist${NCV}\n"
+	exit 1
+fi
+
+if apachectl configtest  &> /dev/null
+then
+	if [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL" ]]
+	then
+		printf "\n${GCV}Injecting apache status page at $APACHE_STATUS_PAGE_INJECT_FILE_RHEL${NCV}"
+		printf "$APACHE_STATUS_PAGE_INJECT" >> "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL"
+		if apachectl configtest &> /dev/null
+		then
+			printf " - ${GCV}OK${NCV}\n"
+			apachectl graceful  &> /dev/null
+		else
+			printf " - ${LRV}FAIL (apachectl configtest)${NCV}\n"
+			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" &> /dev/null
+			exit 1
+		fi
+	elif [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" ]]
+	then
+		printf "\n${GCV}Injecting apache status page at $APACHE_STATUS_PAGE_INJECT_FILE_DEB${NCV}"
+		printf "$APACHE_STATUS_PAGE_INJECT" >> "$APACHE_STATUS_PAGE_INJECT_FILE_DEB"
+		if apachectl configtest &> /dev/null
+		then
+			printf " - ${GCV}OK${NCV}\n"
+			apachectl graceful  &> /dev/null
+		else
+			printf " - ${LRV}FAIL (apachectl configtest)${NCV}\n"
+			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" &> /dev/null
+			exit 1
+		fi
+	else
+		printf "\n${LRV}Nor $APACHE_STATUS_PAGE_INJECT_FILE_RHEL or $APACHE_STATUS_PAGE_INJECT_FILE_DEB files found${NCV}\n"
+		exit 1
+	fi
+else
+	printf "\n${LRV}Apache configtest failed${NCV}\n"
+	exit 1
+fi
+
+#todo
+# fpm
+}
+
+# recompile nginx function
+recompile_nginx_func() {
+
+# check gits
+git_check
+
+# download recompilation script
+if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
+then
+	# execute recompilation script
+	bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" 
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+	exit 0
+else
+	printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+	EXIT_STATUS=1
+	exit 1
+fi
+}
+
+# run set up web servers set status pages function
+if [[ $1 = "setstatus" ]]
+then
+	set_status_pages
+	exit 0
+fi
+
+
+# run tweak function
+if [[ $1 = "tweak" ]]
+then
+	ispmanager_tweak_php_and_mysql_settings_func
+	exit 0
+fi
+
+# run recompile nginx function
+if [[ $1 = "recompile" ]]
+then
+	recompile_nginx_func
+	exit 0
 fi
 
 main_func() {
@@ -272,11 +818,13 @@ then
 		printf "\n${GCV}There is no existing presets in the ISP panel${NCV}\n"
 	fi
 	printf "\n${GCV}Example for 1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
-	printf "${GCV}Example for 5 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
-	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} $BASH_SOURCE del all_$PROXY_PREFIX"
+	printf "${GCV}Example for 4 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
+	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} $BASH_SOURCE del all $PROXY_PREFIX"
 	printf "\n${GCV}Delete one existing preset and inject:${NCV} $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
 	printf "\n${GCV}Restore default templates and delete all presets:${NCV} $BASH_SOURCE reset\n"
-	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm (soon bitrix_fpm, opencart_fpm, magento_fpm, passenger_ruby, gitlab_fpm)\n"
+	printf "\n${GCV}Tweak some PHP and MySQL options:${NCV} $BASH_SOURCE tweak"
+	printf "\n${GCV}Recompile nginx (add/remove modules | update/change SSL):${NCV} $BASH_SOURCE recompile\n"
+	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)\n"
 	printf "\n\n${LRV}ERROR - Not enough arguments, please specify proxy target/targets${NCV}\n"
 	exit 1
 fi
@@ -289,10 +837,10 @@ then
 		printf "\n${LRV}No NGINX default template exists in $MGR_PATH/etc/templates/default/.\nExiting.${NCV}\n"
 		exit 1
 	else
-		printf "\n${GCV}NGINX default template exists. Copying it to $NGINX_TEMPLATE ${NCV}\n"
-		cp -p $NGINX_DEFAULT_TEMPLATE $NGINX_TEMPLATE
+		printf "\nNGINX default template exists. Copying it to $NGINX_TEMPLATE\n"
+		\cp -p $NGINX_DEFAULT_TEMPLATE $NGINX_TEMPLATE &> /dev/null
 		# fix importing default ssl template
-		sed -i 's@import etc/templates/default/@import etc/templates/@gi' $NGINX_TEMPLATE
+		sed -i 's@import etc/templates/default/@import etc/templates/@gi' $NGINX_TEMPLATE &> /dev/null
 	fi
 fi
 
@@ -303,8 +851,8 @@ then
 		printf "\n${LRV}No NGINX default ssl template exists in $MGR_PATH/etc/templates/default/. \nExiting.${NCV}\n"
 		exit 1
 	else
-		printf "\n${GCV}NGINX default ssl template exists. Copying it to $NGINX_SSL_TEMPLATE ${NCV}\n\n"
-		cp -p $NGINX_DEFAULT_SSL_TEMPLATE $NGINX_SSL_TEMPLATE
+		printf "NGINX default ssl template exists. Copying it to $NGINX_SSL_TEMPLATE\n"
+		\cp -p $NGINX_DEFAULT_SSL_TEMPLATE $NGINX_SSL_TEMPLATE &> /dev/null
 	fi
 fi
 
@@ -350,194 +898,273 @@ do
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF="s,(\{#\\} php_off_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE),\$1\n\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_IF_PHPOFF_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target %\}\n\tlocation / \{\n\{% if \\\$PHP == off %\}\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@backend;\n\{% endif %\}\n\\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\tlocation ~ \[^/\]\\\.ph\(p\\\d*|tml\)\\\$ \{\n\t\t\ttry_files /does_not_exists \@php;\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation ~ \[^/\]\\\\.ph\(p\\\\d*|tml\)\\\$ \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\{% if \\\$PHP == on %\}\n\t\tlocation ~* ^.+\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\{% endif %\}\n\t\t\}\n{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation / \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\\{% endif %\}\n\{% if \\\$ANALYZER != off and \\\$ANALYZER !=  %\}\n\t\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\t\tcharset \[% \\\$WEBSTAT_ENCODING %\];\n\t\t\tindex index.html;\n\t\t\tlocation ~ \[^/\].ph\(pd*|tml\)\\\$ \{\n\t\t\t\ttry_files \\\$uri \\\$uri/ \@backend;\n\t\t\t\}\n\t\t\}\n\{% endif %\}\n\t\}\n\{% if \\\$PHP == off %\}\n\tlocation \@backend \{\n\t\tproxy_pass http://$proxy_target;\n\t\tproxy_redirect http://$proxy_target /;\n\t\tproxy_set_header Host \\\$host;\n\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\tproxy_set_header X-Forwarded-Proto \\\$scheme;\n\t\tproxy_set_header X-Forwarded-Port \\\$server_port;\n\t}\n\{% endif %\}\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_IF_PHPOFF_STOP_DO_NOT_REMOVE\n,gi"
 
 	SPECIAL_INJECTIONS_VAR="\{% if THIS_BLOCK_FOR_REMOVE_EXPIRES %\}\n\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n"
-
-	# wordpress_fpm nginx templates injections variables
-	WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS="s,($SPECIAL_INJECTIONS_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == proxy_to_wordpress_fpm %\}\n\tlocation / \{\n\{% if \\\$PHP == on %\}\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\ttry_files \\\$uri \\\$uri/ /index.php?\\\$args;\n\{% endif %\}\n\t\tlocation ~ \[^/\]\\\\.ph(p\d*|tml)\\\$ \{\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\t\tlocation ~* ^.+\\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\{% endif %\}\n\t\t\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation / {\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% if \\\$ANALYZER != off and \\\$ANALYZER != "" %\}\n\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\tcharset \[% $WEBSTAT_ENCODING %\];\n\t\tindex index.html;\n\{% if \\\$PHP == on %\}\n\t\tlocation ~ \[^/\]\\\\.ph\(p\d*|tml\)\\\$ {\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation ~* ^.+\\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\t\t\}\n\t\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% endif %\}\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n\n\t\t,gi"
 	
-	WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS="$WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS"
+	# creating user defined ISP manager presets
+	printf "\n\n>>>>> ${GCV}$PROXY_PREFIX$proxy_target${NCV}\nCreating ISP panel preset"
 	
-	WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_APACHE == on %\}\n\t\tproxy_pass \\{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_STOP_DO_NOT_REMOVE\n,gi"
-	
-	WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
-	
-
-	# bitrix_fpm nginx templates injections variables
-	BITRIX_PROXY_NGINX_HTTP_CONTEXT="/etc/nginx/conf.d/proxy_to_bitrix_fpm_http_context.conf"
-	
-	printf "\n\n${GCV}Creating preset for $PROXY_PREFIX$proxy_target${NCV}\n"
-	# check for error / success
-	if $MGRCTL preset.edit limit_charset=UTF-8 limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target sok=ok
+	# $limit_dirindex_var
+	if [[ $proxy_target = "opencart_fpm" ]] || [[ $proxy_target = "wordpress_fpm" ]] || [[ $proxy_target = "bitrix_fpm" ]]
 	then
-		printf "\n${GCV}Successfuly added preset - $PROXY_PREFIX$proxy_target${NCV}\n"
+		limit_dirindex_var=index.php
+	fi
+	# check for error / success
+	if $MGRCTL preset.edit limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok &> /dev/null
+	then
+		printf " - ${GCV}OK${NCV}\n"
 		preset_raise_error="0"
 			#if wordpress_fpm in preset name create special template
 			if [[ $proxy_target = "wordpress_fpm" ]]
 			then
+				# WORDPRESS_FPM nginx templates injections variables
+				WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS="s,($SPECIAL_INJECTIONS_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target %\}\n\tlocation / \{\n\{% if \\\$PHP == on %\}\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\ttry_files \\\$uri \\\$uri/ /index.php?\\\$args;\n\{% endif %\}\n\t\tlocation ~ \[^/\]\\\\.ph(p\d*|tml)\\\$ \{\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\t\tlocation ~* ^.+\\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\{% endif %\}\n\t\t\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation / {\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% if \\\$ANALYZER != off and \\\$ANALYZER != "" %\}\n\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\tcharset \[% $WEBSTAT_ENCODING %\];\n\t\tindex index.html;\n\{% if \\\$PHP == on %\}\n\t\tlocation ~ \[^/\]\\\\.ph\(p\d*|tml\)\\\$ {\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation ~* ^.+\\\\.\(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf\)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\t\t\}\n\t\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% endif %\}\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n\n\t\t,gi"
+				
+				WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS="$WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS"
+				
+				WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_APACHE == on %\}\n\t\tproxy_pass \\{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_STOP_DO_NOT_REMOVE\n,gi"
+				
+				WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
+				
 				# create & check comaptibility
 				backward_copmat_func
 				
 				# wordpress_fpm nginx-vhosts.template
-				printf "\n${YCV}Injecting SPECIAL $PROXY_PREFIX$proxy_target template in $NGINX_TEMPLATE ${NCV}\n"
+				printf "\n${YCV}Injecting $PROXY_PREFIX$proxy_target${NCV}"
 				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_LOCATIONS" "$NGINX_TEMPLATE"
 				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND" "$NGINX_TEMPLATE"
 				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_TEMPLATE"
 				
 				# wordpress_fpm nginx-vhosts-ssl.template
-				printf "\n${YCV}Injecting SPECIAL $PROXY_PREFIX$proxy_target template in $NGINX_SSL_TEMPLATE ${NCV}\n"
 				perl -i -p0e "$WORDPRESS_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS" "$NGINX_SSL_TEMPLATE"
 				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND" "$NGINX_SSL_TEMPLATE"
 				perl -i -p0e "$WORDPRESS_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_SSL_TEMPLATE"
+				
+				check_exit_and_restore_func
+				printf " - ${GCV}OK${NCV}\n"
+				
+				# wordpress tweak php and mysql
+				ispmanager_tweak_php_and_mysql_settings_func
+				
+				continue
+				
+			elif [[ $proxy_target = "opencart_fpm" ]]
+			then
+				# OPENCART_FPM nginx templates injections variables
+				OPENCART_FPM_NGINX_PERL_INJECTION_LOCATIONS="s,($SPECIAL_INJECTIONS_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == proxy_to_opencart_fpm %\}\n\tlocation / \{\n\{% if \\\$PHP == on %\}\n\t\tlocation ~ \[^/\]\\\.ph(pd*|tml)\\\$ \{\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\tif (!-e \\\$request_filename) \{\n\t\t\trewrite ^/(.+)\\\$ /index.php?_route_=\\\$1 last;\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\{% if \\\$PHP_MODE != php_mode_fcgi_nginxfpm %\}\n\t\tlocation ~* ^.+\\\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% endif %\}\n\{% endif %\}\n\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\{% endif %\}\n\t\t\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\t\tlocation / \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% if \\\$ANALYZER != off and \\\$ANALYZER !=  %\}\n\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\tcharset \[%  %\];\n\t\tindex index.html;\n\{% if \\\$PHP == on %\}\n\t\tlocation ~ \[^/\]\\\.ph(pd*|tml)\\\$ \{\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\t\t\ttry_files /does_not_exists \@php;\n\{% else %\}\n\t\t\ttry_files /does_not_exists \@fallback;\n\{% endif %\}\n\t\t\}\n\{% endif %\}\n\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\{% if \\\$PHP_MODE != php_mode_fcgi_nginxfpm %\}\n\t\tlocation ~* ^.+\\\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\t\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\{% endif %\}\n\t\t\ttry_files \\\$uri \\\$uri/ \@fallback;\n\t\t\}\n\t\tlocation \{% \\\$WEBSTAT_LOCATION %\} \{\n\t\t\ttry_files /does_not_exists \@fallback;\n\t\t\}\n\{% endif %\}\n\t\}\n\{% endif %\}\n\{% if \\\$PHP_MODE == php_mode_fcgi_nginxfpm %\}\n\tlocation ~* ^.+\\\.(jpe?g|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)\\\$ \{\n\{% if \\\$SRV_CACHE == on %\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\{% endif %\}\n\t\tlog_not_found off;\n\t\tadd_header Pragma public;\n\t\tadd_header Cache-Control \"public\, must-revalidate\, proxy-revalidate\";\n\t\ttry_files \\\$uri \\\$uri/ \@static;\n\t\}\n\tlocation ~* \\\.(eot|otf|ttf|woff)\\\$ \{\n\t\tadd_header Access-Control-Allow-Origin *;\n\t\}\n\n\tlocation ~* (\\\.(tpl|ini))\\\$ \{\n\t\tdeny all; \n\t\}\n\n\tlocation ~* \\\.(engine|inc|info|ini|install|log|make|module|profile|test|po|sh|.*sql|theme|tpl(\\\.php)?|xtmpl)\\\$|^(\\\..*|Entries.*|Repository|Root|Tag|Template)\\\$|\\\.php_ \{\n\t\tdeny all;\n\t\}\n\n\tlocation ~ /\\\. \{\n\t\taccess_log off;\n\t\tlog_not_found off;\n\t\tdeny all;\n\t\}\n\n\tlocation ~ ~\\\$ \{\n\t\taccess_log off;\n\t\tlog_not_found off;\n\t\tdeny all;\n\t\}\n\n\tlocation ~* /(?:cache|logs|image|download)/.*\\\.php\\\$ \{\n\t\tdeny all;\n\t\}\n\n\tlocation ~ /\\\.ht \{\n\t\treturn 404;\n\t\}\n\n\tlocation ~ /\\\.tpl/ \{\n\t\treturn 404;\n\t\}\n\n\tlocation \@static \{\n\t\terror_log /dev/null crit;\n\t\taccess_log off ;\n\t\}\n\{% endif %\}\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n\n\t\t,gi"
+				
+				OPENCART_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS="$OPENCART_FPM_NGINX_PERL_INJECTION_LOCATIONS"
+				
+				OPENCART_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_APACHE == on %\}\n\t\tproxy_pass \\{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_STOP_DO_NOT_REMOVE\n,gi"
+				
+				OPENCART_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n\t\tfastcgi_intercept_errors off;\n\t\tfastcgi_ignore_client_abort off;\n\t\tfastcgi_connect_timeout 60;\n\t\tfastcgi_send_timeout 180;\n\t\tfastcgi_read_timeout 180;\n\t\tfastcgi_buffer_size 128k;\n\t\tfastcgi_buffers 4 256k;\n\t\tfastcgi_busy_buffers_size 256k;\n\t\tfastcgi_temp_file_write_size 256k;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
+	
+				# create & check comaptibility
+				backward_copmat_func
+				
+				# opencart_fpm nginx-vhosts.template
+				printf "\n${YCV}Injecting $PROXY_PREFIX$proxy_target${NCV}"
+				perl -i -p0e "$OPENCART_FPM_NGINX_PERL_INJECTION_LOCATIONS" "$NGINX_TEMPLATE"
+				perl -i -p0e "$OPENCART_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND" "$NGINX_TEMPLATE"
+				perl -i -p0e "$OPENCART_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_TEMPLATE"
+				
+				# opencart_fpm nginx-vhosts-ssl.template
+				perl -i -p0e "$OPENCART_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$OPENCART_FPM_NGINX_PERL_INJECTION_APACHE_BACKEND" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$OPENCART_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_SSL_TEMPLATE"
+				
+				check_exit_and_restore_func
+				printf " - ${GCV}OK${NCV}\n"
+				
+				# opencart tweak php and mysql
+				ispmanager_tweak_php_and_mysql_settings_func
 				
 				continue
 				
 			#if bitrix_fpm in preset name create special template
 			elif [[ $proxy_target = "bitrix_fpm" ]]
 			then
-			
+			# set bitrix_fpm local vars
+			BITRIX_REQ_NGINX_FOLDER_URL="isp_templates/bitrix/nginx/"
+			BITRIX_REQ_ERROR_PAGES_URL="bitrix_error_pages/"
+			BITRIX_REQ_ERROR_PAGES_FILES=('403.html' '404.html' '500.html' '502.html' '503.html' '504.html')
+			BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR="/etc/nginx/conf.d"
+			BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR="/etc/nginx/vhosts-includes"
+			BITRIX_FPM_LOCAL_ERRORS_DIR="/etc/nginx/vhosts-includes/bitrix_fpm/errors"
+				
+			# BITRIX_FPM nginx templates injections variables
+			BITRIX_FPM_NGINX_PERL_INJECTION_LOCATIONS="s,($SPECIAL_INJECTIONS_VAR),\$1\n\\{#\\} proxy_to_bitrix_fpm_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - Wed Nov 17 20:10:13 MSK 2021\n\\{% if \\\$PRESET == proxy_to_bitrix_fpm %\\}\n\tset \\\$docroot \"\\{% \\\$DOCROOT %\\}\";\n\\{% if \\\$PHP == on %\\}\n\\{#\\}\n\\{#\\} CGI_APACHE_MODULE_config_start\n\\{#\\}\n\\{% if \\\$REDIRECT_TO_APACHE == on %\\}\n\tset \\\$proxyserver \"\\{% \\\$BACKEND_BIND_URI %\\}\";\n\t#\n\t# www prefix add\n\t#if \(\\\$host !~* ^\(www\\\.\)\(?<domain>.+\)\\\$\) \\{ return 301 \\\$scheme://\\\$1\\\$domain\\\$request_uri; \\}\n\t#\n\t# www prefix remove\n\t#if \(\\\$host ~* ^www\\\.\(?<domain>.+\)\\\$\) \\{ return 301 \\\$scheme://\\\$domain\\\$request_uri; \\}\n\t# 301 tech subdomains\n\tif \(\\\$host ~* ^\(\(mail|smtp|ftp|mx\[\d+\]|ns\[\d+\]|pop3?|imap\)\(\\\.\)\(?<domain>.+\)\\\$\)\) \\{ return 301 \\\$scheme://\\\$domain\\\$request_uri; \\}\n\t#\n\tclient_max_body_size 1024m;\n\tclient_body_buffer_size 4m;\n\t#\n\tkeepalive_timeout 70;\n\tkeepalive_requests 150;\n\t#\n\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\tproxy_set_header X-Real-IP \\\$remote_addr;\n\tproxy_set_header Host \\\$host;\n\tproxy_set_header X-Forwarded-Host \\\$host;\n\tproxy_set_header X-Forwarded-Scheme \\\$scheme;\n\t#\n\t# www prefix remove\n\t#if \(\\\$host ~* ^www\\\.\(?<domain>.+\)\\\$\) \\{ \n\t#\treturn 301 \\\$scheme://\\\$domain\\\$request_uri;\n\t#\\}\n\t# 301 tech subdomains\n\tif \(\\\$host ~* ^\(\(mail|smtp|ftp|mx\[\d+\]|ns\[\d+\]|pop3?|imap\)\(\\\.\)\(?<domain>.+\)\\\$\)\) \\{\n\t\treturn 301 \\\$scheme://\\\$domain\\\$request_uri;\n\t\\}\n\t#### bx/conf/general-add_header.conf\n\tadd_header \"X-Content-Type-Options\" \"nosniff\";\n\tset \\\$frame_options '';\n\tif \(\\\$http_referer !~ '^https?:\/\/\(\[^\/\]+\\\.\)?\(\\{% \\\$NAME %\\}|webvisor.com\)\/'\) \\{\n\t\tset \\\$frame_options 'SAMEORIGIN';\n\t\\}\n\tadd_header \"X-Frame-Options\" \"\\\$frame_options\";\n\t#\n\t# Nginx server status page\n\tlocation ^~ /nginx-status-$RANDOM_N \\{\n\t\tstub_status on;\n\t\tallow all;\n\t\\}\n\t# Apache server status page\n\tlocation ~* /apache-\(status|info\)-$RANDOM_N \\{\n\t\tallow all;\n\t\tproxy_pass \\\$proxyserver;\n\t\\}\n\t#### bx/site_settings/default/bx_temp.conf\n\tlocation ~* ^/bx_tmp_download/ \\{\n\t\tinternal;\n\t\trewrite /bx_tmp_download/\(.+\) /.bx_temp/sitemanager/\\\$1 last;\n\t\\}\n\tlocation ~* ^/.bx_temp/sitemanager/ \\{\n\t\tinternal;\n\t\troot \\\$docroot;\n\t\\}\n\t#### bx/conf/errors.conf\n\t#proxy_intercept_errors on;\n\t# Set error handlers\n\terror_page 403 /403.html;\n\terror_page 404 = \@fallback;\n\t#error_page 404 /404.html;\n\t#error_page 404 /404.php;\n\terror_page 500 /500.html;\n\terror_page 502 /502.html;\n\terror_page 503 /503.html;\n\terror_page 504 /504.html;\n\terror_page 497 https://\\\$host\\\$request_uri;\n\n\t# Custom pages for BitrixEnv errors\n\tlocation ^~ /500.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /502.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /503.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /504.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /403.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /404.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\n\tlocation ~* /bitrix/admin/1c_exchange\\\.php \\{\n\\{% if \\\$NO_TRAFF_COUNT == on %\\}\n\t\taccess_log off;\n\\{% endif %\\}\n\\{% if \\\$LOG_ERROR == on %\\}\n\t\terror_log \\{% \\\$ERROR_LOG_PATH %\\} notice;\n\\{% else %\\}\n\t\terror_log /dev/null crit;\n\\{% endif %\\}\n\t\tproxy_pass \\\$proxyserver;\n\t\tsend_timeout 3600;\n\t\tproxy_connect_timeout 3600;\n\t\tproxy_send_timeout 3600;\n\t\tproxy_read_timeout 3600;\n\t\tfastcgi_read_timeout 3600;\n\t\tfastcgi_send_timeout 3600;\n\t\tfastcgi_connect_timeout 3600;\n\t\tclient_body_timeout 3600;\n\t\tkeepalive_timeout 3600;\n\t\tkeepalive_requests 100;\n\t\\}\n\n\t#### bx/conf/bitrix_block.conf\n\t# ht\(passwd|access\)\n\tlocation ~* /\\\.ht \\{ deny all; \\}\n\n\t# repositories\n\tlocation ~* /\\\.\(svn|hg|git\) \\{ deny all; \\}\n\n\t# bitrix internal locations\n\tlocation ~* ^/bitrix/\(modules|local_cache|stack_cache|managed_cache|php_interface\) \\{ deny all; \\}\n\tlocation ~* ^/bitrix/\\\.settings\\\.php \\{ deny all; \\}\n\n\t# upload files\n\tlocation ~* ^/upload/1c_\[^/\]+/ \\{ deny all; \\}\n\n\t# use the file system to access files outside the site \(cache\)\n\tlocation ~* /\\\.\\\./ \\{ deny all; \\}\n\tlocation ~* ^/bitrix/html_pages/\\\.config\\\.php \\{ deny all; \\}\n\tlocation ~* ^/bitrix/html_pages/\\\.enabled \\{ deny all; \\}\n\n\t#### bx/conf/bitrix_general.conf\n\t# Intenal locations\n\tlocation ^~ /upload/support/not_image \\{ internal; \\}\n\t\t\n\t# Cache location: composite and general site\n\tlocation ~* \@.*\\\.html\\\$ \\{ \n\t\tinternal;\n\t\t# disable browser cache\, php manage file\n\t\texpires -1y;\n\t\tadd_header X-Bitrix-Composite \"Nginx \(file\)\";\n\t\\}\n\n\t# Player options\, disable no-sniff\n\tlocation ~* ^/bitrix/components/bitrix/player/mediaplayer/player\\\$ \\{ add_header Access-Control-Allow-Origin *; \\}\n\n\t# Process dav request on\n\t# main company\n\t# extranet\n\t# additional departments\n\t# locations that ends with / => directly to apache \n\tlocation ~ ^\(/\[^/\]+\)?\(/docs|/workgroups|/company/profile|/bitrix/tools|/company/personal/user|/mobile/webdav|/contacts/personal\).*/\\\$ \\{ proxy_pass \\\$proxyserver; \\}\n\n\t# Add / to request\n\tlocation ~ ^\(/\[^/\]+\)?\(/docs|/workgroups|/company/profile|/bitrix/tools|/company/personal/user|/mobile/webdav|/contacts/personal\) \\{\n\t\tset \\\$addslash \"\";\n\t\tif \(-d \\\$request_filename\) \\{ set \\\$addslash \"\\\$\\{addslash\\}Y\"; \\}\n\t\tif \(\\\$is_args != '?'\) \\{ set \\\$addslash \"\\\$\\{addslash\\}Y\"; \\}\n\t\tif \(\\\$addslash = \"YY\" \) \\{ proxy_pass \\\$proxyserver\\\$request_uri/; \\}\n\t\tproxy_pass \\\$proxyserver;\n\t\\}\n\n\t# Accept access for merged css and js\n\tlocation ~* ^/bitrix/cache/\(css/.+\\\.css|js/.+\\\.js\)\\\$ \\{\n\\{% if \\\$SRV_CACHE == on %\\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\\{% endif %\\}\n\t\terror_page 404 /404.html;\n\t\\}\n\n\t# Disable access for other assets in cache location\n\tlocation ~* ^/bitrix/cache \\{ deny all; \\}\n\n\t# Excange and Outlook\n\tlocation ~ ^/bitrix/tools/ws_.*/_vti_bin/.*\\\.asmx\\\$ \\{ proxy_pass \\\$proxyserver; \\}\n\n\t# Groupdav\n\tlocation ^~ /bitrix/groupdav.php \\{ proxy_pass \\\$proxyserver; \\}\n\n\t# Use nginx to return static content from s3 cloud storage\n\t# /upload/bx_cloud_upload/<schema>.<backet_name>.<s3_point>.amazonaws.com/<path/to/file>\n\tlocation ^~ /upload/bx_cloud_upload/ \\{\n\t\t# Amazon\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.\(s3|us-east-2|us-east-1|us-west-1|us-west-2|af-south-1|ap-east-1|ap-south-1|ap-northeast-3|ap-northeast-2|ap-southeast-1|ap-southeast-2|ap-northeast-1|ca-central-1|cn-north-1|cn-northwest-1|eu-central-1|eu-west-1|eu-west-2|eu-south-1|eu-west-3|eu-north-1|me-south-1|sa-east-1\)\\\.amazonaws\\\.com/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_pass \\\$1://\\\$2.\\\$3.amazonaws.com/\\\$4;\n\t\t\\}\n\n\t\t# Rackspace\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.\(\[^/:\\\s\]+\)\\\.\(\[^/:\\\s\]+\)\\\.rackcdn\\\.com/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.\\\$3.\\\$4.rackcdn.com/\\\$5;\n\t\t\\}\n\n\t\t# Clodo\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.clodo\\\.ru:\(80|443\)/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.clodo.ru:\\\$3/\\\$4;\n\t\t\\}\n\n\t\t# Google\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.commondatastorage\\\.googleapis\\\.com/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.commondatastorage.googleapis.com/\\\$3;\n\t\t\\}\n\n\t\t# Selectel\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.selcdn\\\.ru/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.selcdn.ru/\\\$3;\n\t\t\\}\n\n\t\t# Yandex\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.storage\\\.yandexcloud\\\.net/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.storage.yandexcloud.net/\\\$3;\n\t\t\\}\n\n\t\tlocation ~* .*\\\$ \\{ deny all; \\}\n\t\\}\n\n\t# Static content\n\tlocation ~* ^/\(upload|bitrix/images|bitrix/tmp\) \\{\n\t\tif \( \\\$upstream_http_x_accel_redirect = ''  \) \\{\n\\{% if \\\$SRV_CACHE == on %\\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\\{% endif %\\}\n\t\t\\}\n\t\\}\n\n\tlocation  ~* \\\.\(jpe?g|png|tiff|gif|webp|xml|yml|ogg|ogv|svgz?|mp4|rss|atom|ico|zip|tgz|gz|rar|bz2?|docx?|xlsx?|exe|pptx?|tar|midi?|wav|rtf|pdf|txt|js|css|bmp|pnm|pbm|ppm|woff2?|mp3|mpe?g|avi|webm|ttf\)\\\$ \\{\n\t\tadd_header Cache-Control \"public\";\n\t\terror_page 404 /404.html;\n\\{% if \\\$SRV_CACHE == on %\\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\\{% endif %\\}\n\t\\}\n\n\t# pub & online\n\t# telephony and voximplant\n\tlocation ~* ^/\(pub/|online/|services/telephony/info_receiver.php|/bitrix/tools/voximplant/\) \\{\n\t\tadd_header X-Frame-Options '' always;\n\t\tlocation ~* ^/\(pub/imconnector/|pub/imbot.php|services/telephony/info_receiver.php|bitrix/tools/voximplant/\) \\{\n\t\t\tproxy_ignore_client_abort on;\n\t\t\tproxy_pass \\\$proxyserver;\n\t\t\\}\n\tproxy_pass \\\$proxyserver;\n\t\\}\n\n\t# Bitrix setup script\n\tlocation ^~ ^\(/bitrixsetup\\\.php\)\\\$ \\{ \n\t\tproxy_pass \\\$proxyserver; \n\t\tproxy_buffering off;\n\t\\}\n\n\t# memcached and composite variables\n\tmemcached_connect_timeout 1s;\n\tmemcached_read_timeout 1s;\n\tmemcached_send_timeout 1s;\n\tmemcached_gzip_flag 65536;\n\tset \\\$memcached_key \"/\\\$\\{host\\}\\\$\\{composite_key\\}/index\@\\\$\\{args\\}.html\";\n\tset \\\$composite_cache \"bitrix/html_pages/\\\$\\{host\\}\\\$\\{composite_key\\}/index\@\\\$\\{args\\}.html\";\n\tset \\\$composite_file \"\\\$\\{docroot\\}/\\\$\\{composite_cache\\}\";\n\t# config file\n\tset \\\$composite_enabled  \"\\\$\\{docroot\\}/bitrix/html_pages/.enabled\";\n\t# if test pass through general tests:\n\tset \\\$use_composite_cache \"\";\n\t# global site test\, the same for all sites on the server\n\tif \(!-f /etc/nginx/conf.d/nginx_bitrix_http_context.conf\) \\{ set \\\$composite_key \"\"; set \\\$is_global_composite \"\";\\}\n\tif \(\\\$is_global_composite = 1\) \\{ set \\\$use_composite_cache \"A\"; \\}\n\n\tlocation / \\{\n\t\t# add trailing slash when no period in url\n\t\t#rewrite ^\(\[^.\]*\[^/\]\)\\\$ \\\$1/ permanent;\n\t\tdefault_type text/html;\n\t\tif \(-f \\\$composite_enabled\) \\{ set \\\$use_composite_cache \"\\\$\\{use_composite_cache\\}BC\"; \\}\n\t\tif \(-f \\\$composite_file\) \\{ set \\\$use_composite_cache \"\\\$\\{use_composite_cache\\}D\"; \\}\n\t\t# compostite nginx file\n\t\tif \(\\\$use_composite_cache = \"ABCD\"\) \\{ \n\t\t\trewrite .* /\\\$composite_cache last; \n\t\t\\}\n\t\t# compostite nginx memcached\n\t\tif \(\\\$use_composite_cache = \"ABC\"\) \\{\n\t\t\terror_page 404 405 412 502 504 = \@fallback;\n\t\t\tadd_header X-Bitrix-Composite \"Nginx \(memcached\)\";\n\t\t\t# use memcached tcp\n\t\t\tmemcached_pass localhost:11211;\n\t\t\t# use memcached socket\n\t\t\t#memcached_pass unix:/tmp/memcached.socket;\n\t\t\\}    \n\t\tproxy_pass \\\$proxyserver;\n\t\\}\n\n\tlocation \@fallback \\{\n\t\tproxy_set_header Host \\\$host;\n\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\tproxy_set_header X-Forwarded-Proto \\\$scheme;\n\t\tproxy_set_header X-Forwarded-Port \\\$server_port;\n\\{% if \\\$NO_TRAFF_COUNT == on %\\}\n\t\taccess_log off;\n\\{% endif %\\}\n\t\tproxy_pass \\{% \\\$BACKEND_BIND_URI %\\};\n\t\tproxy_redirect \\{% \\\$BACKEND_BIND_URI %\\} /;\n\t\\}\n\\{% endif %\\}\n\\{#\\}\n\\{#\\} CGI_APACHE_MODULE_config_stop\n\\{#\\}\n\\{#\\}\n\\{#\\} FPM_config_start\n\\{#\\}\n\\{% if \\\$REDIRECT_TO_PHPFPM == on %\\}\n\t#\n\t# www prefix add\n\t#if \(\\\$host !~* ^\(www\\\.\)\(?<domain>.+\)\\\$\) \\{ return 301 \\\$scheme://\\\$1\\\$domain\\\$request_uri; \\}\n\t#\n\t# www prefix remove\n\t#if \(\\\$host ~* ^www\\\.\(?<domain>.+\)\\\$\) \\{ return 301 \\\$scheme://\\\$domain\\\$request_uri; \\}\n\t# 301 tech subdomains\n\tif \(\\\$host ~* ^\(\(mail|smtp|ftp|mx\[\d+\]|ns\[\d+\]|pop3?|imap\)\(\\\.\)\(?<domain>.+\)\\\$\)\) \\{ return 301 \\\$scheme://\\\$domain\\\$request_uri; \\}\n\t#\n\tclient_max_body_size 1024m;\n\tclient_body_buffer_size 4m;\n\t#\n\tkeepalive_timeout 70;\n\tkeepalive_requests 150;\n\t#\n\tadd_header \"X-Content-Type-Options\" \"nosniff\";\n\tset \\\$frame_options '';\n\tif \(\\\$http_referer !~ '^https?:\/\/\(\[^\/\]+\\\.\)?\(\\{% \\\$NAME %\\}|webvisor.com\)\/'\) \\{\n\t\tset \\\$frame_options 'SAMEORIGIN';\n\t\\}\n\tadd_header X-Frame-Options \\\$frame_options;\n\t#\n\t# Nginx server status page\n\tlocation ^~ /nginx-status-$RANDOM_N \\{\n\t\tstub_status on;\n\t\tallow all;\n\t\\}\n\t#\n\t#### bx/site_settings/default/bx_temp.conf\n\tlocation ~* ^/bx_tmp_download/ \\{\n\t\tinternal;\n\t\trewrite /bx_tmp_download/\(.+\) /.bx_temp/sitemanager/\\\$1 last;\n\t\\}\n\tlocation ~* ^/.bx_temp/sitemanager/ \\{\n\t\tinternal;\n\t\troot \\\$docroot;\n\t\\}\n\t#\n\t#### bx/conf/errors.conf\n\t#proxy_intercept_errors on;\n\t# Set error handlers\n\terror_page 403 /403.html;\n\terror_page 404 = \@php;\n\t#error_page 404 /404.html;\n\t#error_page 404 /404.php;\n\terror_page 500 /500.html;\n\terror_page 502 /502.html;\n\terror_page 503 /503.html;\n\terror_page 504 /504.html;\n\terror_page 497 https://\\\$host\\\$request_uri;\n\t# Custom pages for BitrixEnv errors\n\tlocation ^~ /500.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /502.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /503.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /504.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /403.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\tlocation ^~ /404.html \\{ root /etc/nginx/vhosts-includes/bitrix_fpm/errors; \\}\n\t#\n\t# 1C exchange\n\tlocation ~* /bitrix/admin/1c_exchange\\\.php \\{\n\t\tinclude fastcgi_params;\n\\{% if \\\$NO_TRAFF_COUNT == on %\\}\n\t\taccess_log off;\n\\{% endif %\\}\n\\{% if \\\$LOG_ERROR == on %\\}\n\t\terror_log \\{% \\\$ERROR_LOG_PATH %\\} notice;\n\\{% else %\\}\n\t\terror_log /dev/null crit;\n\\{% endif %\\}\n\t\tfastcgi_read_timeout 3600;\n\t\tfastcgi_send_timeout 3600;\n\t\tfastcgi_connect_timeout 3600;\n\t\tclient_body_timeout 3600;\n\t\tkeepalive_timeout 3600;\n\t\tkeepalive_requests 100;\n\t\tfastcgi_pass \\{% \\\$PHPFPM_USER_SOCKET_PATH %\\};\n\t\ttry_files \\\$uri \@php;\n\t\\}\n\t#### bx/conf/bitrix_block.conf\n\t# ht\(passwd|access\)\n\tlocation ~* /\\\.ht \\{ deny all; \\}\n\t#\n\t# repositories\n\tlocation ~* /\\\.\(svn|hg|git\) \\{ deny all; \\}\n\t#\n\t# bitrix internal locations\n\tlocation ~* ^/bitrix/\(modules|local_cache|stack_cache|managed_cache|php_interface\) \\{ deny all; \\}\n\tlocation ~* ^/bitrix/\\\.settings\\\.php \\{ deny all; \\}\n\t#\n\t# upload files\n\tlocation ~* ^/upload/1c_\[^/\]+/ \\{ deny all; \\}\n\t#\n\t# use the file system to access files outside the site \(cache\)\n\tlocation ~* /\\\.\\\./ \\{ deny all; \\}\n\tlocation ~* ^/bitrix/html_pages/\\\.config\\\.php \\{ deny all; \\}\n\tlocation ~* ^/bitrix/html_pages/\\\.enabled \\{ deny all; \\}\n\t#### bx/conf/bitrix_general.conf\n\t# Intenal locations\n\tlocation ^~ /upload/support/not_image \\{ internal; \\}\n\t\t\n\t# Cache location: composite and general site\n\tlocation ~* \@.*\\\.html\\\$ \\{ \n\t\tinternal;\n\t\t# disable browser cache\, php manage file\n\t\texpires -1y;\n\t\tadd_header X-Bitrix-Composite \"Nginx \(file\)\";\n\t\\}\n\n\t# Player options\, disable no-sniff\n\tlocation ~* ^/bitrix/components/bitrix/player/mediaplayer/player\\\$ \\{ add_header Access-Control-Allow-Origin *; \\}\n\n\t# Process dav request on\n\t# main company\n\t# extranet\n\t# additional departments\n\t# locations that ends with / => directly to apache \n\tlocation ~ ^\(/\[^/\]+\)?\(/docs|/workgroups|/company/profile|/bitrix/tools|/company/personal/user|/mobile/webdav|/contacts/personal\).*/\\\$ \\{\n\t\ttry_files \\\$uri \@php;\n\t\\}\n\t#\n\t# Add / to request\n\tlocation ~ ^\(/\[^/\]+\)?\(/docs|/workgroups|/company/profile|/bitrix/tools|/company/personal/user|/mobile/webdav|/contacts/personal\) \\{\n\t\tset \\\$addslash \"\";\n\t\tif \(-d \\\$request_filename\) \\{ set \\\$addslash \"\\\$\\{addslash\\}Y\"; \\}\n\t\tif \(\\\$is_args != '?'\) \\{ set \\\$addslash \"\\\$\\{addslash\\}Y\"; \\}\n\t\tif \(\\\$addslash = \"YY\" \) \\{ rewrite ^\(.*\[^/\]\)\\\$ \\\$1/ permanent; \\}\n\t\t\ttry_files \\\$uri \@php;\n\t\\}\n\n\t# Accept access for merged css and js\n\tlocation ~* ^/bitrix/cache/\(css/.+\\\.css|js/.+\\\.js\)\\\$ \\{\n\\{% if \\\$SRV_CACHE == on %\\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\\{% endif %\\}\n\t\terror_page 404 = \@php;\n\t\t#error_page 404 /404.html;\n\t\t#error_page 404 /404.php;\n\t\\}\n\n\t# Disable access for other assets in cache location\n\tlocation ~* ^/bitrix/cache \\{ deny all; \\}\n\n\t# Excange and Outlook\n\tlocation ~ ^/bitrix/tools/ws_.*/_vti_bin/.*\\\.asmx\\\$ \\{ try_files \\\$uri \@php; \\}\n\n\t# Groupdav\n\tlocation ^~ /bitrix/groupdav.php \\{ try_files try_files \\\$uri \@php; \\}\n\n\t# Use nginx to return static content from s3 cloud storage\n\t# /upload/bx_cloud_upload/<schema>.<backet_name>.<s3_point>.amazonaws.com/<path/to/file>\n\tlocation ^~ /upload/bx_cloud_upload/ \\{\n\t\t# Amazon\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.\(s3|us-east-2|us-east-1|us-west-1|us-west-2|af-south-1|ap-east-1|ap-south-1|ap-northeast-3|ap-northeast-2|ap-southeast-1|ap-southeast-2|ap-northeast-1|ca-central-1|cn-north-1|cn-northwest-1|eu-central-1|eu-west-1|eu-west-2|eu-south-1|eu-west-3|eu-north-1|me-south-1|sa-east-1\)\\\.amazonaws\\\.com/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_pass \\\$1://\\\$2.\\\$3.amazonaws.com/\\\$4;\n\t\t\\}\n\n\t\t# Rackspace\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.\(\[^/:\\\s\]+\)\\\.\(\[^/:\\\s\]+\)\\\.rackcdn\\\.com/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.\\\$3.\\\$4.rackcdn.com/\\\$5;\n\t\t\\}\n\n\t\t# Clodo\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.clodo\\\.ru:\(80|443\)/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.clodo.ru:\\\$3/\\\$4;\n\t\t\\}\n\n\t\t# Google\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.commondatastorage\\\.googleapis\\\.com/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.commondatastorage.googleapis.com/\\\$3;\n\t\t\\}\n\n\t\t# Selectel\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.selcdn\\\.ru/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.selcdn.ru/\\\$3;\n\t\t\\}\n\n\t\t# Yandex\n\t\tlocation ~ ^/upload/bx_cloud_upload/\(http\[\\\s\]?\)\\\.\(\[^/:\\\s\]+\)\\\.storage\\\.yandexcloud\\\.net/\(\[^\\\s\]+\)\\\$ \\{\n\t\t\tinternal;\n\t\t\tresolver 1.1.1.1 188.120.247.2 82.146.59.250 188.120.247.8 ipv6=off;\n\t\t\tresolver_timeout 3s;\n\t\t\tproxy_method GET;\n\t\t\tproxy_set_header X-Real-IP \\\$remote_addr;\n\t\t\tproxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;\n\t\t\tproxy_set_header X-Forwarded-Server \\\$host;\n\t\t\t#more_clear_input_headers 'Authorization';\n\t\t\tproxy_max_temp_file_size 0;\n\t\t\tproxy_buffer_size 4k;\n\t\t\tproxy_buffers 32 4k;\n\t\t\tproxy_pass \\\$1://\\\$2.storage.yandexcloud.net/\\\$3;\n\t\t\\}\n\n\t\tlocation ~* .*\\\$ \\{ deny all; \\}\n\t\\}\n\n\t# Static content\n\tlocation ~* ^/\(upload|bitrix/images|bitrix/tmp\) \\{\n\t\tif \( \\\$upstream_http_x_accel_redirect = ''  \) \\{\n\\{% if \\\$SRV_CACHE == on %\\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\\{% endif %\\}\n\t\t\\}\n\t\\}\n\n\tlocation  ~* \\\.\(jpe?g|png|tiff|gif|webp|xml|yml|ogg|ogv|svgz?|mp4|rss|atom|ico|zip|tgz|gz|rar|bz2?|docx?|xlsx?|exe|pptx?|tar|midi?|wav|rtf|pdf|txt|js|css|bmp|pnm|pbm|ppm|woff2?|mp3|mpe?g|avi|webm|ttf\)\\\$ \\{\n\t\tadd_header Cache-Control \"public\";\n\t\terror_page 404 = \@php;\n\t\t#error_page 404 /404.html;\n\t\t#error_page 404 /404.php;\n\\{% if \\\$SRV_CACHE == on %\\}\n\t\texpires \[% \\\$EXPIRES_VALUE %\];\n\\{% endif %\\}\n\t\\}\n\n\t# Bitrix admin area\n\tlocation ^~ /bitrix/admin/.*\\\.php\\\$  \\{\n\t\ttry_files \\\$uri \@bitrix_admin_fpm;\n\t\\}\n\t# pub & online\n\t# telephony and voximplant\n\tlocation ~* ^/\(pub/|online/|services/telephony/info_receiver.php|/bitrix/tools/voximplant/\) \\{\n\t\tadd_header X-Frame-Options '' always;\n\t\tlocation ~* ^/\(pub/imconnector/|pub/imbot.php|services/telephony/info_receiver.php|bitrix/tools/voximplant/\) \\{\n\t\t\ttry_files \\\$uri \@php;\n\t\t\\}\n\ttry_files \\\$uri \@php;\n\t\\}\n\n\t# Bitrix setup script\n\tlocation ^~ ^\(/bitrixsetup\\\.php\)\\\$ \\{\n\t\ttry_files \\\$uri \@php;\n\t\\}\n\n\t# memcached and composite variables\n\tmemcached_connect_timeout 1s;\n\tmemcached_read_timeout 1s;\n\tmemcached_send_timeout 1s;\n\tmemcached_gzip_flag 65536;\n\tset \\\$composite_cache \"bitrix/html_pages/\\\$\\{host\\}\\\$\\{composite_key\\}/index\@\\\$\\{args\\}.html\";\n\tset \\\$composite_file \"\\\$\\{docroot\\}/\\\$\\{composite_cache\\}\";\n\t# config file\n\tset \\\$composite_enabled  \"\\\$\\{docroot\\}/bitrix/html_pages/.enabled\";\n\t# if test pass through general tests:\n\tset \\\$use_composite_cache \"\";\n\t# global site test\, the same for all sites on the server\n\tif \(!-f /etc/nginx/conf.d/nginx_bitrix_http_context.conf\) \\{ set \\\$composite_key \"\"; set \\\$is_global_composite \"\";\\}\n\tif \(\\\$is_global_composite = 1\) \\{ set \\\$use_composite_cache \"A\"; \\}\n\n\tlocation / \\{\n\t\t# add trailing slash when no period in url\n\t\t#rewrite ^\(\[^.\]*\[^/\]\)\\\$ \\\$1/ permanent;\n\t\tlocation ~ \[^/\]\\\.ph\(p\d*|tml\)\\\$ \\{\n\t\tdefault_type text/html;\n\t\tif \(-f \\\$composite_enabled\) \\{ set \\\$use_composite_cache \"\\\$\\{use_composite_cache\\}BC\"; \\}\n\t\tif \(-f \\\$composite_file\) \\{ set \\\$use_composite_cache \"\\\$\\{use_composite_cache\\}D\"; \\}\n\t\t# compostite nginx file\n\t\tif \(\\\$use_composite_cache = \"ABCD\"\) \\{ \n\t\t\trewrite .* /\\\$composite_cache last; \n\t\t\\}\n\t\t\t# compostite nginx memcached\n\t\t\tif \(\\\$use_composite_cache = \"ABC\"\) \\{\n\t\t\t\terror_page 404 405 412 502 504 = \@bitrix_no_script_filename;\n\t\t\t\tadd_header X-Bitrix-Composite \"Nginx \(memcached\)\";\n\t\t\tset \\\$memcached_key \"/\\\$\\{host\\}\\\$\\{composite_key\\}/index\@\\\$\\{args\\}.html\";\n\t\t\t\t# use memcached tcp\n\t\t\t\tmemcached_pass localhost:11211;\n\t\t\t\t# use memcached socket\n\t\t\t\t#memcached_pass unix:/tmp/memcached.socket;\n\t\t\\}\n\t\t\tinclude fastcgi_params;\n\t\t\ttry_files \\\$uri \@php;\n\t\t\tfastcgi_pass \\{% \\\$PHPFPM_USER_SOCKET_PATH %\\};\n\t\t\tfastcgi_param SCRIPT_FILENAME \\\$document_root\\\$fastcgi_script_name;\n\t\t\tfastcgi_param PHP_ADMIN_VALUE \"sendmail_path = /usr/sbin/sendmail -t -i -f \\{% \\\$EMAIL %\\}\";\n\t\t\\}\n\n\t\tlocation ~* /bitrix/admin/.+\\\.ph\(p\d*|tml\)\\\$ \\{\n\t\t\tinclude fastcgi_params;\n\t\t\ttry_files \\\$uri \@bitrix_admin_fpm;\n\t\t\tfastcgi_pass \\{% \\\$PHPFPM_USER_SOCKET_PATH %\\};\n\t\t\tfastcgi_param SCRIPT_FILENAME \\\$document_root\\\$fastcgi_script_name;\n\t\t\tfastcgi_param PHP_ADMIN_VALUE \"sendmail_path = /usr/sbin/sendmail -t -i -f \\{% \\\$EMAIL %\\}\";\n\t\t\\}\n\t\ttry_files \\\$uri \\\$uri/ \@php;\n\t\\}\n\n\tlocation \@bitrix_admin_fpm \\{\n\t\tinclude fastcgi_params;\n\t\tfastcgi_param SCRIPT_FILENAME \\\$document_root/bitrix/admin/404.php;\n\t\tfastcgi_pass \\{% \\\$PHPFPM_USER_SOCKET_PATH %\\};\n\t\tfastcgi_param PHP_ADMIN_VALUE \"sendmail_path = /usr/sbin/sendmail -t -i -f \\{% \\\$EMAIL %\\}\";\n\t\tfastcgi_intercept_errors off;\n\t\tfastcgi_ignore_client_abort off;\n\t\tfastcgi_connect_timeout 60;\n\t\tfastcgi_send_timeout 180;\n\t\tfastcgi_read_timeout 180;\n\t\tfastcgi_buffer_size 128k;\n\t\tfastcgi_buffers 8 256k;\n\t\tfastcgi_busy_buffers_size 256k;\n\t\tfastcgi_temp_file_write_size 10m;\n\t\tfastcgi_split_path_info ^\(\(?U\).+\\\.ph\(?:p\\\d*|tml\)\)\(/?.+\)\\\$;\n\t\\}\n\tlocation \@bitrix_no_script_filename \\{\n\t\tfastcgi_pass \\{% \\\$PHPFPM_USER_SOCKET_PATH %\\};\n\t\tinclude fastcgi_params;\n\t\ttry_files \\\$uri \@php;\n\t\\}\n\\{% endif %\\}\n\\{#\\}\n\\{#\\} FPM_config_stop\n\\{#\\}\n\\{% endif %\\}\n\\{% endif %\\}\n\\{#\\} proxy_to_bitrix_fpm_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n\n\t\t\n\n,gi"
+	
+				BITRIX_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS="$BITRIX_FPM_NGINX_PERL_INJECTION_LOCATIONS"
+	
+				BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n\t\tfastcgi_intercept_errors off;\n\t\tfastcgi_ignore_client_abort off;\n\t\tfastcgi_connect_timeout 60;\n\t\tfastcgi_send_timeout 180;\n\t\tfastcgi_read_timeout 180;\n\t\tfastcgi_buffer_size 128k;\n\t\tfastcgi_buffers 8 256k;\n\t\tfastcgi_busy_buffers_size 256k;\n\t\tfastcgi_temp_file_write_size 10m;\n\t\tfastcgi_param SCRIPT_FILENAME \\\$document_root/bitrix/urlrewrite.php;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
+				
+				BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND_2="s,\t\ttry_files \\\$uri =404;\n\t\tinclude fastcgi_params;\n\t\}\n\{% endif %\}\n\},\{% if \\\$PRESET != proxy_to_bitrix_fpm and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\ttry_files \\\$uri =404;\n\{% endif %\}\n\t\}\n\{% endif %\}\n\},gi"
+				
+				BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND_3="s,\{% if \\\$REDIRECT_TO_PHPFPM == on %\}\n\tlocation \@php \{\n\t\tfastcgi_index index.php;,\{% if \\\$REDIRECT_TO_PHPFPM == on %\}\n\tlocation \@php \{\n\t\tinclude fastcgi_params;\n\t\tfastcgi_index index.php;\n,gi"
+	
+				# check current nginx conf sanity
+				if ! nginx_test_output=$({ nginx -t; } 2>&1)
+				then 
+					printf "\n${LRV}ERROR - current nginx configuration check has failed (nginx -t)${NCV}\n$nginx_test_output"
+					EXIT_STATUS=1
+					check_exit_and_restore_func
+				fi
 				# create & check comaptibility
 				backward_copmat_func
 				
-				# bitrix_fpm nginx map include
-				printf "\n${YCV}Writing bitrix nginx maps in $BITRIX_PROXY_NGINX_HTTP_CONTEXT ${NCV}\n"
-				cat <<XEOF > $BITRIX_PROXY_NGINX_HTTP_CONTEXT
-
-
-
-###### push-im_settings.conf start ######
-push_stream_shared_memory_size				256M;
-push_stream_max_messages_stored_per_channel	1000;
-push_stream_max_channel_id_length				32;
-push_stream_max_number_of_channels			100000;
-push_stream_message_ttl						86400;
-###### push-im_settings.conf end ######
-
-###### composite_settings.conf start ######
-map $uri $composite_key {
-	default										$uri;
-	~^(/|/index.php|/index.html)$						"";
-	~^(?P<non_slash>.+)/$							$non_slash;
-	~^(?P<non_index>.+)/index.php$					$non_index;
-	~^(?P<non_index>.+)/index.html$					$non_index;
-}
-
-# disable composite cache if BX_ACTION_TYPE exists
-map $http_bx_action_type $not_bx_action_type {
-	default		"0";
-	""			"1";
-}
-
-# disable composite cache if BX_AJAX
-map $http_bx_ajax $not_bx_ajax {
-	default		"0";
-	""			"1";
-}
-
-# disable composite cache if method != GET
-map $request_method $is_get {
-	default		"0";
-	"GET"		"1";
-}
-
-# disable composite cache if there next query string in agrs
-# ncc
-map $arg_ncc $non_arg_ncc {
-	default		"0";
-	""			"1";
-}
-
-# bxajaxid
-map $arg_bxajaxid $non_arg_bxajaxid {
-	default		"0";
-	""			"1";
-}
-
-# sessid
-map $arg_sessid $non_arg_sessid {
-	default		"0";
-	""			"1";
-}
-
-# test IE
-map $http_user_agent $is_modern {
-	default					 "1";
-	"~MSIE [5-9]"				 "0";
-}
-
-# add common limit by uri path
-map $uri $is_good_uri {
-	default								"1";
-	~^/bitrix/								"0";
-	~^/index_controller.php					"0";
-}
-
-# not found NCC
-map $cookie_BITRIX_SM_NCC $non_cookie_ncc {
-	default		"0";
-	""			"1";
-}
-
-# complex test
-# BITRIX_SM_LOGIN, BITRIX_SM_UIDH - hold values and BITRIX_SM_CC is empty
-map $cookie_BITRIX_SM_LOGIN $is_bx_sm_login {
-	default		"1";
-	""			"0";
-}
-
-map $cookie_BITRIX_SM_UIDH $is_bx_sm_uidh {
-	default		"1";
-	""			"0";
-}
-
-map $cookie_BITRIX_SM_CC $is_bx_sm_cc {
-	default		"1";
-	"Y"			"0";
-}
-
-map "${is_bx_sm_login}${is_bx_sm_uidh}${is_bx_sm_cc}" $is_storedAuth {
-	default		"1";
-	"111"		"0";
-}
-
-# test all global conditions
-map "${not_bx_action_type}${not_bx_ajax}${is_get}${non_arg_ncc}${non_arg_bxajaxid}${non_arg_sessid}${is_modern}${is_good_uri}${non_cookie_ncc}${is_storedAuth}" $is_global_composite {
-	default		"1";
-	~0			"0";
-}
-
-map $uri $general_key {
-	default								$uri;
-	~^(?P<non_slash>.+)/$					$non_slash;
-	~^(?P<php_path>.+).php$				$php_path;
-}
-
-# if exists cookie PHPSESSID disable
-map $cookie_PHPSESSID $non_cookie_phpsessid {
-	default			"0";
-	""				"1";
-}
-
-# main condition for general cache
-map "${is_get}${cookie_PHPSESSID}" $is_global_cache {
-	default			"1";
-	~0				"0";
-}
-###### composite_settings.conf end ######
-XEOF
-				# bitrix_fpm nginx-vhosts.template
-				printf "\n${YCV}Injecting SPECIAL $PROXY_PREFIX$proxy_target template in $NGINX_TEMPLATE ${NCV}\n"
+				# check gits
+				git_check
 				
+				# installed nginx check
+				nginx_push_pull_module_support
+				
+				# user select nginx push pull stream Y/N
+				if [[ $NGINX_HAVE_PUSH_PULL = "1" ]]
+				then 
+					BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf"
+				else
+					printf "\n${YCV}Warning: nginx compiled without push and pull stream module\nI can recompile it with nginx-push-stream (and also with brotli, headers-more-nginx-module, latest openssl) OR you may just continue without it (modern bitrix core using own node.js or cloud stream server)\n${NCV}\n"
+					read -p "Continue without nginx recompilation ? [Y/n]" -n 1 -r
+					echo
+					if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+					then
+						# no push and pull stream
+						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf.disabled"
+					else
+						# recompilation of nginx was selected
+						printf "\n${GCV}You have chosen to recompile nginx with modules needed\nDo not forget manually uncomment the more_clear_input_headers directives in bitrix nginx configuration if recompilation succeed like this:\nsed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_TEMPLATE && sed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_SSL_TEMPLATE${NCV}"
+						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf"
+						EXIT_STATUS=0
+						trap 'EXIT_STATUS=1' ERR
+							
+						# download recompilation script
+						if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
+						then
+							# execute recompilation script
+							printf "This will take some time\nRecompiling"
+							
+							if printf "1\n" | bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+							then
+								printf " - ${GCV}OK${NCV}\n"
+								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+							else
+								printf " - ${LRV}FAIL${NCV}\n"
+								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+								EXIT_STATUS=1
+								check_exit_and_restore_func
+							fi
+						else
+							printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
+							\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+							EXIT_STATUS=1
+							check_exit_and_restore_func
+						fi
+					fi
+				fi
+				
+				# download bitrix_fpm error files
+				printf "\n${YCV}Downloading bitrix error files to $BITRIX_FPM_LOCAL_ERRORS_DIR${NCV}\n"
+				if mkdir -p "$BITRIX_FPM_LOCAL_ERRORS_DIR"
+				then
+					for file in "${BITRIX_REQ_ERROR_PAGES_FILES[@]}"
+					do
+						EXIT_STATUS=0
+						trap 'EXIT_STATUS=1' ERR
+						
+						printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$BITRIX_REQ_ERROR_PAGES_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_LOCAL_ERRORS_DIR/$file"
+						# check result and restore if error
+						printf "Verifying download status of $BITRIX_FPM_LOCAL_ERRORS_DIR/$file"
+						if [[ -f "$BITRIX_FPM_LOCAL_ERRORS_DIR/$file" ]]
+						then
+							# file exists after download and total size more than 30 bytes
+							FILE_SIZE=$(ls -l "$BITRIX_FPM_LOCAL_ERRORS_DIR/$file" | awk '{print $5}' 2> /dev/null)
+							if [[ $FILE_SIZE -gt 30 ]]
+							then 
+								printf " - ${GCV}OK${NCV}\n"
+							else
+								# file size less than 30 bytes
+								printf " - ${LRV}FAIL (Filesize less than 30 bytes)${NCV}\n"
+								EXIT_STATUS=1
+								check_exit_and_restore_func
+							fi
+						else
+							# file doesnt exists after download
+							printf " - ${LRV}FAIL (File not exist after download)${NCV}\n"
+							EXIT_STATUS=1
+							check_exit_and_restore_func
+						fi
+					done
+				else
+					printf "\n${LRV}ERROR - Cannot create $BITRIX_FPM_LOCAL_ERRORS_DIR${NCV}\n"
+					EXIT_STATUS=1
+					check_exit_and_restore_func
+				fi
+				
+				# download bitrix_fpm nginx files
+				if [[ -f "$NGINX_MAIN_CONF_FILE" ]]
+				then 
+					# we have main conf, check includes
+					if ! grep -v "#" $NGINX_MAIN_CONF_FILE | grep "include /etc/nginx/conf.d/\*.conf.*;" &> /dev/null
+					then
+						# nginx's include /etc/nginx/conf.d/*.conf.* was not found
+						# check that we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
+						if ! grep "$PROXY_PREFIX$proxy_target" $NGINX_MAIN_CONF_FILE &> /dev/null
+						then
+							sed -i "s@http {@&\n# $PROXY_PREFIX$proxy_target\_START_DO_NOT_REMOVE\n# date added - $current_date_time\n# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE\n@g" $NGINX_MAIN_CONF_FILE
+							# download
+							bitrix_fpm_download_files_func
+							
+							# adding inject if /etc/nginx/conf.d/*.conf.* was not found
+							printf "Updating $NGINX_MAIN_CONF_FILE\n"
+							sed -i "s@# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE@    include\t$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file;\n&@g" $NGINX_MAIN_CONF_FILE &> /dev/null
+						else
+							# we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
+							printf "\n${LRV}ERROR - $existing $PROXY_PREFIX$proxy_target found in $NGINX_MAIN_CONF_FILE\nUse \"$BASH_SOURCE del $PROXY_PREFIX$proxy_target\" to remove it${NCV}\n"
+							EXIT_STATUS=1
+							check_exit_and_restore_func
+						fi
+					else
+						# nginx's include /etc/nginx/conf.d/*.conf.* was found
+						# just download
+						bitrix_fpm_download_files_func
+					fi
+				else
+					# we cannot find $NGINX_MAIN_CONF_FILE
+					printf "\n${LRV}ERROR - file $NGINX_MAIN_CONF_FILE was not found${NCV}\n"
+					EXIT_STATUS=1
+					check_exit_and_restore_func
+				fi
+				
+				# bitrix_fpm nginx-vhosts.template
+				printf "${YCV}Injecting $PROXY_PREFIX$proxy_target${NCV}"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_LOCATIONS" "$NGINX_TEMPLATE"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_TEMPLATE"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND_2" "$NGINX_TEMPLATE"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND_3" "$NGINX_TEMPLATE"
 				
 				# bitrix_fpm nginx-vhosts-ssl.template
-				printf "\n${YCV}Injecting SPECIAL $PROXY_PREFIX$proxy_target template in $NGINX_SSL_TEMPLATE ${NCV}\n"
+				perl -i -p0e "$BITRIX_FPM_NGINX_SSL_PERL_INJECTION_LOCATIONS" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND_2" "$NGINX_SSL_TEMPLATE"
+				perl -i -p0e "$BITRIX_FPM_NGINX_PERL_INJECTION_PHPFPM_BACKEND_3" "$NGINX_SSL_TEMPLATE"
 				
+				check_exit_and_restore_func
+				printf " - ${GCV}OK${NCV}\n"
+				
+				# set status pages for nginx and apache
+				BITRIX_FPM_STATUS_SET=1
+				set_status_pages &> /dev/null
+				
+				# bitrix tweak php and mysql
+				ispmanager_tweak_php_and_mysql_settings_func
+
 				continue
 			else
-				#no special injections comes here
-				printf "\n${GCV}Injecting $PROXY_PREFIX$proxy_target ${NCV}\n"
 				
 				# create & check comaptibility
 				backward_copmat_func
-				printf "\n${GCV}Backward compatibility test succeed ${NCV}\n"
+				
+				# not special injections comes here
+				printf "\nInjecting $PROXY_PREFIX$proxy_target"
 				
 				# $NGINX_TEMPLATE injection
 				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_TEMPLATE"
@@ -548,7 +1175,9 @@ XEOF
 				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE" "$NGINX_SSL_TEMPLATE"
 				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM" "$NGINX_SSL_TEMPLATE"
 				perl -i -p0e "$REGULAR_PROXY_NGINX_PERL_INJECTION_IF_PHP_OFF" "$NGINX_SSL_TEMPLATE"
-				printf "${GCV}Successfuly injected - $PROXY_PREFIX$proxy_target ${NCV}\n"
+				
+				check_exit_and_restore_func
+				printf " - ${GCV}OK${NCV}\n"
 			fi
 	else
 		printf "\n${LRV}Error on adding preset - $PROXY_PREFIX$proxy_target${NCV}\n"
@@ -564,9 +1193,12 @@ fastcgi_pass_format_func
 # fix seo 301
 seo_fix_ssl_port_func
 
+# ssl tune
+ssl_tune_func
+
 # panel graceful restart
-$MGRCTL -R
-printf "\n${LRV}ISP panel restarted${NCV}\n"
+isp_panel_graceful_restart_func
+
 }
 
 main_func "${@:2}"
