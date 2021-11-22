@@ -74,7 +74,6 @@ GIT_REQ_URI="${SCRIPT_GIT_PATH#https://*/}"
 GIT_BACKUP_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
 
 # show script version and check gits
-self_current_version="1.0.2"
 script_git_name="proxy_preset_builder.sh"
 git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
 git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
