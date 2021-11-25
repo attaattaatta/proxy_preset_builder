@@ -7,6 +7,7 @@
 <br>Автокомпозит c [Ammina opimizer](http://marketplace.1c-bitrix.ru/solutions/ammina.optimizer/) для Битрикс:
 - Отмечаем чек-бокс "Авторедирект на корректную страницу при наличии в строке запроса параметра iswebp" в настройках модуля в админке Битрикс
 - Скачиваем https://www.ammina.ru/upload/sysfiles/ammina_composite.conf в /etc/nginx/vhosts-resources/ваш_сайт/
+- Заменяем ${root_path} на путь до корня сайта
 - Перезапускаем nginx:
 ```
 nginx -t && nginx -s reload
