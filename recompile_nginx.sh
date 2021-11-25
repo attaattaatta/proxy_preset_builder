@@ -232,7 +232,7 @@ ngx_configure_make_install_func
 ngx_compilation_custom_func() {
 printf "\n${GCV}List:${NCV}\nopenssl\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GCV}Type names above (or|and) enter full path to nginx module to compile, separated by space:${NCV}"
 read -a nginx_modules_array
-for nginx_module in ${nginx_modules_array[@]}
+for nginx_module in "${nginx_modules_array[@]}"
 do 
 if [[ "$nginx_module" =~ "openssl" ]]
 then
