@@ -1,8 +1,8 @@
 #!/bin/bash
 # enable debug
 #set -x -v
+# pipefail | verbose
 #set -e -o verbose
-#pipefail | verbose
 
 # fixing paths
 export PATH=$PATH:/usr/sbin:/usr/sbin:/usr/local/sbin
