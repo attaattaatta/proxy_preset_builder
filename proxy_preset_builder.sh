@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.2"
+self_current_version="1.0.3"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -93,7 +93,7 @@ fi
 # check panel version and release name
 printf "\n${GCV}ISP Manager version checking${NCV}\n"
 
-panel_required_version="6.26.0"
+panel_required_version="6.32.0"
 
 panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+')"
 panel_release_name="$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
@@ -114,7 +114,7 @@ then
 else
 	if [[ $panel_current_version < $panel_required_version ]]
 	then 
-		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/12c70d7c370959f9f8a2c45b3b72c0a9aade914c/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}"
+		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/12c70d7c370959f9f8a2c45b3b72c0a9aade914c/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}\n"
 		exit 1
 	else
 		printf "ISP Manager version ($panel_current_version) suits\n"
@@ -308,7 +308,8 @@ else
 			then
 				break
 			else
-				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 15000\nand enable PHP extensions: opcache, memcache, memcached, ioncube, imagick, bcmath, xsl\n"
+				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 15000\nand enable PHP extensions: opcache, 
+				e, memcached, ioncube, imagick, bcmath, xsl\n"
 				printf "${GCV}"
 				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
@@ -329,8 +330,8 @@ else
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok
 					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=xsl sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=xsl sok=ok
+					$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
+					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=15000 cgi_value=15000 fpm_value=15000 sok=ok
 					} &> /dev/null
@@ -909,7 +910,7 @@ do
 		limit_dirindex_var=index.php
 	fi
 	# check for error / success
-	if $MGRCTL preset.edit limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok &> /dev/null
+	if $MGRCTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok &> /dev/null
 	then
 		printf " - ${GCV}OK${NCV}\n"
 		preset_raise_error="0"
@@ -1032,7 +1033,7 @@ do
 						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf.disabled"
 					else
 						# recompilation of nginx was selected
-						printf "\n${GCV}You have chosen to recompile nginx with modules needed\nDo not forget manually uncomment the more_clear_input_headers directives in bitrix nginx configuration if recompilation succeed like this:\nsed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_TEMPLATE && sed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_SSL_TEMPLATE${NCV}"
+						printf "\n${GCV}You have chosen to recompile nginx with modules needed\nDo not forget manually uncomment the more_clear_input_headers directives in bitrix nginx configuration if recompilation succeed like this:\nsed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_TEMPLATE && sed -i 's@#more_clear_input_headers@more_clear_input_headers@gi' $NGINX_SSL_TEMPLATE${NCV}\n"
 						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf"
 						EXIT_STATUS=0
 						trap 'EXIT_STATUS=1' ERR
@@ -1183,6 +1184,7 @@ do
 	else
 		printf "\n${LRV}Error on adding preset - $PROXY_PREFIX$proxy_target${NCV}\n"
 		printf "${LRV}Skipping template injection.${NCV}\n"
+		printf "${LRV}Check $MGR_PATH/var/ispmgr.log for errors${NCV}\n" 
 		preset_raise_error="1"
 		continue
 	fi
