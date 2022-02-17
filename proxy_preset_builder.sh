@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.3"
+self_current_version="1.0.5"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -131,7 +131,7 @@ then
 	exit 1
 fi
 
-# restart ISP panel
+# restart ISP panel func
 isp_panel_graceful_restart_func() {
 
 printf "\n${LRV}ISP panel restarting${NCV}"
@@ -157,8 +157,8 @@ backup_func() {
 	
 	printf "\n${GCV}Backing up etc and templates${NCV}\n"
 	\mkdir -p "$BACKUP_ROOT_DIR"
-	\cp -rp "$MGR_PATH/etc/templates" "$current_ispmgr_backup_directory"
-	\cp -rp "/etc" "$current_etc_backup_directory"
+	\cp -rp --reflink=auto "$MGR_PATH/etc/templates" "$current_ispmgr_backup_directory"
+	\cp -rp --reflink=auto "/etc" "$current_etc_backup_directory"
 	printf "/etc and templates are backed up to $current_ispmgr_backup_directory and $current_etc_backup_directory\n"
 }
   
@@ -267,9 +267,9 @@ check_exit_and_restore_func() {
 		printf "\n${LRV}Restoring last templates backup${NCV}\n"
 		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]
 		then
-			\cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" &> /dev/null && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
+			\cp -f -p --reflink=auto "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p --reflink=auto "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p --reflink=auto "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" &> /dev/null && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
 			exit 1
 		else 
 			printf "\n${LRV}ERROR - $current_etc_backup_directory or $current_ispmgr_backup_directory was not found\n"
@@ -807,6 +807,12 @@ fi
 
 main_func() {
 
+# enabling ISP PHP-FPM FastCGI feature
+printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
+$MGRCTL feature.edit elid=web package_php-fpm=on sok=ok
+check_exit_and_restore_func
+printf " - ${GCV}OK${NCV}\n"
+
 # enought arguments check and if nothing in the list of presets show help
 if [[ "$#" -lt 1 ]]
 then
@@ -840,9 +846,9 @@ then
 		exit 1
 	else
 		printf "\nNGINX default template exists. Copying it to $NGINX_TEMPLATE\n"
-		\cp -p $NGINX_DEFAULT_TEMPLATE $NGINX_TEMPLATE &> /dev/null
+		\cp -p --reflink=auto "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" &> /dev/null
 		# fix importing default ssl template
-		sed -i 's@import etc/templates/default/@import etc/templates/@gi' $NGINX_TEMPLATE &> /dev/null
+		sed -i 's@import etc/templates/default/@import etc/templates/@gi' "$NGINX_TEMPLATE" &> /dev/null
 	fi
 fi
 
@@ -854,7 +860,7 @@ then
 		exit 1
 	else
 		printf "NGINX default ssl template exists. Copying it to $NGINX_SSL_TEMPLATE\n"
-		\cp -p $NGINX_DEFAULT_SSL_TEMPLATE $NGINX_SSL_TEMPLATE &> /dev/null
+		\cp -p --reflink=auto "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" &> /dev/null
 	fi
 fi
 
