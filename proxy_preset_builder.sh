@@ -818,7 +818,7 @@ then
 	# feature.edit return OK but actual install continues, so we need to sleep some time
 	printf "\n${GCV}Waiting 60 seconds for ISP Panel PHP-FPM FastCGI feature install${NCV}"
 	sleep 60
-	if ! [[ $MGRCTL feature | grep "name=web" | grep -i fpm ]]
+	if ! [[ $($MGRCTL feature | grep "name=web" | grep -i fpm) ]]
 	then
 		printf "\n${LRV}ISP Manager PHP-FPM FastCGI feature still not exists\nCheck /usr/local/mgr5/var/pkg.log logfile${NCV}"
 		exit 1
