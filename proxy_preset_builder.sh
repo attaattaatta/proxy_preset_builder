@@ -809,9 +809,12 @@ main_func() {
 
 # enabling ISP PHP-FPM FastCGI feature
 printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
+EXIT_STATUS=0
 $MGRCTL feature.edit elid=web package_php-fpm=on sok=ok
 check_exit_and_restore_func
 printf " - ${GCV}OK${NCV}\n"
+# feature.edit return OK but actual install continues, so we need to sleep some time
+sleep 30
 
 # enought arguments check and if nothing in the list of presets show help
 if [[ "$#" -lt 1 ]]
