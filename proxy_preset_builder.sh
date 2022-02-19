@@ -291,7 +291,7 @@ then
 else
 	printf "\n${GCV}PHP${NCV}\n"
 	# get isp panel installed php versions into the array phpversions
-	IFS=$'\n' read -r -d '' -a phpversions < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
+	phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
 	phpversions+=('Skip')
 	
 	# check that array not empty
@@ -308,8 +308,7 @@ else
 			then
 				break
 			else
-				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 15000\nand enable PHP extensions: opcache, 
-				e, memcached, ioncube, imagick, bcmath, xsl\n"
+				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 15000\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
 				printf "${GCV}"
 				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
@@ -350,7 +349,7 @@ else
 	fi
 
 	# get isp panel installed mysql versions into the array mysqlversions
-	IFS=$'\n' read -r -d '' -a mysqlversions < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
+	mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
 	mysqlversions+=('Skip')
 	
 	# check that array not empty
