@@ -75,9 +75,13 @@ bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) a
 ```
 bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add 1.1.1.1:80 127.0.0.1:8088
 ```
-Добавление шаблона для bitrix
+Добавление только шаблона для bitrix
 ```
 bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add bitrix_fpm
+```
+Добавление множества шаблонов
+```
+bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add bitrix_fpm opencart_fpm wordpress_fpm moodle_fpm 
 ```
 Сброс всех добавленных шаблонов и инъекций и добавление следом проксирования на 127.0.0.1:9000
 ```
