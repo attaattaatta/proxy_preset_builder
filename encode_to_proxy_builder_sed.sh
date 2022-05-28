@@ -8,7 +8,7 @@ then
 	RANDOM_N=$RANDOM
 	INPUT_F=/tmp/sepd_RANDOM_N
 	\cp -Rfp $1 $INPUT_F
-	\sed -i -E 's@p\\d@p\\\\d@gi' $INPUT_F
+	\sed -i -E 's@p\\d@p\\\\\\d@gi' $INPUT_F
 	\sed -i 's@\"@\\\"@gi' $INPUT_F
 	\sed -i 's/\@/\\@/gi' $INPUT_F
 	\sed -i 's@\]@\\\]@gi' $INPUT_F
