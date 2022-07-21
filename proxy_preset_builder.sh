@@ -843,7 +843,7 @@ then
 	printf "\n${GCV}Restore default templates and delete all presets:${NCV} $BASH_SOURCE reset\n"
 	printf "\n${GCV}Tweak some PHP and MySQL options:${NCV} $BASH_SOURCE tweak"
 	printf "\n${GCV}Recompile nginx (add/remove modules | update/change SSL):${NCV} $BASH_SOURCE recompile\n"
-	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)\n"
+	printf "\n${YCV}Current specials list:${NCV} wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)\n"
 	printf "\n\n${LRV}ERROR - Not enough arguments, please specify proxy target/targets${NCV}\n"
 	exit 1
 fi
