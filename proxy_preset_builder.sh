@@ -170,7 +170,7 @@ fastcgi_pass_format_func() {
 
 # remove ssl port number from 301 redirect
 seo_fix_ssl_port_func() {
-	sed -i -E 's@(.*return 301 https:\/\/\$host)\:\{\% \$SSL_PORT \%\}(\$request_uri;)@{% if $PRESET == $PROXY_PREFIX$proxy_target %}\n\tif ($request_uri !~ ^\(/robots.txt|/bitrix/admin/site_checker.*|/bitrix/admin/1c_exchange.*\)\) {\n\t\1\2\n\t}\n{% else %}\n\1\2\n{% endif %}@gi' $NGINX_TEMPLATE
+	sed -i -E 's@(.*return 301 https:\/\/\$host)\:\{\% \$SSL_PORT \%\}(\$request_uri;)@\{\% if $PRESET == proxy_to_bitrix_fpm \%\}\n\tif ($request_uri !~ ^\(/robots.txt|/bitrix/admin/site_checker.*|/bitrix/admin/1c_exchange.*\)\) {\n\t\1\2\n\t}\n{% else %}\n\1\2\n{% endif %}@gi' $NGINX_TEMPLATE
 }
 
 # set ssl tune options
