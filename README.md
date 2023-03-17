@@ -39,29 +39,36 @@ bash proxy_preset_builder.sh
 ```
 bash /tmp/proxy_preset_builder.sh
 
-Hello, my version is 1.0.2
+
+Hello, my version is 1.0.8
 
 ISP Manager version checking
-ISP Manager version (6.29.1) suits
+ISP Manager version (6.70.1) suits
 ISP Manager release (ISPmanager Lite) suits
 
-Listing existing presets:
+Listing existing templates:
 ---------------
-proxy_to_127.0.0.1:5000
+proxy_to_wordpress_fpm
 proxy_to_bitrix_fpm
 proxy_to_opencart_fpm
+proxy_to_moodle_fpm
+proxy_to_webassyst_fpm
+proxy_to_magento2_fpm
+proxy_to_127.0.0.1:3000
+proxy_to_unix:/home/atta/myapp/guni.sock:
 ---------------
 
-Example for 1 preset: /tmp/111 add wordpress_fpm OR /tmp/111 add 127.0.0.1:8088
-Example for 4 presets: /tmp/111 add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket
+Example for 1 preset: /tmp/123 add wordpress_fpm OR /tmp/123 add 127.0.0.1:8088
+Example for 4 presets: /tmp/123 add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket
 
-Delete all existing %proxy_to_*% presets and injects: /tmp/111 del all proxy_to_
-Delete one existing preset and inject: /tmp/111 del proxy_to_wordpress_fpm OR /tmp/111 del proxy_to_127.0.0.1:8000
-Restore default templates and delete all presets: /tmp/111 reset
+Delete all existing %proxy_to_*% presets and injects: /tmp/123 del all proxy_to_
+Delete one existing preset and inject: /tmp/123 del proxy_to_wordpress_fpm OR /tmp/123 del proxy_to_127.0.0.1:8000
+Restore default templates and delete all presets: /tmp/123 reset
 
-Tweak some PHP and MySQL options: /tmp/111 tweak
+Tweak some general PHP and MySQL options: /tmp/123 tweak
+Recompile nginx (add/remove modules | update/change SSL): /tmp/123 recompile
 
-Current specials list: wordpress_fpm, bitrix_fpm, opencart_fpm (soon magento_fpm, passenger_ruby, gitlab_fpm)
+Current special templates list: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm
 
 
 ERROR - Not enough arguments, please specify proxy target/targets
@@ -81,7 +88,7 @@ bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) a
 ```
 Добавление множества шаблонов
 ```
-bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add bitrix_fpm opencart_fpm wordpress_fpm moodle_fpm 
+bash <(wget --no-check-certificate -q -o /dev/null -O- https://bit.ly/3q9BCQi) add bitrix_fpm opencart_fpm wordpress_fpm moodle_fpm magento2_fpm
 ```
 Сброс всех добавленных шаблонов и инъекций и добавление следом проксирования на 127.0.0.1:9000
 ```
