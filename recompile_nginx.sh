@@ -112,6 +112,7 @@ fi
 # nginx make sanity check function
 nginx_obj_sanity_check() {
 printf "\n${GCV}Making objs/nginx check${NCV}"
+\mv /usr/share/nginx/modules /usr/share/nginx/modules_
 if nginx_test_output_objs=$({ "$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t; } 2>&1)
 then
 	printf " - ${GCV}OK${NCV}\n"
@@ -123,6 +124,7 @@ else
 	EXIT_STATUS=1
 	check_exit_code
 fi
+\mv /usr/share/nginx/modules_ /usr/share/nginx/modules
 }
 
 # show nginx compilation args function
