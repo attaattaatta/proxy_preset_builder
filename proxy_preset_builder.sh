@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.8"
+self_current_version="1.0.9"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -93,7 +93,7 @@ fi
 # check panel version and release name
 printf "\n${GCV}ISP Manager version checking${NCV}\n"
 
-panel_required_version="6.32.0"
+panel_required_version="6.82.0"
 
 panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+')"
 panel_release_name="$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
@@ -902,13 +902,13 @@ do
 	# backward compatibility for panel's variables and #custom template and also it's the hook for replacements
 	BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR="\n\\{#\\} apache_backward_compatibility_condition_start_DO_NOT_\(RE\)MOVE\n\{% if \\\$PRESET == #custom %\}\n\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %}\ /;\n\{% endif %\}\n\\{#\\} apache_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE\n"
 	
-	BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE="s,(\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\tlocation \@fallback \{\n)\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n,\$1$BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR,gi"
+	BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE="s,(\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\tlocation \@fallback \{\n)\t\tinclude \{% \\\$INCLUDE_DYNAMIC_RESOURCE_PATH %\};\n\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n,\$1$BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR,gi"
 	
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_APACHE == on %\}\n\t\tproxy_pass http://$proxy_target;\n\t\tproxy_redirect http://$proxy_target /;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_STOP_DO_NOT_REMOVE\n,gi"
 	
 	BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR="\n\\{#\\} phpfpm_backward_compatibility_condition_start_DO_NOT_\(RE\)MOVE\n\{% if \\\$PRESET == #custom %\}\n\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n\{% endif %\}\n\\{#\\} phpfpm_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE\n"
 	
-	BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM="s,(\{% if \\\$REDIRECT_TO_PHPFPM == on %\}\n\tlocation \@php \{\n\t\tfastcgi_index index.php;\n\t\tfastcgi_param PHP_ADMIN_VALUE \"sendmail_path = /usr/sbin/sendmail -t -i -f \{% \\\$EMAIL %\}\";\n)\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n,\$1$BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR,gi"
+	BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_PHPFPM="s,(\{% if \\\$REDIRECT_TO_PHPFPM == on %\}\n\tlocation \@php \{\n\t\tinclude \{% \\\$INCLUDE_DYNAMIC_RESOURCE_PATH %\};\n\t\tfastcgi_index index.php;\n\t\tfastcgi_param PHP_ADMIN_VALUE \"sendmail_path = /usr/sbin/sendmail -t -i -f \{% \\\$EMAIL %\}\";\n)\t\tfastcgi_pass \{% \\\$PHPFPM_USER_SOCKET_PATH %\};\n,\$1$BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR,gi"
 	
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass $proxy_target;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
 	
