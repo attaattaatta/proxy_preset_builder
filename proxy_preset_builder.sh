@@ -57,7 +57,7 @@ RANDOM_N=$RANDOM
 # proxy prefix may be changed here
 PROXY_PREFIX="proxy_to_"
 
-# GIT repo 
+# GIT repo
 SCRIPT_GIT_REPO="https://github.com/attaattaatta/proxy_preset_builder"
 SCRIPT_GIT_BACKUP_REPO="https://gitlab.hoztnode.net/admins/scripts"
 
@@ -563,7 +563,7 @@ then
 			backup_func
 			
 			# removing all $PROXY_PREFIX presets
-			preset_list=$($MGRCTL preset | awk -F '=' '{print $3}' | grep -E '$PROXY_PREFIX_.+')
+			preset_list=$($MGRCTL preset | awk -F '=' '{print $3}' | grep -E "$PROXY_PREFIX.+")
 			for plist in $preset_list; do $MGRCTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel %%$PROXY_PREFIX%% presets was removed${NCV}\n"
 		
