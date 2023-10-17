@@ -40,6 +40,7 @@ shopt -s nocasematch
 REL=$(cat /etc/*release* | head -n 1)
 case "$REL" in
         *cent*) distr="rhel";;
+	*alma*) distr="rhel";;
         *cloud*) distr="rhel";;
         *rhel*) distr="rhel";;
         *debian*) distr="debian";;
@@ -174,6 +175,26 @@ ngx_configure_make_install_func() {
 #	cd "$SRC_DIR"
 #fi
 # todo end
+{
+if [[ "$nginx_configure_string" =~ "brotli" ]]
+then
+CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
+
+if [[ $CMAKE_VERSION < "3.15" ]]
+then
+cd "$SRC_DIR/CMake" && ./bootstrap && make -j$(nproc) && make -j$(nproc) install
+hash -r
+fi
+
+cd "$SRC_DIR/ngx_brotli"
+cd deps/brotli
+mkdir out && cd out
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
+cmake --build . --config Release --target brotlienc
+fi
+
+cd "$SRC_DIR/${latest_nginx//.tar*}"
+} >> $NGX_RECOMPILE_LOG_FILE 2>&1
 
 # nginx configure
 printf "$nginx_configure_string" | bash  >> $NGX_RECOMPILE_LOG_FILE 2>&1
@@ -298,7 +319,6 @@ install_other_staff_func() {
 cd "$SRC_DIR"
 
 latest_nginx=$(curl -skL http://nginx.org/en/download.html | egrep -o "nginx\-[0-9.]+\.tar[.a-z]*" | head -n 1)
-latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-3.]+\w\.tar\.gz" | tail -n 1)
 latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | egrep -o "libressl\-[0-9.]+\.tar\.gz" | tail -n 1)
 latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/"  | egrep -o "glibc\-[0-9.]+\.tar\.gz*" | tail -n 1)
 
@@ -313,6 +333,7 @@ tar -xaf "${latest_glibc}"
 tar -xaf "${latest_openssl}"
 tar -xaf "${latest_libressl}"
 
+git clone https://github.com/Kitware/CMake.git
 git clone --recursive https://github.com/google/boringssl.git
 git clone https://github.com/google/ngx_brotli.git
 git clone https://github.com/apache/incubator-pagespeed-ngx.git
@@ -337,10 +358,12 @@ cd "$SRC_DIR"
 
 install_rhel_dependencies_func() {
 
+latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-1.]+\w\.tar\.gz" | tail -n 1)
+
 # install rhel dependencies
 yum -y install epel-release
 yum -y groupinstall 'Development Tools'
-for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel
+for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake
 do
 yum -y install $package
 done
@@ -353,9 +376,11 @@ install_other_staff_func
 
 install_debian_dependencies_func() {
 
+latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-3.]+\w\.tar\.gz" | tail -n 1)
+
 # install debian dependencies
 apt update
-for package in build-essential wget curl git gcc unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev
+for package in build-essential wget curl git gcc unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev cmake
 do
 apt -y install $package
 done
