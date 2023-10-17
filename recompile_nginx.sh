@@ -182,6 +182,8 @@ CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
 
 if [[ $CMAKE_VERSION < "3.15" ]]
 then
+cd "$SRC_DIR"
+git clone https://github.com/Kitware/CMake.git
 cd "$SRC_DIR/CMake" && ./bootstrap && make -j$(nproc) && make -j$(nproc) install
 hash -r
 fi
@@ -333,7 +335,6 @@ tar -xaf "${latest_glibc}"
 tar -xaf "${latest_openssl}"
 tar -xaf "${latest_libressl}"
 
-git clone https://github.com/Kitware/CMake.git
 git clone --recursive https://github.com/google/boringssl.git
 git clone https://github.com/google/ngx_brotli.git
 git clone https://github.com/apache/incubator-pagespeed-ngx.git
