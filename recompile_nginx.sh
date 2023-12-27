@@ -250,7 +250,7 @@ exit 0
 ngx_compilation_default_func() {
 cd "$SRC_DIR/${latest_nginx//.tar*}"
 make clean &> /dev/null
-nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi'  | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/${latest_openssl//.tar*}  --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi'  | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/${latest_openssl//.tar*}  --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 ngx_configure_make_install_func
 }
 
@@ -298,9 +298,9 @@ make clean &> /dev/null
 # if ssl module selected removing --with-openssl if any exists
 if [[ ! -z $openssl_configure_string ]] || [[ ! -z $libressl_configure_string ]] || [[ ! -z $boringssl_configure_string ]] 
 then
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 else
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 fi
 
 echo "$nginx_configure_string" | sed 's@ @\n@gi'
