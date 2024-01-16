@@ -321,6 +321,7 @@ install_other_staff_func() {
 cd "$SRC_DIR"
 
 latest_nginx=$(curl -skL http://nginx.org/en/download.html | egrep -o "nginx\-[0-9.]+\.tar[.a-z]*" | head -n 1)
+latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-3.]+\w\.tar\.gz" | tail -n 1)
 latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | egrep -o "libressl\-[0-9.]+\.tar\.gz" | tail -n 1)
 latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/"  | egrep -o "glibc\-[0-9.]+\.tar\.gz*" | tail -n 1)
 
@@ -359,8 +360,6 @@ cd "$SRC_DIR"
 
 install_rhel_dependencies_func() {
 
-latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-1.]+\w\.tar\.gz" | tail -n 1)
-
 # install rhel dependencies
 yum -y install epel-release
 yum -y groupinstall 'Development Tools'
@@ -376,8 +375,6 @@ install_other_staff_func
 } >> $NGX_RECOMPILE_LOG_FILE 2>&1
 
 install_debian_dependencies_func() {
-
-latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-3.]+\w\.tar\.gz" | tail -n 1)
 
 # install debian dependencies
 apt update
