@@ -310,7 +310,7 @@ else
 			then
 				break
 			else
-				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 15000\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
+				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 150000\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
 				printf "${GCV}"
 				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
@@ -334,7 +334,7 @@ else
 					$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=15000 cgi_value=15000 fpm_value=15000 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 					} &> /dev/null
 					
 					# todo
