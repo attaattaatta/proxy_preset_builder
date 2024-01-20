@@ -334,7 +334,10 @@ else
 					$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version value=0 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
 					} &> /dev/null
 					
 					# todo
