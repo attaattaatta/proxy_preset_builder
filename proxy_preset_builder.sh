@@ -320,7 +320,7 @@ else
 					EXIT_STATUS=0
 					trap 'EXIT_STATUS=1' ERR
 					{
-					$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=180 memory_limit=256  post_max_size=256 upload_max_filesize=256 sok=ok
+					$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=300 memory_limit=1024  post_max_size=1024 upload_max_filesize=1024 sok=ok
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
 					$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
@@ -334,7 +334,7 @@ else
 					$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version value=0 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq value=0 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
