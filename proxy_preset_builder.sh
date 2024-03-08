@@ -310,7 +310,7 @@ else
 			then
 				break
 			else
-				printf "I can tweak PHP $php_choosen_version: max_execution_time to 180s, post_max_size to 256m, upload_max_filesize to 256m, memory_limit to 256m, opcache.revalidate_freq to 0, max_input_vars to 150000\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
+				printf "I can tweak PHP $php_choosen_version: max_execution_time to 300s, post_max_size to 1024m, upload_max_filesize to 1024m, memory_limit to 1024m, opcache.revalidate_freq to 0, max_input_vars to 150000\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
 				printf "${GCV}"
 				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
