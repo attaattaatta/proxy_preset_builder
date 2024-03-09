@@ -306,11 +306,11 @@ else
 		PS3='Choose PHP version to tweak:'
 		select php_choosen_version in "${phpversions[@]}"
 		do
-			if [[ $php_choosen_version == Skip ]] 
+			if [[ $php_choosen_version == Skip || -z $php_choosen_version ]] 
 			then
 				break
 			else
-				printf "I can tweak PHP $php_choosen_version: max_execution_time to 300s, post_max_size to 1024m, upload_max_filesize to 1024m, memory_limit to 1024m, opcache.revalidate_freq to 0, max_input_vars to 150000\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
+				printf "I can tweak PHP $php_choosen_version: max_execution_time to 300s, post_max_size to 1024m, upload_max_filesize to 1024m, memory_limit to 1024m, opcache.revalidate_freq to 0, max_input_vars to 150000, opcache.memory_consumption to 300MB\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
 				printf "${GCV}"
 				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
@@ -335,6 +335,8 @@ else
 					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq value=0 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
+					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption value=300 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
@@ -369,7 +371,7 @@ else
 		PS3='Choose MySQL version to tweak:'
 		select mysql_choosen_version in "${mysqlversions[@]}"
 		do
-			if [[ $mysql_choosen_version == Skip ]] 
+			if [[ $mysql_choosen_version == Skip || -z $mysql_choosen_version ]] 
 			then
 				break
 			else
