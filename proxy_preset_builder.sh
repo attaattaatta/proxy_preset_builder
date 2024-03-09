@@ -25,7 +25,7 @@ then
 fi
 
 #check tools
-WE_NEED=('/usr/local/mgr5/sbin/mgrctl' 'nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir')
+WE_NEED=('/usr/local/mgr5/sbin/mgrctl' 'nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout')
 
 for needitem in "${WE_NEED[@]}"
 do
@@ -75,19 +75,19 @@ GIT_BACKUP_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
 
 # show script version and check gits
 script_git_name="proxy_preset_builder.sh"
-git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
-git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
+git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
+git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
 
 if [[ $git_version ]] && [[ $self_current_version < $git_version ]]
 then
 	printf "\nVersion ${YCV}$git_version${NCV} at $SCRIPT_GIT_PATH/$script_git_name \n"
-	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
+	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
 fi
 
 if [[ $git_backup_version ]] && [[ $self_current_version < $git_backup_version ]]
 then
 	printf "\nVersion ${YCV}$git_backup_version${NCV} at $SCRIPT_GIT_BACKUP_PATH/$script_git_name\n"
-	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_BACKUP_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_BACKUP_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
+	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_BACKUP_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_BACKUP_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
 fi
 
 # check panel version and release name
@@ -453,7 +453,7 @@ for file in "${BITRIX_REQ_NGINX_HTTP_FILES[@]}"
 do
 	EXIT_STATUS=0
 	trap 'EXIT_STATUS=1' ERR
-	printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file"
+	printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file"
 	# check download result and restore if error
 	printf "Verifying download status of $BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file"
 	check_exit_and_restore_func
@@ -484,7 +484,7 @@ for file in "${BITRIX_REQ_NGINX_SERVER_FILES[@]}"
 do
 	EXIT_STATUS=0
 	trap 'EXIT_STATUS=1' ERR
-	printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file"
+	printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file"
 	# check download result and restore if error
 	printf "Verifying download status of $BITRIX_FPM_LOCAL_INCLUDE_SERVER_DIR/$file"
 	check_exit_and_restore_func
@@ -775,7 +775,7 @@ recompile_nginx_func() {
 git_check
 
 # download recompilation script
-if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
+if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
 then
 	# execute recompilation script
 	bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" 
@@ -1170,7 +1170,7 @@ do
 						trap 'EXIT_STATUS=1' ERR
 							
 						# download recompilation script
-						if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
+						if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "/tmp/$NGX_RECOMPILE_SCRIPT_NAME"
 						then
 							# execute recompilation script
 							printf "This will take some time\nRecompiling"
@@ -1203,7 +1203,7 @@ do
 						EXIT_STATUS=0
 						trap 'EXIT_STATUS=1' ERR
 						
-						printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$BITRIX_REQ_ERROR_PAGES_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_LOCAL_ERRORS_DIR/$file"
+						printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$BITRIX_REQ_NGINX_FOLDER_URL$BITRIX_REQ_ERROR_PAGES_URL$file HTTP/1.1\nHost:$GIT_THE_CHOSEN_ONE_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_THE_CHOSEN_ONE_DOMAIN_NAME:443 -quiet | sed '1,/^\s$/d' > "$BITRIX_FPM_LOCAL_ERRORS_DIR/$file"
 						# check result and restore if error
 						printf "Verifying download status of $BITRIX_FPM_LOCAL_ERRORS_DIR/$file"
 						if [[ -f "$BITRIX_FPM_LOCAL_ERRORS_DIR/$file" ]]
