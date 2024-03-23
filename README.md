@@ -1,7 +1,7 @@
 ## Возможности:
 
 1. Удаление и добавление шаблонов для nginx проксирования в ISP Manager 6 Lite, Pro, Host как массовое так и по одному
-2. Добавление уже предустановленных (в скрипте) шаблонов wordpress, bitrix, opencart (в оновном для связки nginx + php-fpm, но также оставлена (и "допилена") совместимость с другими связками)
+2. Добавление уже предустановленных (в скрипте) шаблонов пользоватей для Nginx + PHP-FPM и CMS Wordpress, Вitrix, Opencart, Moodle, Magento2, Webasyst, CS-Cart
 3. Для 1С Битрикс реализована поддержка работы (авто)композита как Nginx (file), так и Nginx (memcached) в связках nginx+apache и nginx+php-fpm
 <br> Принцип работы реализован такой: сначала nginx проверит наличие html файла кэша, и если его не обнаружит пойдёт в memcached, в случае неудачи с memcached пойдёт к ядру Битрикс (при переключении с файлового кеша композита на memcached необходимо обязательно очистить каталог bitrix/html_pages/*)
 <br>Автокомпозит c [Ammina opimizer](http://marketplace.1c-bitrix.ru/solutions/ammina.optimizer/) для Битрикс:
@@ -68,7 +68,7 @@ Restore default templates and delete all presets: /tmp/123 reset
 Tweak some general PHP and MySQL options: /tmp/123 tweak
 Recompile nginx (add/remove modules | update/change SSL): /tmp/123 recompile
 
-Current special templates list: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm
+Current special templates list: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm
 
 
 ERROR - Not enough arguments, please specify proxy target/targets
