@@ -112,20 +112,29 @@ fi
 
 # nginx make sanity check function
 nginx_obj_sanity_check() {
+
 printf "\n${GCV}Making objs/nginx check${NCV}"
+
 \mv /usr/share/nginx/modules /usr/share/nginx/modules_
+
 if nginx_test_output_objs=$({ "$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t; } 2>&1)
+
 then
 	printf " - ${GCV}OK${NCV}\n"
 else
+	\mv /usr/share/nginx/modules_ /usr/share/nginx/modules
+
 	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output_objs\n"
+	printf "Check $NGX_RECOMPILE_LOG_FILE\n"
+
 	if [[ -f $NGX_RECOMPILE_LOG_FILE ]]
 		then printf "\nLogfile - $NGX_RECOMPILE_LOG_FILE"
 	fi
+
 	EXIT_STATUS=1
+
 	check_exit_code
 fi
-\mv /usr/share/nginx/modules_ /usr/share/nginx/modules
 }
 
 # show nginx compilation args function
@@ -255,7 +264,7 @@ ngx_configure_make_install_func
 }
 
 ngx_compilation_custom_func() {
-printf "\n${GCV}List:${NCV}\nopenssl\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GCV}Type names above (or|and) enter full path to nginx module to compile, separated by space:${NCV}"
+printf "\n${GCV}List:${NCV}\nopenssl\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GCV}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NCV}"
 read -a nginx_modules_array
 for nginx_module in ${nginx_modules_array[@]}
 do 
@@ -288,6 +297,9 @@ then
 elif [[ "${nginx_module#*'/'}" != "$nginx_module" ]]
 then
 	custom_configure_string="$custom_configure_string --add-module=$nginx_module"
+elif [[ "${nginx_module#*'http_'}" != "$nginx_module" ]]
+then
+	custom_configure_string_with="$custom_configure_string_with --with-$nginx_module"
 fi
 done
 
@@ -296,11 +308,11 @@ cd "$SRC_DIR/${latest_nginx//.tar*}"
 make clean &> /dev/null
 
 # if ssl module selected removing --with-openssl if any exists
-if [[ ! -z $openssl_configure_string ]] || [[ ! -z $libressl_configure_string ]] || [[ ! -z $boringssl_configure_string ]] 
+if [[ ! -z $custom_configure_string_with ]] || [[ ! -z $openssl_configure_string ]] || [[ ! -z $libressl_configure_string ]] || [[ ! -z $boringssl_configure_string ]] 
 then
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 else
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 fi
 
 echo "$nginx_configure_string" | sed 's@ @\n@gi'
