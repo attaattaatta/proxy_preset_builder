@@ -115,14 +115,14 @@ nginx_obj_sanity_check() {
 
 printf "\n${GCV}Making objs/nginx check${NCV}"
 
-\mv /usr/share/nginx/modules /usr/share/nginx/modules_
+\mv /usr/share/nginx/modules /usr/share/nginx/modules_ 2>&1
 
 if nginx_test_output_objs=$({ "$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t; } 2>&1)
 
 then
 	printf " - ${GCV}OK${NCV}\n"
 else
-	\mv /usr/share/nginx/modules_ /usr/share/nginx/modules
+	\mv /usr/share/nginx/modules_ /usr/share/nginx/modules 2>&1
 
 	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output_objs\n"
 	printf "Check $NGX_RECOMPILE_LOG_FILE\n"
