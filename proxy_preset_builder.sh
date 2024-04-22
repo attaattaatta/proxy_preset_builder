@@ -435,18 +435,20 @@ else
 					#check_exit_and_restore_func
 
 					#disable binlog if no replicas exists
-					if mysql -e "show replicas;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
+					if mysql -e "show slave status;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
 					then
 						# RHEL
-						if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
+						if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf || -f /etc/my.cnf.d/mariadb-server.cnf ]]
 						then
 						        echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
+							echo "skip-log-bin" >> /etc/my.cnf.d/mariadb-server.cnf
 							systemctl restart mysql mysqld mariadb &> /dev/null
 							\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
 						# DEBIAN
-						elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
+						elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf || -f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
 						then
 						        echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+							echo "skip-log-bin" >> /etc/mysql/mariadb.conf.d/50-server.cnf
 							systemctl restart mysql mysqld mariadb &> /dev/null
 							\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
 						# UNKNOWN
