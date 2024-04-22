@@ -442,13 +442,13 @@ else
 						then
 						        echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
 							systemctl restart mysql mysqld mariadb &> /dev/null
-							\rm -Rf /var/lib/binlog.* &> /dev/null
+							\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
 						# DEBIAN
 						elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
 						then
 						        echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
 							systemctl restart mysql mysqld mariadb &> /dev/null
-							\rm -Rf /var/lib/binlog.* &> /dev/null
+							\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
 						# UNKNOWN
 						elif [[ $distr == "unknown" ]]
 						then
