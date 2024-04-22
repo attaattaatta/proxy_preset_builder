@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.13"
+self_current_version="1.0.14"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -35,6 +35,36 @@ do
 	exit 1
 	fi
 done
+
+# check OS
+shopt -s nocasematch
+REL=$(cat /etc/*release* | head -n 1)
+case "$REL" in
+        *cent*) distr="rhel";;
+	*alma*) distr="rhel";;
+        *cloud*) distr="rhel";;
+        *rhel*) distr="rhel";;
+        *debian*) distr="debian";;
+        *ubuntu*) distr="debian";;
+        *) distr="unknown";;
+esac;
+shopt -u nocasematch
+
+# RHEL
+if [[ $distr == "rhel" ]]
+then
+        printf "\n${GCV}Looks like this is some RHEL (or derivative) OS${NCV}\n"
+# DEBIAN
+elif [[ $distr == "debian" ]]
+then
+        printf "\n${GCV}Looks like this is some Debian (or derivative) OS${NCV}\n"
+# UNKNOWN
+elif [[ $distr == "unknown" ]]
+then
+        printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
+        EXIT_STATUS=1
+        exit 1
+fi
 
 # isp vars
 MGR_PATH="/usr/local/mgr5"
@@ -291,6 +321,15 @@ then
 	EXIT_STATUS=0
 	printf "Tweak was canceled by user choice\n"
 else
+	# fix ISP panel mysql include bug
+	if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf &> /dev/null
+		then
+		printf "\n${GCV}ISP panel MySQL 8 no include path bug was fixed${NCV}\n"
+		echo '!'"includedir /etc/mysql/mysql.conf.d/" >> /etc/mysql/my.cnf
+		systemctl restart mysql mysqld mariadb &> /dev/null
+		sleep 5s
+	fi
+
 	printf "\n${GCV}PHP${NCV}\n"
 	# get isp panel installed php versions into the array phpversions
 	phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
@@ -375,7 +414,7 @@ else
 			then
 				break
 			else
-				printf "I can tweak MySQL - $mysql_choosen_version:\ninnodb_strict_mode to OFF, sql_mode to '', innodb_flush_method to O_DIRECT, transaction_isolation to READ-COMMITTED, innodb_flush_log_at_trx_commit to 2\n"
+				printf "I can tweak MySQL - $mysql_choosen_version:\ninnodb_strict_mode to OFF, sql_mode to '', innodb_flush_method to O_DIRECT, transaction_isolation to READ-COMMITTED, innodb_flush_log_at_trx_commit to 2, disable binlog if no replicas exists\n"
 				printf "${GCV}"
 				read -p "Should I tweak these MySQL settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
@@ -391,8 +430,33 @@ else
 					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
 					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
 					} &> /dev/null
+					sleep 10s
 					#todo
 					#check_exit_and_restore_func
+
+					#disable binlog if no replicas exists
+					if mysql -e "show replicas;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
+					then
+						# RHEL
+						if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
+						then
+						        echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
+							systemctl restart mysql mysqld mariadb &> /dev/null
+							\rm -Rf /var/lib/binlog.* &> /dev/null
+						# DEBIAN
+						elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
+						then
+						        echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+							systemctl restart mysql mysqld mariadb &> /dev/null
+							\rm -Rf /var/lib/binlog.* &> /dev/null
+						# UNKNOWN
+						elif [[ $distr == "unknown" ]]
+						then
+						        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
+						fi
+					fi
+					sleep 5s
+
 					printf " - ${GCV}DONE${NCV}\n"
 					break
 				else
