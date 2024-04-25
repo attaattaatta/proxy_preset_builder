@@ -3,10 +3,11 @@
 1. Удаление и добавление шаблонов для nginx проксирования в ISP Manager 6 Lite, Pro, Host как массовое так и по одному
 2. Добавление уже предустановленных (в скрипте) шаблонов пользоватей для Nginx + PHP-FPM и CMS Wordpress, Вitrix, Opencart, Moodle, Magento2, Webasyst, CS-Cart
 3. Для 1С Битрикс реализована поддержка работы (авто)композита как Nginx (file), так и Nginx (memcached) в связках nginx+apache и nginx+php-fpm
-<br/>
-<br/>Принцип работы реализован такой: сначала nginx проверит наличие html файла кэша, и если его не обнаружит пойдёт в memcached, в случае неудачи с memcached пойдёт к ядру Битрикс (при переключении с файлового кеша композита на memcached необходимо обязательно очистить каталог bitrix/html_pages/*). <br>Также в исполнении Memcached версии композита не будет работать передача клиентских заголовков в 1С Битрикс. Это связано с тем, что сам memcached не умеет хранить такую информацию. Для исправления такой ситуации можно воспользоваться [ngx_http_enhanced_memcached_module](https://github.com/bpaquet/ngx_http_enhanced_memcached_module "ngx_http_enhanced_memcached_module") или переключиться на хранение композитного кеша в файлах.
-<br/>
-<br/>Автокомпозит c [Ammina opimizer](http://marketplace.1c-bitrix.ru/solutions/ammina.optimizer/ "Ammina opimizer") для Битрикс:
+Принцип работы реализован такой: сначала nginx проверит наличие html файла кэша, и если его не обнаружит пойдёт в memcached, в случае неудачи с memcached пойдёт к ядру Битрикс (при переключении с файлового кеша композита на memcached необходимо обязательно очистить каталог bitrix/html_pages/*).
+
+Также в исполнении Memcached версии композита не будет работать передача клиентских заголовков в 1С Битрикс. Это связано с тем, что сам memcached не умеет хранить такую информацию. Для исправления такой ситуации можно воспользоваться [ngx_http_enhanced_memcached_module](https://github.com/bpaquet/ngx_http_enhanced_memcached_module/blob/master/README.markdown#304-not-modified "ngx_http_enhanced_memcached_module") или переключиться на хранение композитного кеша в файлах.
+
+Автокомпозит c [Ammina opimizer](http://marketplace.1c-bitrix.ru/solutions/ammina.optimizer/ "Ammina opimizer") для Битрикс:
 - Отмечаем чек-бокс "Авторедирект на корректную страницу при наличии в строке запроса параметра iswebp" в настройках модуля в админке Битрикс
 - Скачиваем https://www.ammina.ru/upload/sysfiles/ammina_composite.conf в /etc/nginx/vhosts-resources/ваш_сайт/
 - Заменяем ${root_path} в скачанном файле на путь до корня сайта
@@ -18,7 +19,8 @@ nginx -t && nginx -s reload
 6. Оптимизация основных параметров для PHP и MySQL средствами API панели управления после установки спец. шаблонов (wordpress, bitrix и др.). Список изменяемых параметров выводится при работе скрипта.
 7. Сброс всех шаблонов панели (возврат на настройки по умолчанию для панели управления)
 8. Пересборка на debian/rhel nginx с требуемыми модулями (brotli, push server, headers more и тд) и последними версиями openssl, libressl, boringssl
-<br/> Для шаблона с bitrix автоматическая детекция и пересборка после положительного ответа скрипту
+
+Для шаблона с bitrix автоматическая детекция и пересборка после положительного ответа скрипту
 
 ## Запуск:
 1. Напрямую из репозитория:
