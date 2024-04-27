@@ -4,7 +4,7 @@
 2. Добавление уже предустановленных (в скрипте) шаблонов пользоватей для Nginx + PHP-FPM и CMS Wordpress, Вitrix, Opencart, Moodle, Magento2, Webasyst, CS-Cart
 3. Для 1С Битрикс реализована поддержка работы (авто)композита (заголовок X-Bitrix-Composite) Nginx (file), Nginx (memcached), Bitrix Cache (200) в связках nginx+apache и nginx+php-fpm
 
-Принцип работы реализован такой: сначала nginx проверит наличие $корень_сайта/bitrix/.bxfile_composite_enabled (заголовок будет X-Bitrix-Composite: Bitrix Cache (200)), если его нет, html файла кэша $корень_сайта/bitrix/html_pages/$сайт (X-Bitrix-Composite: Nginx (file)), и затем memcached (X-Bitrix-Composite: Nginx (memcached)), в случае неудачи с memcached пойдёт к ядру Битрикс (при переключении с файлового кеша композита на memcached необходимо обязательно очистить каталог bitrix/html_pages/*).
+Принцип работы реализован такой: сначала nginx проверит наличие \$корень_сайта/bitrix/.bxfile_composite_enabled (заголовок будет X-Bitrix-Composite: Bitrix Cache (200)), если его нет, html файла кэша \$корень_сайта/bitrix/html_pages/\$сайт (X-Bitrix-Composite: Nginx (file)), и затем memcached (X-Bitrix-Composite: Nginx (memcached)), в случае неудачи с memcached пойдёт к ядру Битрикс (при переключении с файлового кеша композита на memcached необходимо обязательно очистить каталог bitrix/html_pages/*).
 
 В случае использования X-Bitrix-Composite: Nginx (memcached) наиболее производительное решение, но бекенду 1С-Битрикс будут недоступны клиентские заголовки, можно дописать серверные заголовки на стороне nginx.
 
