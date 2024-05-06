@@ -446,7 +446,7 @@ else
 								\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
 							} &> /dev/null
 
-						if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
+						elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
 						then
 							{
 								echo "skip-log-bin" >> /etc/my.cnf.d/mariadb-server.cnf
