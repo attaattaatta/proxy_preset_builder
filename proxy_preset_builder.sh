@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.20"
+self_current_version="1.0.21"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -64,6 +64,117 @@ then
         printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
         EXIT_STATUS=1
         exit 1
+fi
+
+#check env
+if [[ -f /usr/bin/hostnamectl ]] || [[ -f /bin/hostnamectl ]]
+then
+	PLATFROM_CHASSIS=$(hostnamectl status | grep Chassis | awk '{print $2}')
+	PLATFROM_VIRT=$(hostnamectl status | grep Virtualization | awk '{print $2}')
+	
+	if [[ $PLATFROM_CHASSIS == "server" || $PLATFROM_CHASSIS == "laptop" ]]
+	then
+		DEDICATED="yes"
+		VIRTUAL="no"
+	else
+		DEDICATED="no"
+	fi
+	
+	if [[ $PLATFROM_CHASSIS == "vm" || $PLATFROM_CHASSIS == "container" ]]
+	then
+		VIRTUAL="yes"
+		if [[ $PLATFROM_VIRT == "kvm" ]]
+		then
+			PLATFROM_VIRT="kvm"
+		elif [[ $PLATFROM_VIRT == "openvz" ]]
+		then
+			PLATFROM_VIRT="openvz"
+		elif [[ $PLATFROM_VIRT == "xen" ]]
+		then
+			PLATFROM_VIRT="xen"
+		else
+			PLATFROM_VIRT="unknown"
+		fi 
+	else
+		PLATFROM_VIRT="none"
+		VIRTUAL="no"
+	fi
+elif [[ -f /usr/sbin/dmidecode ]] || [[ -f /bin/dmidecode ]]
+then
+	PLATFROM_CHASSIS=$(dmidecode -t memory | grep -iA 10 "Physical Memory Array" | grep Location | awk '{print $2}')
+	if [[ $PLATFROM_CHASSIS == "Other" ]]
+	then
+		VIRTUAL="yes"
+		DEDICATED="no"
+		PLATFROM_VIRT="unknown"
+	elif [[ $PLATFROM_CHASSIS == "System" ]]
+	then
+		VIRTUAL="no"
+		DEDICATED="yes"
+		PLATFROM_VIRT="none"
+	fi
+
+	if [[ -f /usr/bin/systemd-detect-virt ]]
+	then
+		PLATFROM_VIRT=$(systemd-detect-virt)
+		if [[ $PLATFROM_VIRT == "openvz" ]]
+		then
+			VIRTUAL="yes"
+			DEDICATED="no"
+			PLATFROM_VIRT="openvz"
+		elif [[ $PLATFROM_VIRT == "kvm" ]]
+		then
+			VIRTUAL="yes"
+			DEDICATED="no"
+			PLATFROM_VIRT="kvm"
+		elif [[ $PLATFROM_VIRT == "xen" ]]
+		then
+			VIRTUAL="yes"
+			DEDICATED="no"
+			PLATFROM_VIRT="xen"
+		elif [[ $PLATFROM_VIRT == "none" ]]
+		then
+			VIRTUAL="no"
+			DEDICATED="yes"
+			PLATFROM_VIRT="none"
+		else
+			VIRTUAL="unknown"
+			DEDICATED="unknown"
+			PLATFROM_VIRT="unknown"
+		fi
+	fi	
+elif [[ -f /usr/bin/systemd-detect-virt ]]
+then
+	PLATFROM_VIRT=$(systemd-detect-virt)
+	if [[ $PLATFROM_VIRT == "openvz" ]]
+	then
+		VIRTUAL="yes"
+		DEDICATED="no"
+		PLATFROM_VIRT="openvz"
+	elif [[ $PLATFROM_VIRT == "kvm" ]]
+	then
+		VIRTUAL="yes"
+		DEDICATED="no"
+		PLATFROM_VIRT="kvm"
+	elif [[ $PLATFROM_VIRT == "xen" ]]
+	then
+		VIRTUAL="yes"
+		DEDICATED="no"
+		PLATFROM_VIRT="xen"
+	elif [[ $PLATFROM_VIRT == "none" ]]
+	then
+		VIRTUAL="no"
+		DEDICATED="yes"
+		PLATFROM_VIRT="none"
+	else
+		VIRTUAL="unknown"
+		DEDICATED="unknown"
+		PLATFROM_VIRT="unknown"
+	fi
+else
+	PLATFROM_VIRT="unknown"
+	DEDICATED="unknown"
+	VIRTUAL="unknown"
 fi
 
 # isp vars
@@ -313,9 +424,88 @@ check_exit_and_restore_func() {
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
 
+if [[ $DEDICATED == "yes" ]]
+then
+	printf "\nSeems like a ${GCV}dedicated${NCV} server here\n"
+elif [[ $VIRTUAL == "yes" ]]
+then
+	printf "\nSeems like a ${GCV}virtual${NCV} server here"
+	if [[ -n $PLATFROM_VIRT ]]
+	then
+		printf " with ${GCV}$PLATFROM_VIRT${NCV} virtualization\n"
+	else
+		printf " with ${LRV}unknown${NCV} virtualization\n"
+	fi
+else
+	printf "\nSeems like a ${LRV}unknown${NCV} server\n"
+fi
+
+# check swap file exists if this is virtual server
+if [[ $VIRTUAL == "yes" ]]
+then
+
+	#Checking swap file exists and its settings
+	if ! grep -i "swap" /etc/fstab &> /dev/null
+	then
+		echo
+		read -p "No swap detected. Skip fix ? [Y/n]" -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]
+		then
+			# user chose not to fix swap
+			printf "Fix was canceled by user choice\n"
+		else
+			VFS_CACHE_PRESSURE=$(cat /proc/sys/vm/vfs_cache_pressure)
+			SWAPPINESS=$(cat /proc/sys/vm/swappiness)
+		
+			printf "Current vfs_cache_pressure - $VFS_CACHE_PRESSURE ( ${GCV}echo \"vm.vfs_cache_pressure = 100\" >> /etc/sysctl.conf && sysctl -p ${NCV})\n"
+			printf "Current swappiness - $SWAPPINESS ( ${GCV}echo \"vm.swappiness = 60\" >> /etc/sysctl.conf && sysctl -p ${NCV})\n"
+	
+			TOTAL_RAM_IN_GB=$(awk '/MemTotal/ { printf "%.1f\n", $2/1024/1024 }' /proc/meminfo)
+			FREE_RAM_IN_MB=$(awk '/MemAvailable/ { printf "%i\n", $2/1024 }' /proc/meminfo)
+	
+			printf "\n${LRV}There is no swap file in /etc/fstab${NCV} and total ${GCV}$TOTAL_RAM_IN_GB GB RAM${NCV} size. Free RAM size - ${GCV}$FREE_RAM_IN_MB MB${NCV} \n\n"
+			swapsizes=("1GB" "2GB" "3GB" "4GB" "5GB" "10GB")
+			swapsizes+=('Skip')
+			PS3='Choose swap size to set:'
+			select swapsize_choosen_version in "${swapsizes[@]}"
+			do
+				if [[ $swapsize_choosen_version == Skip || -z $swapsize_choosen_version ]] 
+				then
+					break
+				else
+					printf "\nRunning"
+					{
+					DD_COUNT=$(($(echo $swapsize_choosen_version | grep -o [[:digit:]])*1024*1024))
+					\swapoff /swapfile
+					\rm -f /swapfile
+					\dd if=/dev/zero of=/swapfile bs=1024 count=$DD_COUNT
+					\mkswap /swapfile
+					\chmod 600 /swapfile
+					\swapon /swapfile
+					} &> /dev/null
+
+
+					if swapon --show | grep -i "/swapfile" &> /dev/null
+					then
+						echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
+						printf " - ${GCV}DONE${NCV}\n"
+						break
+					else
+						printf " - ${LRV}ERROR. Cannot add /swapfile to /etc/fstab${NCV}\n"
+						break
+					fi
+				fi
+			
+			done
+		fi
+	fi
+fi
+
+echo
 read -p "Skip PHP and MySQL tweak? [Y/n]" -n 1 -r
 echo
-if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+if ! [[ $REPLY =~ ^[Nn]$ ]]
 then
 	# user chose not to tweak PHP nor MySQL
 	EXIT_STATUS=0
@@ -353,7 +543,7 @@ else
 				printf "${GCV}"
 				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
-				if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+				if ! [[ $REPLY =~ ^[Nn]$ ]]
 				then
 					printf "\nRunning"
 					EXIT_STATUS=0
@@ -418,24 +608,23 @@ else
 				printf "${GCV}"
 				read -p "Should I tweak these MySQL settings? [Y/n]" -n 1 -r
 				printf "${NCV}"
-				if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+				if ! [[ $REPLY =~ ^[Nn]$ ]]
 				then
 					printf "\nRunning"
 					EXIT_STATUS=0
 					trap 'EXIT_STATUS=1' ERR
 					{
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
-					} &> /dev/null
-					sleep 10s
-					#todo
-					#check_exit_and_restore_func
 
-					#disable binlog if no replicas exists
-					if mysql -e "show slave status;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
+					# check docker or not
+					if $MGRCTL db.server | grep "$mysql_choosen_version" | grep "docker=on" &> /dev/null
+					then
+						MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
+					else
+						MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
+					fi
+
+					#native mysql version disable binlog if no replicas exists
+					if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
 					then
 						# RHEL
 						if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
@@ -476,6 +665,23 @@ else
 						        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
 						fi
 					fi
+
+					if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
+					then
+						echo "skip-log-bin" >> /etc/ispmysql/$mysql_choosen_version/custom.cnf
+					fi
+
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
+					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
+
+					} &> /dev/null
+					sleep 10s
+					#todo
+					#check_exit_and_restore_func
+
 					sleep 5s
 
 					printf " - ${GCV}DONE${NCV}\n"
@@ -647,7 +853,7 @@ then
 		read -p "This will delete all $PROXY_PREFIX presets. Are you sure? [Y/n]" -n 1 -r
 		echo
 		printf "${NCV}"
-		if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+		if ! [[ $REPLY =~ ^[Nn]$ ]]
 		then
 			# backup
 			backup_func
@@ -679,7 +885,7 @@ then
 			read -p "This will delete $2 preset. Are you sure? [Y/n]" -n 1 -r
 			echo
 			printf "${NCV}"
-			if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]
+			if ! [[ $REPLY =~ ^[Nn]$ ]]
 			then
 				# backup
 				backup_func
