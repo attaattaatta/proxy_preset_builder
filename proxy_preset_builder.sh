@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.22"
+self_current_version="1.0.23"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -281,6 +281,7 @@ trap 'EXIT_STATUS=1' ERR
 $MGRCTL -R
 check_exit_and_restore_func
 printf " - ${GCV}OK${NCV}\n"
+printf "\n${GCV}Do not forget to raise ISP Panel default PHP-FPM pool manager to static and children number (nproc is $(nproc)) ${NCV}\n"
 exit 0
 
 }
@@ -455,6 +456,10 @@ then
 			# user chose not to fix swap
 			printf "Fix was canceled by user choice\n"
 		else
+
+			# check free space
+			CURRENT_FREE_SPACE_GIGABYTES=$(df -BG --sync / | awk '{print $4}' | tail -n 1 | grep -Eo [[:digit:]]+)
+
 			VFS_CACHE_PRESSURE=$(cat /proc/sys/vm/vfs_cache_pressure)
 			SWAPPINESS=$(cat /proc/sys/vm/swappiness)
 		
@@ -464,7 +469,7 @@ then
 			TOTAL_RAM_IN_GB=$(awk '/MemTotal/ { printf "%.1f\n", $2/1024/1024 }' /proc/meminfo)
 			FREE_RAM_IN_MB=$(awk '/MemAvailable/ { printf "%i\n", $2/1024 }' /proc/meminfo)
 	
-			printf "\n${LRV}There is no swap file in /etc/fstab${NCV} and total ${GCV}$TOTAL_RAM_IN_GB GB RAM${NCV} size. Free RAM size - ${GCV}$FREE_RAM_IN_MB MB${NCV} \n\n"
+			printf "\n${LRV}There is no swap file in /etc/fstab${NCV} and total ${GCV}$TOTAL_RAM_IN_GB GB RAM${NCV} size. Current free RAM size - ${GCV}$FREE_RAM_IN_MB MB${NCV} \n\n"
 			swapsizes=("1GB" "2GB" "3GB" "4GB" "5GB" "10GB")
 			swapsizes+=('Skip')
 			PS3='Choose swap size to set:'
@@ -474,26 +479,34 @@ then
 				then
 					break
 				else
-					printf "\nRunning"
-					{
-					DD_COUNT=$(($(echo $swapsize_choosen_version | grep -o [[:digit:]])*1024*1024))
-					\swapoff /swapfile
-					\rm -f /swapfile
-					\dd if=/dev/zero of=/swapfile bs=1024 count=$DD_COUNT
-					\mkswap /swapfile
-					\chmod 600 /swapfile
-					\swapon /swapfile
-					} &> /dev/null
+					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES=$(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)
+					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED=$(($(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)*2))
 
-
-					if swapon --show | grep -i "/swapfile" &> /dev/null
+					if [[ $CURRENT_FREE_SPACE_GIGABYTES -ge $SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED ]]
 					then
-						echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
-						printf " - ${GCV}DONE${NCV}\n"
-						break
+						printf "\nRunning"
+						{
+						DD_COUNT=$(($(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)*1024*1024))
+						\swapoff /swapfile
+						\rm -f /swapfile
+						\dd if=/dev/zero of=/swapfile bs=1024 count=$DD_COUNT
+						\mkswap /swapfile
+						\chmod 600 /swapfile
+						\swapon /swapfile
+						} &> /dev/null
+	
+	
+						if swapon --show | grep -i "/swapfile" &> /dev/null
+						then
+							echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
+							printf " - ${GCV}DONE${NCV}\n"
+							break
+						else
+							printf " - ${LRV}ERROR. Cannot add /swapfile to /etc/fstab${NCV}\n"
+							break
+						fi
 					else
-						printf " - ${LRV}ERROR. Cannot add /swapfile to /etc/fstab${NCV}\n"
-						break
+						printf "\n${LRV}ERROR. Not enough free space in / ${NCV}(Only ${LRV}${CURRENT_FREE_SPACE_GIGABYTES}GB${NCV} available for now, ${GCV}${SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED}GB${NCV} needed)\nYou may run 'ulimit -Sv 100000; du -a -h / 2> >(grep -v \"Permission denied\") | sort -T /dev/shm -h -r | head -n 100; ulimit -Sv unlimited' to investigate this\n\n"
 					fi
 				fi
 			
@@ -501,6 +514,46 @@ then
 		fi
 	fi
 fi
+
+echo
+read -p "Skip edit common services files descriptors limits to 150K ? [Y/n]" -n 1 -r
+echo
+if ! [[ $REPLY =~ ^[Nn]$ ]]
+then
+	# user chose not to tweak files descriptors limits
+	EXIT_STATUS=0
+	printf "Tweak was canceled by user choice\n"
+else
+	NOFILE_TWEAK_SERVICE=('nginx' 'mariadb' 'mysql' 'mysqld' 'mariadbd' 'apache2' 'httpd' 'httpd-scale')
+	NOFILE_LIMIT="150000"
+
+	sep0="echo =============";
+	$sep0
+	for service in "${NOFILE_TWEAK_SERVICE[@]}"
+	do
+	        DIR="/etc/systemd/system/${service}.service.d"
+		{
+	        \mkdir -p $DIR
+	        {
+	                echo "[Service]";
+	                echo "LimitNOFILE=${NOFILE_LIMIT}";
+	        } > $DIR/nofile.conf
+	
+	        systemctl daemon-reload
+	        systemctl restart ${service}.service
+		} &> /dev/null
+
+		if systemctl show ${service}.service | grep "LimitNOFILE=${NOFILE_LIMIT}" &> /dev/null
+		then
+			printf "${GCV}${service} set file limit success${NCV}\n"
+		else
+			printf "${LRV}${service} does not exist or set file limit fail${NCV}\n"
+		fi
+	done
+
+	$sep0
+fi
+
 
 echo
 read -p "Skip PHP and MySQL tweak? [Y/n]" -n 1 -r
