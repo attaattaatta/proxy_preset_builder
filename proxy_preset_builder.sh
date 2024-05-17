@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.23"
+self_current_version="1.0.24"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -515,43 +515,70 @@ then
 	fi
 fi
 
-echo
-read -p "Skip edit common services files descriptors limits to 150K ? [Y/n]" -n 1 -r
-echo
-if ! [[ $REPLY =~ ^[Nn]$ ]]
+
+# tweaking open files limits
+NOFILE_TWEAK_SERVICE=('nginx' 'mariadb' 'mysql' 'mysqld' 'mariadbd' 'apache2' 'httpd' 'httpd-scale')
+NOFILE_LIMIT="150000"
+TWEAKNEED=();
+
+{
+for service in "${NOFILE_TWEAK_SERVICE[@]}"
+do
+if systemctl list-units --full -all | grep -Fq "${NOFILE_TWEAK_SERVICE}.service" && [[ $(systemctl show "${service}.service" | grep -o -P '(?<=LimitNOFILE=)\d+') -lt 150000 ]]
 then
-	# user chose not to tweak files descriptors limits
-	EXIT_STATUS=0
-	printf "Tweak was canceled by user choice\n"
-else
-	NOFILE_TWEAK_SERVICE=('nginx' 'mariadb' 'mysql' 'mysqld' 'mariadbd' 'apache2' 'httpd' 'httpd-scale')
-	NOFILE_LIMIT="150000"
+	TWEAK_VALUE="${service}"
+	TWEAKNEED+=("${TWEAK_VALUE}")
+fi
+done
 
-	sep0="echo =============";
-	$sep0
-	for service in "${NOFILE_TWEAK_SERVICE[@]}"
-	do
-	        DIR="/etc/systemd/system/${service}.service.d"
-		{
-	        \mkdir -p $DIR
-	        {
-	                echo "[Service]";
-	                echo "LimitNOFILE=${NOFILE_LIMIT}";
-	        } > $DIR/nofile.conf
+if [[ ${#TWEAKNEED[@]} -ne 0 ]]
+then
+	TWEAK_NEED="yes"
+fi
+} &> /dev/null
+
+if [[ $TWEAK_NEED == "yes" ]]
+then
+	echo
+	read -p "Skip edit common services files descriptors limits to 150K ? [Y/n]" -n 1 -r
+	echo
+	if ! [[ $REPLY =~ ^[Nn]$ ]]
+	then
+		# user chose not to tweak files descriptors limits
+		EXIT_STATUS=0
+		printf "Tweak was canceled by user choice\n"
+	else
 	
-	        systemctl daemon-reload
-	        systemctl restart ${service}.service
-		} &> /dev/null
-
-		if systemctl show ${service}.service | grep "LimitNOFILE=${NOFILE_LIMIT}" &> /dev/null
-		then
-			printf "${GCV}${service} set file limit success${NCV}\n"
-		else
-			printf "${LRV}${service} does not exist or set file limit fail${NCV}\n"
-		fi
-	done
-
-	$sep0
+	
+		sep0="echo =============";
+		$sep0
+		for service in "${TWEAKNEED[@]}"
+		do
+		        DIR="/etc/systemd/system/${service}.service.d"
+			{
+		        \mkdir -p $DIR
+		        {
+		                echo "[Service]";
+		                echo "LimitNOFILE=${NOFILE_LIMIT}";
+		        } > $DIR/nofile.conf
+		
+		        systemctl daemon-reload
+		        systemctl restart ${service}.service
+			} &> /dev/null
+	
+			if systemctl show ${service}.service | grep "LimitNOFILE=${NOFILE_LIMIT}" &> /dev/null
+			then
+				printf "${GCV}${service} set file limit success${NCV}\n"
+			else
+				printf "${LRV}${service} does not exist or set file limit fail${NCV}\n"
+			fi
+		done
+	
+		$sep0
+	fi
+unset NOFILE_TWEAK_SERVICE
+unset TWEAKNEED
+unset TWEAK_NEED
 fi
 
 
