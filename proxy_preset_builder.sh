@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.24"
+self_current_version="1.0.26"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -25,7 +25,7 @@ then
 fi
 
 #check tools
-WE_NEED=('/usr/local/mgr5/sbin/mgrctl' 'nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout')
+WE_NEED=('nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout')
 
 for needitem in "${WE_NEED[@]}"
 do
@@ -53,11 +53,11 @@ shopt -u nocasematch
 # RHEL
 if [[ $distr == "rhel" ]]
 then
-        printf "\n${GCV}Looks like this is some RHEL (or derivative) OS${NCV}\n"
+        printf "\nLooks like this is some ${GCV}RHEL (or derivative) OS${NCV}\n"
 # DEBIAN
 elif [[ $distr == "debian" ]]
 then
-        printf "\n${GCV}Looks like this is some Debian (or derivative) OS${NCV}\n"
+        printf "\nLooks like this is some ${GCV}Debian (or derivative) OS${NCV}\n"
 # UNKNOWN
 elif [[ $distr == "unknown" ]]
 then
@@ -177,6 +177,22 @@ else
 	VIRTUAL="unknown"
 fi
 
+if [[ $DEDICATED == "yes" ]]
+then
+	printf "\nSeems like a ${GCV}dedicated${NCV} server here\n"
+elif [[ $VIRTUAL == "yes" ]]
+then
+	printf "\nSeems like a ${GCV}virtual${NCV} server here"
+	if [[ -n $PLATFROM_VIRT ]]
+	then
+		printf " with ${GCV}$PLATFROM_VIRT${NCV} virtualization\n"
+	else
+		printf " with ${LRV}unknown${NCV} virtualization\n"
+	fi
+else
+	printf "\nSeems like a ${LRV}unknown${NCV} server\n"
+fi
+
 # isp vars
 MGR_PATH="/usr/local/mgr5"
 MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
@@ -232,6 +248,25 @@ then
 fi
 
 # check panel version and release name
+isp_panel_check_license_version() {
+
+if [[ ! -z "$ISP_MGR_LIC_GOOD" ]]
+then
+	return
+fi
+
+#check mgrctl
+WE_NEED=('/usr/local/mgr5/sbin/mgrctl')
+
+for needitem in "${WE_NEED[@]}"
+do
+	if ! command -v $needitem &> /dev/null
+	then 
+		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
+	exit 1
+	fi
+done
+
 printf "\n${GCV}ISP Manager version checking${NCV}\n"
 
 panel_required_version="6.82.0"
@@ -258,12 +293,15 @@ else
 		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/12c70d7c370959f9f8a2c45b3b72c0a9aade914c/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}\n"
 		exit 1
 	else
+		ISP_MGR_LIC_GOOD=1
 		printf "ISP Manager version ($panel_current_version) suits\n"
 	fi
+		ISP_MGR_VER_GOOD=1
 		printf "ISP Manager release ($panel_release_name) suits\n"
 fi
 # unset case insence for regexp
 shopt -u nocasematch
+}
 
 # validate first argument 
 if ! [[ $1 =~ $ALLOWED_ACTIONS ]]  && ! [[ -z "$1" ]]
@@ -281,7 +319,7 @@ trap 'EXIT_STATUS=1' ERR
 $MGRCTL -R
 check_exit_and_restore_func
 printf " - ${GCV}OK${NCV}\n"
-printf "\n${GCV}Do not forget to raise ISP Panel default PHP-FPM pool manager to static and children number (nproc is $(nproc)) ${NCV}\n"
+printf "\n${YCV}Do not forget to raise ISP Panel default PHP-FPM pool manager to static and children number (nproc is $(nproc)) ${NCV}\n"
 exit 0
 
 }
@@ -422,26 +460,31 @@ check_exit_and_restore_func() {
 	fi
 }
 
-# tweaking all installed php versions and mysql through ISP Manager panel API
-ispmanager_tweak_php_and_mysql_settings_func() {
+# run all tweaks
+run_all_tweaks() {
 
-if [[ $DEDICATED == "yes" ]]
+echo
+read -p "Skip all tweaks? [Y/n]" -n 1 -r
+echo
+if ! [[ $REPLY =~ ^[Nn]$ ]]
 then
-	printf "\nSeems like a ${GCV}dedicated${NCV} server here\n"
-elif [[ $VIRTUAL == "yes" ]]
-then
-	printf "\nSeems like a ${GCV}virtual${NCV} server here"
-	if [[ -n $PLATFROM_VIRT ]]
-	then
-		printf " with ${GCV}$PLATFROM_VIRT${NCV} virtualization\n"
-	else
-		printf " with ${LRV}unknown${NCV} virtualization\n"
-	fi
+	# user chose skip all tweaks
+	EXIT_STATUS=0
+	printf "Tweaks was ${LRV}canceled${NCV} by user choice\n"
 else
-	printf "\nSeems like a ${LRV}unknown${NCV} server\n"
+	tweak_swapfile_func
+	tweak_openfiles_func
+	if [[ "$ISP_MGR_LIC_GOOD" = 1 ]] 
+	then
+		ispmanager_tweak_php_and_mysql_settings_func
+	fi
+	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
+}
 
 # check swap file exists if this is virtual server
+tweak_swapfile_func() {
+
 if [[ $VIRTUAL == "yes" ]]
 then
 
@@ -449,13 +492,10 @@ then
 	if ! grep -i "swap" /etc/fstab &> /dev/null
 	then
 		echo
-		read -p "No swap detected. Skip fix ? [Y/n]" -n 1 -r
+		read -p "No swap detected. Fix ? [Y/n]" -n 1 -r
 		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]
 		then
-			# user chose not to fix swap
-			printf "Fix was canceled by user choice\n"
-		else
 
 			# check free space
 			CURRENT_FREE_SPACE_GIGABYTES=$(df -BG --sync / | awk '{print $4}' | tail -n 1 | grep -Eo [[:digit:]]+)
@@ -511,12 +551,17 @@ then
 				fi
 			
 			done
+		else
+			# user chose not to fix swap
+			printf "Fix swap was canceled by user choice\n"
 		fi
 	fi
 fi
-
+}
 
 # tweaking open files limits
+tweak_openfiles_func() {
+
 NOFILE_TWEAK_SERVICE=('nginx' 'mariadb' 'mysql' 'mysqld' 'mariadbd' 'apache2' 'httpd' 'httpd-scale')
 NOFILE_LIMIT="150000"
 TWEAKNEED=();
@@ -540,16 +585,10 @@ fi
 if [[ $TWEAK_NEED == "yes" ]]
 then
 	echo
-	read -p "Skip edit common services files descriptors limits to 150K ? [Y/n]" -n 1 -r
+	read -p "Tweak files descriptors limits to 150K ? [Y/n]" -n 1 -r
 	echo
 	if ! [[ $REPLY =~ ^[Nn]$ ]]
 	then
-		# user chose not to tweak files descriptors limits
-		EXIT_STATUS=0
-		printf "Tweak was canceled by user choice\n"
-	else
-	
-	
 		sep0="echo =============";
 		$sep0
 		for service in "${TWEAKNEED[@]}"
@@ -575,22 +614,28 @@ then
 		done
 	
 		$sep0
+	else
+		# user chose not to tweak files descriptors limits
+		EXIT_STATUS=0
+		printf "Tweak files descriptors was canceled by user choice\n"
 	fi
 unset NOFILE_TWEAK_SERVICE
 unset TWEAKNEED
 unset TWEAK_NEED
 fi
+}
 
+# tweaking all installed php versions and mysql through ISP Manager panel API
+ispmanager_tweak_php_and_mysql_settings_func() {
 
 echo
-read -p "Skip PHP and MySQL tweak? [Y/n]" -n 1 -r
+read -p "Tweak some PHP and MySQL settings ? [Y/n]" -n 1 -r
 echo
 if ! [[ $REPLY =~ ^[Nn]$ ]]
 then
-	# user chose not to tweak PHP nor MySQL
-	EXIT_STATUS=0
-	printf "Tweak was canceled by user choice\n"
-else
+	# check isp lic
+	isp_panel_check_license_version
+
 	# fix ISP panel mysql include bug
 	if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf &> /dev/null
 		then
@@ -712,7 +757,7 @@ else
 							{
 						        	echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
 								systemctl restart mysql mysqld mariadb &> /dev/null
-								\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
+								\rm -f /var/lib/mysql/binlog.* &> /dev/null
 							} &> /dev/null
 
 						elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
@@ -720,7 +765,7 @@ else
 							{
 								echo "skip-log-bin" >> /etc/my.cnf.d/mariadb-server.cnf
 								systemctl restart mysql mysqld mariadb &> /dev/null
-								\rm -Rf /var/lib/mysql/binlog.* &> /dev/null
+								\rm -f /var/lib/mysql/binlog.* &> /dev/null
 							} &> /dev/null
 
 						# DEBIAN
@@ -729,14 +774,14 @@ else
 							{
 						        	echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
 								systemctl restart mysql mysqld mariadb
-								\rm -Rf /var/lib/mysql/binlog.* 
+								\rm -f /var/lib/mysql/binlog.* 
 							} &> /dev/null
 						elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
 						then
 							{
 								echo "skip-log-bin" >> /etc/mysql/mariadb.conf.d/50-server.cnf
 								systemctl restart mysql mysqld mariadb
-								\rm -Rf /var/lib/mysql/binlog.* 
+								\rm -f /var/lib/mysql/binlog.* 
 							} &> /dev/null
 
 						# UNKNOWN
@@ -774,11 +819,16 @@ else
 			fi
 		done
 	fi
+else
+	# user chose not to tweak PHP nor MySQL
+	EXIT_STATUS=0
+	printf "Tweak was canceled by user choice\n"
 fi
 }
 
 # check nginx conf and reload configuration
 nginx_conf_sanity_check_and_reload_func() {
+
 printf "\n${YCV}Making nginx configuration check${NCV}"
 if nginx_test_output=$({ nginx -t; } 2>&1)
 then
@@ -1171,7 +1221,7 @@ fi
 # run tweak function
 if [[ $1 = "tweak" ]]
 then
-	ispmanager_tweak_php_and_mysql_settings_func
+	run_all_tweaks
 	exit 0
 fi
 
@@ -1183,6 +1233,8 @@ then
 fi
 
 main_func() {
+
+isp_panel_check_license_version
 
 # enabling ISP PHP-FPM FastCGI feature
 if ! [[ $($MGRCTL feature | grep "name=web" | grep -i fpm) ]]
@@ -1263,7 +1315,7 @@ do
 	proxy_targets="$proxy_targets $proxy_target"
 	
 done
-printf "\n${GCV}Proxy target list: $proxy_targets${NCV}\n"
+printf "\nProxy target list to add:${GCV} $proxy_targets${NCV}\n"
 
 # creating backup
 backup_func
@@ -1339,8 +1391,8 @@ do
 				check_exit_and_restore_func
 				printf " - ${GCV}OK${NCV}\n"
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 				
 				continue
 				
@@ -1372,8 +1424,8 @@ do
 				check_exit_and_restore_func
 				printf " - ${GCV}OK${NCV}\n"
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 				
 				continue
 
@@ -1405,8 +1457,8 @@ do
 				check_exit_and_restore_func
 				printf " - ${GCV}OK${NCV}\n"
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 				
 				continue
 			
@@ -1442,8 +1494,8 @@ do
 				check_exit_and_restore_func
 				printf " - ${GCV}OK${NCV}\n"
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 				
 				continue
 
@@ -1477,8 +1529,8 @@ do
 				check_exit_and_restore_func
 				printf " - ${GCV}OK${NCV}\n"
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 				
 				continue
 
@@ -1512,8 +1564,8 @@ do
 				check_exit_and_restore_func
 				printf " - ${GCV}OK${NCV}\n"
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 				
 				continue
 				
@@ -1692,8 +1744,8 @@ do
 				BITRIX_FPM_STATUS_SET=1
 				#set_status_pages &> /dev/null
 				
-				# tweak php and mysql
-				ispmanager_tweak_php_and_mysql_settings_func
+				# tweak
+				run_all_tweaks
 
 				continue
 			else
