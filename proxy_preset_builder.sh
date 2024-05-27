@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.26"
+self_current_version="1.0.27"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -464,20 +464,19 @@ check_exit_and_restore_func() {
 run_all_tweaks() {
 
 echo
-read -p "Skip all tweaks? [Y/n]" -n 1 -r
+read -p "Skip all tweaks ? [Y/n]" -n 1 -r
 echo
 if ! [[ $REPLY =~ ^[Nn]$ ]]
 then
 	# user chose skip all tweaks
 	EXIT_STATUS=0
+
 	printf "Tweaks was ${LRV}canceled${NCV} by user choice\n"
 else
 	tweak_swapfile_func
 	tweak_openfiles_func
-	if [[ "$ISP_MGR_LIC_GOOD" = 1 ]] 
-	then
-		ispmanager_tweak_php_and_mysql_settings_func
-	fi
+	ispmanager_tweak_php_and_mysql_settings_func
+
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
 }
