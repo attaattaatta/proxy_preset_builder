@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.27"
+self_current_version="1.0.28"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -554,6 +554,8 @@ then
 			# user chose not to fix swap
 			printf "Fix swap was canceled by user choice\n"
 		fi
+	else
+		printf "\nTweak swap file not needed or ${GCV}already done${NCV}\n"
 	fi
 fi
 }
@@ -618,210 +620,216 @@ then
 		EXIT_STATUS=0
 		printf "Tweak files descriptors was canceled by user choice\n"
 	fi
-unset NOFILE_TWEAK_SERVICE
-unset TWEAKNEED
-unset TWEAK_NEED
+	unset NOFILE_TWEAK_SERVICE
+	unset TWEAKNEED
+	unset TWEAK_NEED
+
+else
+	printf "\nTweak files descriptors not needed or ${GCV}already done${NCV}\n"
 fi
 }
 
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
 
-echo
-read -p "Tweak some PHP and MySQL settings ? [Y/n]" -n 1 -r
-echo
-if ! [[ $REPLY =~ ^[Nn]$ ]]
+if [[ -f /usr/local/mgr5/sbin/mgrctl ]]
 then
-	# check isp lic
-	isp_panel_check_license_version
-
-	# fix ISP panel mysql include bug
-	if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf &> /dev/null
+	echo
+	read -p "Tweak some PHP and MySQL settings ? [Y/n]" -n 1 -r
+	echo
+	if ! [[ $REPLY =~ ^[Nn]$ ]]
+	then
+		# check isp lic
+		isp_panel_check_license_version
+	
+		# fix ISP panel mysql include bug
+		if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf &> /dev/null
+			then
+			printf "\n${GCV}ISP panel MySQL 8 no include path bug was fixed${NCV}\n"
+			echo '!'"includedir /etc/mysql/mysql.conf.d/" >> /etc/mysql/my.cnf
+			systemctl restart mysql mysqld mariadb &> /dev/null
+			sleep 5s
+		fi
+	
+		printf "\n${GCV}PHP${NCV}\n"
+		# get isp panel installed php versions into the array phpversions
+		phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
+		phpversions+=('Skip')
+		
+		# check that array not empty
+		if [[ ${#phpversions[@]} -eq 0 ]]
 		then
-		printf "\n${GCV}ISP panel MySQL 8 no include path bug was fixed${NCV}\n"
-		echo '!'"includedir /etc/mysql/mysql.conf.d/" >> /etc/mysql/my.cnf
-		systemctl restart mysql mysqld mariadb &> /dev/null
-		sleep 5s
-	fi
-
-	printf "\n${GCV}PHP${NCV}\n"
-	# get isp panel installed php versions into the array phpversions
-	phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
-	phpversions+=('Skip')
-	
-	# check that array not empty
-	if [[ ${#phpversions[@]} -eq 0 ]]
-	then
-		EXIT_STATUS=1
-		printf "\n${LRV}ERROR - Array phpversions empty. Check that PHP versions exists in ISP Manager panel.${NCV}\n"
-	else
-		# generating menu from array and user choosen php version to $php_choosen_version and apply
-		PS3='Choose PHP version to tweak:'
-		select php_choosen_version in "${phpversions[@]}"
-		do
-			if [[ $php_choosen_version == Skip || -z $php_choosen_version ]] 
-			then
-				break
-			else
-				printf "I can tweak PHP $php_choosen_version: max_execution_time to 300s, post_max_size to 1024m, upload_max_filesize to 1024m, memory_limit to 1024m, opcache.revalidate_freq to 0, max_input_vars to 150000, opcache.memory_consumption to 300MB\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
-				printf "${GCV}"
-				read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
-				printf "${NCV}"
-				if ! [[ $REPLY =~ ^[Nn]$ ]]
+			EXIT_STATUS=1
+			printf "\n${LRV}ERROR - Array phpversions empty. Check that PHP versions exists in ISP Manager panel.${NCV}\n"
+		else
+			# generating menu from array and user choosen php version to $php_choosen_version and apply
+			PS3='Choose PHP version to tweak:'
+			select php_choosen_version in "${phpversions[@]}"
+			do
+				if [[ $php_choosen_version == Skip || -z $php_choosen_version ]] 
 				then
-					printf "\nRunning"
-					EXIT_STATUS=0
-					trap 'EXIT_STATUS=1' ERR
-					{
-					$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=300 memory_limit=1024  post_max_size=1024 upload_max_filesize=1024 sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=imagick elname=imagick sok=ok
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcache elname=memcache sok=ok 
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok
-					$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
-					$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq value=0 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption value=300 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
-					$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
-					} &> /dev/null
-					
-					# todo
-					#check_exit_and_restore_func
-					printf " - ${GCV}DONE${NCV}\n"
 					break
 				else
-					printf "\n${YCV}PHP tweaking canceled${NCV}\n"
-					EXIT_STATUS=1
-					break
-				fi
-			fi
-		done
-	fi
-
-	# get isp panel installed mysql versions into the array mysqlversions
-	mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
-	mysqlversions+=('Skip')
-	
-	# check that array not empty
-	if [[ ${#mysqlversions[@]} -eq 0 ]]
-	then
-		EXIT_STATUS=1
-		printf "\n${LRV}ERROR - Array mysqlversions empty. Check that MySQL versions exists in ISP Manager panel.${NCV}\n"
-	else
-		printf "\n${GCV}MySQL${NCV}\n"
-	
-		# generating menu from array and user choosen mysql version to $mysql_choosen_version and apply
-		PS3='Choose MySQL version to tweak:'
-		select mysql_choosen_version in "${mysqlversions[@]}"
-		do
-			if [[ $mysql_choosen_version == Skip || -z $mysql_choosen_version ]] 
-			then
-				break
-			else
-				printf "I can tweak MySQL - $mysql_choosen_version:\ninnodb_strict_mode to OFF, sql_mode to '', innodb_flush_method to O_DIRECT, transaction_isolation to READ-COMMITTED, innodb_flush_log_at_trx_commit to 2, disable binlog if no replicas exists\n"
-				printf "${GCV}"
-				read -p "Should I tweak these MySQL settings? [Y/n]" -n 1 -r
-				printf "${NCV}"
-				if ! [[ $REPLY =~ ^[Nn]$ ]]
-				then
-					printf "\nRunning"
-					EXIT_STATUS=0
-					trap 'EXIT_STATUS=1' ERR
-					{
-
-					# check docker or not
-					if $MGRCTL db.server | grep "$mysql_choosen_version" | grep "docker=on" &> /dev/null
+					printf "I can tweak PHP $php_choosen_version: max_execution_time to 300s, post_max_size to 1024m, upload_max_filesize to 1024m, memory_limit to 1024m, opcache.revalidate_freq to 0, max_input_vars to 150000, opcache.memory_consumption to 300MB\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
+					printf "${GCV}"
+					read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
+					printf "${NCV}"
+					if ! [[ $REPLY =~ ^[Nn]$ ]]
 					then
-						MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
+						printf "\nRunning"
+						EXIT_STATUS=0
+						trap 'EXIT_STATUS=1' ERR
+						{
+						$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=300 memory_limit=1024  post_max_size=1024 upload_max_filesize=1024 sok=ok
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
+						$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=imagick elname=imagick sok=ok
+						$MGRCTL phpextensions.install plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
+						$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcache elname=memcache sok=ok 
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok
+						$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok
+						$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
+						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq value=0 sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption value=300 sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
+						} &> /dev/null
+						
+						# todo
+						#check_exit_and_restore_func
+						printf " - ${GCV}DONE${NCV}\n"
+						break
 					else
-						MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
+						printf "\n${YCV}PHP tweaking canceled${NCV}\n"
+						EXIT_STATUS=1
+						break
 					fi
-
-					#native mysql version disable binlog if no replicas exists
-					if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
-					then
-						# RHEL
-						if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
-						then
-							{
-						        	echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
-								systemctl restart mysql mysqld mariadb &> /dev/null
-								\rm -f /var/lib/mysql/binlog.* &> /dev/null
-							} &> /dev/null
-
-						elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
-						then
-							{
-								echo "skip-log-bin" >> /etc/my.cnf.d/mariadb-server.cnf
-								systemctl restart mysql mysqld mariadb &> /dev/null
-								\rm -f /var/lib/mysql/binlog.* &> /dev/null
-							} &> /dev/null
-
-						# DEBIAN
-						elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
-						then
-							{
-						        	echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
-								systemctl restart mysql mysqld mariadb
-								\rm -f /var/lib/mysql/binlog.* 
-							} &> /dev/null
-						elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
-						then
-							{
-								echo "skip-log-bin" >> /etc/mysql/mariadb.conf.d/50-server.cnf
-								systemctl restart mysql mysqld mariadb
-								\rm -f /var/lib/mysql/binlog.* 
-							} &> /dev/null
-
-						# UNKNOWN
-						elif [[ $distr == "unknown" ]]
-						then
-						        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
-						fi
-					fi
-
-					if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
-					then
-						echo "skip-log-bin" >> /etc/ispmysql/$mysql_choosen_version/custom.cnf
-					fi
-
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
-					$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
-
-					} &> /dev/null
-					sleep 10s
-					#todo
-					#check_exit_and_restore_func
-
-					sleep 5s
-
-					printf " - ${GCV}DONE${NCV}\n"
+				fi
+			done
+		fi
+	
+		# get isp panel installed mysql versions into the array mysqlversions
+		mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
+		mysqlversions+=('Skip')
+		
+		# check that array not empty
+		if [[ ${#mysqlversions[@]} -eq 0 ]]
+		then
+			EXIT_STATUS=1
+			printf "\n${LRV}ERROR - Array mysqlversions empty. Check that MySQL versions exists in ISP Manager panel.${NCV}\n"
+		else
+			printf "\n${GCV}MySQL${NCV}\n"
+		
+			# generating menu from array and user choosen mysql version to $mysql_choosen_version and apply
+			PS3='Choose MySQL version to tweak:'
+			select mysql_choosen_version in "${mysqlversions[@]}"
+			do
+				if [[ $mysql_choosen_version == Skip || -z $mysql_choosen_version ]] 
+				then
 					break
 				else
-					printf "\n${YCV}MySQL tweaking canceled${NCV}\n"
-					EXIT_STATUS=1
-					break
+					printf "I can tweak MySQL - $mysql_choosen_version:\ninnodb_strict_mode to OFF, sql_mode to '', innodb_flush_method to O_DIRECT, transaction_isolation to READ-COMMITTED, innodb_flush_log_at_trx_commit to 2, disable binlog if no replicas exists\n"
+					printf "${GCV}"
+					read -p "Should I tweak these MySQL settings? [Y/n]" -n 1 -r
+					printf "${NCV}"
+					if ! [[ $REPLY =~ ^[Nn]$ ]]
+					then
+						printf "\nRunning"
+						EXIT_STATUS=0
+						trap 'EXIT_STATUS=1' ERR
+						{
+	
+						# check docker or not
+						if $MGRCTL db.server | grep "$mysql_choosen_version" | grep "docker=on" &> /dev/null
+						then
+							MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
+						else
+							MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
+						fi
+	
+						#native mysql version disable binlog if no replicas exists
+						if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
+						then
+							# RHEL
+							if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
+							then
+								{
+							        	echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
+									systemctl restart mysql mysqld mariadb &> /dev/null
+									\rm -f /var/lib/mysql/binlog.* &> /dev/null
+								} &> /dev/null
+	
+							elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
+							then
+								{
+									echo "skip-log-bin" >> /etc/my.cnf.d/mariadb-server.cnf
+									systemctl restart mysql mysqld mariadb &> /dev/null
+									\rm -f /var/lib/mysql/binlog.* &> /dev/null
+								} &> /dev/null
+	
+							# DEBIAN
+							elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
+							then
+								{
+							        	echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+									systemctl restart mysql mysqld mariadb
+									\rm -f /var/lib/mysql/binlog.* 
+								} &> /dev/null
+							elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
+							then
+								{
+									echo "skip-log-bin" >> /etc/mysql/mariadb.conf.d/50-server.cnf
+									systemctl restart mysql mysqld mariadb
+									\rm -f /var/lib/mysql/binlog.* 
+								} &> /dev/null
+	
+							# UNKNOWN
+							elif [[ $distr == "unknown" ]]
+							then
+							        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
+							fi
+						fi
+	
+						if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
+						then
+							echo "skip-log-bin" >> /etc/ispmysql/$mysql_choosen_version/custom.cnf
+						fi
+	
+						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
+						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
+						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
+						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
+						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
+	
+						} &> /dev/null
+						sleep 10s
+						#todo
+						#check_exit_and_restore_func
+	
+						sleep 5s
+	
+						printf " - ${GCV}DONE${NCV}\n"
+						break
+					else
+						printf "\n${YCV}MySQL tweaking canceled${NCV}\n"
+						EXIT_STATUS=1
+						break
+					fi
 				fi
-			fi
-		done
+			done
+		fi
+	else
+		# user chose not to tweak PHP nor MySQL
+		EXIT_STATUS=0
+		printf "Tweak was canceled by user choice\n"
 	fi
-else
-	# user chose not to tweak PHP nor MySQL
-	EXIT_STATUS=0
-	printf "Tweak was canceled by user choice\n"
 fi
 }
 
