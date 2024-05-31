@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.28"
+self_current_version="1.0.29"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -680,7 +680,7 @@ then
 						EXIT_STATUS=0
 						trap 'EXIT_STATUS=1' ERR
 						{
-						$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=300 memory_limit=1024  post_max_size=1024 upload_max_filesize=1024 sok=ok
+						$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=300 memory_limit=1024 post_max_size=1024 upload_max_filesize=1024 sok=ok
 						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
 						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
 						$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
@@ -700,6 +700,8 @@ then
 						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
+						# tweaking native php version for phpmyadmin upload size large dumps
+						$MGRCTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
 						} &> /dev/null
 						
 						# todo
