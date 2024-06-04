@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.30"
+self_current_version="1.0.31"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -475,6 +475,7 @@ then
 else
 	tweak_swapfile_func
 	tweak_openfiles_func
+	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
@@ -626,6 +627,36 @@ then
 
 else
 	printf "\nTweak files descriptors not needed or ${GCV}already done${NCV}\n"
+fi
+}
+
+# Install opendkim and php 7.2 features in ISP panel
+ispmanager_enable_features_func() {
+
+if [[ -f /usr/local/mgr5/sbin/mgrctl ]]
+then
+	echo
+	read -p "Install opendkim, php 7.2, all php 8 features in ISP panel ? [Y/n]" -n 1 -r
+	echo
+	if ! [[ $REPLY =~ ^[Nn]$ ]]
+	then
+		# check isp lic
+		isp_panel_check_license_version
+		printf "\nRunning"
+
+		{
+		$MGRCTL feature.edit elid=email package_opendkim=on sok=ok 
+		$MGRCTL feature.edit elid=altphp72 package_ispphp72_fpm=on package_ispphp72_mod_apache=on packagegroup_altphp72gr=ispphp72 sok=ok
+		$MGRCTL feature.edit elid=altphp81 package_ispphp81_fpm=on package_ispphp81_mod_apache=on packagegroup_altphp81gr=ispphp81 sok=ok
+		$MGRCTL feature.edit elid=altphp82 package_ispphp82_fpm=on package_ispphp82_mod_apache=on packagegroup_altphp82gr=ispphp82 sok=ok
+		$MGRCTL feature.edit elid=altphp83 package_ispphp83_fpm=on package_ispphp83_mod_apache=on packagegroup_altphp83gr=ispphp83 sok=ok
+		} &> /dev/null
+
+		printf " - ${GCV}DONE${NCV}\n"	
+	else
+		# user chose not to enable ISP manager features 
+		printf "Features was not enabled\n"
+	fi
 fi
 }
 
