@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.29"
+self_current_version="1.0.30"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -72,7 +72,7 @@ then
 	PLATFROM_CHASSIS=$(hostnamectl status | grep Chassis | awk '{print $2}')
 	PLATFROM_VIRT=$(hostnamectl status | grep Virtualization | awk '{print $2}')
 	
-	if [[ $PLATFROM_CHASSIS == "server" || $PLATFROM_CHASSIS == "laptop" ]]
+	if [[ $PLATFROM_CHASSIS == "server" || $PLATFROM_CHASSIS == "laptop" || $PLATFROM_CHASSIS == "desktop" ]]
 	then
 		DEDICATED="yes"
 		VIRTUAL="no"
