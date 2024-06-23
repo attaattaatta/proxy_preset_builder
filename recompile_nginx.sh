@@ -20,7 +20,7 @@ fi
 
 # global vars
 EXIT_STATUS=0
-NGX_MENU_VARIANTS="\n${GCV}Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream${NCV}\n"
+NGX_MENU_VARIANTS="\n${GCV}Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 3 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream${NCV}\n"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.$RANDOM.log"
 GLIBC_CUSTOM=0
 SRC_DIR="/usr/local/src"
@@ -33,7 +33,7 @@ then
 fi
 
 # script version
-self_current_version="1.0.0"
+self_current_version="1.0.1"
 
 # check OS
 shopt -s nocasematch
@@ -92,6 +92,10 @@ else
 	printf " - ${GCV}OK${NCV}\n"
 fi
 }
+
+latest_nginx=$(curl -skL http://nginx.org/en/download.html | egrep -o "nginx\-[0-9.]+\.tar[.a-z]*" | head -n 1)
+latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | egrep -o "libressl\-[0-9.]+\.tar\.gz" | tail -n 1)
+latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/"  | egrep -o "glibc\-[0-9.]+\.tar\.gz*" | tail -n 1)
 
 # nginx conf sanity check function
 nginx_conf_sanity_check() {
@@ -184,28 +188,6 @@ ngx_configure_make_install_func() {
 #	cd "$SRC_DIR"
 #fi
 # todo end
-{
-if [[ "$nginx_configure_string" =~ "brotli" ]]
-then
-CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
-
-if [[ $CMAKE_VERSION < "3.15" ]]
-then
-cd "$SRC_DIR"
-git clone https://github.com/Kitware/CMake.git
-cd "$SRC_DIR/CMake" && ./bootstrap && make -j$(nproc) && make -j$(nproc) install
-hash -r
-fi
-
-cd "$SRC_DIR/ngx_brotli"
-cd deps/brotli
-mkdir out && cd out
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
-cmake --build . --config Release --target brotlienc
-fi
-
-cd "$SRC_DIR/${latest_nginx//.tar*}"
-} >> $NGX_RECOMPILE_LOG_FILE 2>&1
 
 # nginx configure
 printf "$nginx_configure_string" | bash  >> $NGX_RECOMPILE_LOG_FILE 2>&1
@@ -241,7 +223,7 @@ service nginx restart
 
 if [[ $distr == "rhel" ]]
 then
-	yum versionlock add nginx* 
+	yum versionlock add nginx*
 	yum versionlock status
 fi
 
@@ -257,46 +239,86 @@ exit 0
 }
 
 ngx_compilation_default_func() {
+
 cd "$SRC_DIR/${latest_nginx//.tar*}"
 make clean &> /dev/null
-nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi'  | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/${latest_openssl//.tar*}  --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi'  | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl3 --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 ngx_configure_make_install_func
 }
 
 ngx_compilation_custom_func() {
-printf "\n${GCV}List:${NCV}\nopenssl\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GCV}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NCV}"
+printf "\n${GCV}List:${NCV}\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GCV}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NCV}"
 read -a nginx_modules_array
 for nginx_module in ${nginx_modules_array[@]}
-do 
-if [[ "$nginx_module" =~ "openssl" ]]
+do
+if [[ "$nginx_module" =~ "openssl3" ]]
 then
-	openssl_configure_string="--with-openssl=$SRC_DIR\/${latest_openssl//.tar*}"
+	openssl_configure_string="--with-openssl=$SRC_DIR\/openssl3"
+
+elif [[ "$nginx_module" =~ "openssl1" ]]
+then
+	openssl_configure_string="--with-openssl=$SRC_DIR\/openssl1"
+
 elif [[ "$nginx_module" =~ "libressl" ]]
 then
 	libressl_configure_string="--with-openssl=$SRC_DIR\/${latest_libressl//.tar*}"
+
 elif [[ "$nginx_module" =~ "boringssl" ]]
 then
 	boringssl_configure_string="--with-openssl=$SRC_DIR\/boringssl --with-openssl-opt=enable-tls1_3"
+
 elif [[ "$nginx_module" =~ "brotli" ]]
 then
 	brotli_configure_string="--add-module=$SRC_DIR\/ngx_brotli"
+	printf "\n${NCV}Running silently with logging to the ${GCV}$NGX_RECOMPILE_LOG_FILE${NCV}\nPlease wait\n"
+{
+	CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
+
+	if [[ $CMAKE_VERSION < "3.15" ]]
+		then
+			cd "$SRC_DIR"
+			git clone https://github.com/Kitware/CMake.git
+			cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+			cd "$SRC_DIR/CMake" 
+			bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl3 -DOPENSSL_LIBRARIES=/usr/local/src/openssl3/lib
+			make -j$(nproc)
+			make -j$(nproc) install
+			hash -r
+		fi
+
+cd "$SRC_DIR/ngx_brotli"
+cd deps/brotli
+\rm -Rf out
+mkdir out
+cd out && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
+cmake --build . --config Release --target brotlienc
+
+cd "$SRC_DIR/${latest_nginx//.tar*}"
+
+} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+
 elif [[ "$nginx_module" =~ "pagespeed" ]]
 then
 	pagespeed_configure_string="--add-module=$SRC_DIR\/incubator-pagespeed-ngx"
 	# todo
 	#GLIBC_CUSTOM=1
+
 elif [[ "$nginx_module" =~ "geoip2" ]]
 then
 	geoip2_configure_string="--add-module=$SRC_DIR\/ngx_http_geoip2_module"
+
 elif [[ "$nginx_module" =~ "headers_more" ]]
 then
 	headers_more_configure_string="--add-module=$SRC_DIR\/headers-more-nginx-module"
+
 elif [[ "$nginx_module" =~ "push_stream" ]]
 then
 	push_stream_configure_string="--add-module=$SRC_DIR\/nginx-push-stream-module"
+
 elif [[ "${nginx_module#*'/'}" != "$nginx_module" ]]
 then
 	custom_configure_string="$custom_configure_string --add-module=$nginx_module"
+
 elif [[ "${nginx_module#*'http_'}" != "$nginx_module" ]]
 then
 	custom_configure_string_with="$custom_configure_string_with --with-$nginx_module"
@@ -308,11 +330,11 @@ cd "$SRC_DIR/${latest_nginx//.tar*}"
 make clean &> /dev/null
 
 # if ssl module selected removing --with-openssl if any exists
-if [[ ! -z $custom_configure_string_with ]] || [[ ! -z $openssl_configure_string ]] || [[ ! -z $libressl_configure_string ]] || [[ ! -z $boringssl_configure_string ]] 
+if [[ ! -z $custom_configure_string_with ]] || [[ ! -z $openssl_configure_string ]] || [[ ! -z $libressl_configure_string ]] || [[ ! -z $boringssl_configure_string ]]
 then
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-dynamic-module.*@@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 else
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
 fi
 
 echo "$nginx_configure_string" | sed 's@ @\n@gi'
@@ -330,36 +352,32 @@ fi
 }
 
 install_other_staff_func() {
+
 cd "$SRC_DIR"
 
-latest_nginx=$(curl -skL http://nginx.org/en/download.html | egrep -o "nginx\-[0-9.]+\.tar[.a-z]*" | head -n 1)
-latest_openssl=$(curl -skL https://ftp.openssl.org/source/ | egrep -o "openssl\-[0-3.]+\w\.tar\.gz" | tail -n 1)
-latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | egrep -o "libressl\-[0-9.]+\.tar\.gz" | tail -n 1)
-latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/"  | egrep -o "glibc\-[0-9.]+\.tar\.gz*" | tail -n 1)
-
 wget -nc --no-check-certificate "https://nginx.org/download/${latest_nginx}"
-wget -nc --no-check-certificate "https://ftp.openssl.org/source/${latest_openssl}"
 wget -nc --no-check-certificate "http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/${latest_libressl}"
 wget -nc --no-check-certificate "http://ftp.gnu.org/gnu/glibc/${latest_glibc}"
 
 tar -xaf "${latest_nginx}"
-tar -xaf "${latest_openssl}"
 tar -xaf "${latest_glibc}"
-tar -xaf "${latest_openssl}"
 tar -xaf "${latest_libressl}"
 
 git clone --recursive https://github.com/google/boringssl.git
-git clone https://github.com/google/ngx_brotli.git
+git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && cd openssl3 && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) && cd ..
+git clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1"
+git clone --recurse-submodules https://github.com/google/ngx_brotli.git
 git clone https://github.com/apache/incubator-pagespeed-ngx.git
 git clone https://github.com/leev/ngx_http_geoip2_module.git
 git clone https://github.com/openresty/headers-more-nginx-module.git
 git clone https://github.com/wandenberg/nginx-push-stream-module.git
 
 cd "$SRC_DIR/ngx_brotli" && git submodule update --init
+
 cd "$SRC_DIR/incubator-pagespeed-ngx"
 
-# new PSOL need GLIBC => 3.4.20 
-#wget -nc --no-check-certificate "https://downloads.apache.org/incubator/pagespeed/1.14.36.1/x64/psol-1.14.36.1-apache-incubating-x64.tar.gz" 
+# new PSOL need GLIBC => 3.4.20
+#wget -nc --no-check-certificate "https://downloads.apache.org/incubator/pagespeed/1.14.36.1/x64/psol-1.14.36.1-apache-incubating-x64.tar.gz"
 #tar -xf psol-1.14.36.1-apache-incubating-x64.tar.gz
 
 # old PSOL
@@ -375,7 +393,7 @@ install_rhel_dependencies_func() {
 # install rhel dependencies
 yum -y install epel-release
 yum -y groupinstall 'Development Tools'
-for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake
+for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake perl-IPC-Cmd libcurl-devel
 do
 yum -y install $package
 done
@@ -400,7 +418,7 @@ done
 install_other_staff_func
 
 } >> $NGX_RECOMPILE_LOG_FILE 2>&1
-	
+
 # RHEL / DEBIAN
 main_func () {
 
