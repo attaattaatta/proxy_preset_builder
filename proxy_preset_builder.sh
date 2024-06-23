@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.33"
+self_current_version="1.0.34"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -269,9 +269,9 @@ done
 
 printf "\n${GCV}ISP Manager version checking${NCV}\n"
 
-panel_required_version="6.82.0"
+panel_required_version="6820"
 
-panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+')"
+panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+' | sed 's@\.@@gi')"
 panel_release_name="$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
 
 if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]
