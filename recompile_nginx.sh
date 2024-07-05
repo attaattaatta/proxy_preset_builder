@@ -33,7 +33,7 @@ then
 fi
 
 # script version
-self_current_version="1.0.1"
+self_current_version="1.0.2"
 
 # check OS
 shopt -s nocasematch
@@ -93,9 +93,9 @@ else
 fi
 }
 
-latest_nginx=$(curl -skL http://nginx.org/en/download.html | egrep -o "nginx\-[0-9.]+\.tar[.a-z]*" | head -n 1)
-latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | egrep -o "libressl\-[0-9.]+\.tar\.gz" | tail -n 1)
-latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/"  | egrep -o "glibc\-[0-9.]+\.tar\.gz*" | tail -n 1)
+latest_nginx=$(curl -skL http://nginx.org/en/download.html | grep -E -o "nginx-[0-9.]+\.tar[.a-z]*" | head -n 1)
+latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | grep -E -o "libressl-[0-9.]+\.tar\.gz" | tail -n 1)
+latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/"  | grep -E -o "glibc-[0-9.]+\.tar\.gz*" | tail -n 1)
 
 # nginx conf sanity check function
 nginx_conf_sanity_check() {
@@ -389,6 +389,16 @@ cd "$SRC_DIR"
 }
 
 install_rhel_dependencies_func() {
+
+# centos 7 eol repo fix
+{
+REL=$(cat /etc/*release* | head -n 1)
+if echo $REL | grep -i centos | grep -i 7
+then
+	sed -i "s/^mirrorlist=/#mirrorlist=/g" /etc/yum.repos.d/CentOS-*
+	sed -i "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*
+	yum --enablerepo=updates clean metadata
+} > /dev/null 2>&1
 
 # install rhel dependencies
 yum -y install epel-release
