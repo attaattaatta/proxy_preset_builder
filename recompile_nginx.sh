@@ -18,6 +18,33 @@ then
         exit 1
 fi
 
+# check free space
+printf "\n${GCV}Checking free space${NCV}"
+current_free_space=$(df -Pm --sync / | awk '{print $4}' | tail -n 1)
+space_need_megabytes="2000"
+if [[ $current_free_space -le $space_need_megabytes ]]
+then
+        printf " - ${LRV}FAIL${NCV}";
+	EXIT_STATUS=1
+        check_exit_code
+else
+	printf " - ${GCV}OK${NCV}\n"
+fi
+
+if ! which curl; then apt update; apt -y install curl || yum -y install curl; fi &> /dev/null
+
+#check tools
+WE_NEED=('nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout' 'curl')
+
+for needitem in "${WE_NEED[@]}"
+do
+	if ! command -v $needitem &> /dev/null
+	then 
+		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
+	exit 1
+	fi
+done
+
 # global vars
 EXIT_STATUS=0
 NGX_MENU_VARIANTS="\n${GCV}Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 3 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream${NCV}\n"
@@ -391,15 +418,13 @@ cd "$SRC_DIR"
 install_rhel_dependencies_func() {
 
 # centos 7 eol repo fix
-{
 REL=$(cat /etc/*release* | head -n 1)
 if echo $REL | grep -i centos | grep -i 7
 then
 	sed -i "s/^mirrorlist=/#mirrorlist=/g" /etc/yum.repos.d/CentOS-*
 	sed -i "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*
 	yum --enablerepo=updates clean metadata
-} > /dev/null 2>&1
-
+fi
 # install rhel dependencies
 yum -y install epel-release
 yum -y groupinstall 'Development Tools'
