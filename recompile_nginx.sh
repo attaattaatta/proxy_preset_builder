@@ -113,8 +113,7 @@ space_need_megabytes="2000"
 if [[ $current_free_space -le $space_need_megabytes ]]
 then
         printf " - ${LRV}FAIL${NCV}";
-	EXIT_STATUS=1
-        check_exit_code
+	exit 1
 else
 	printf " - ${GCV}OK${NCV}\n"
 fi
