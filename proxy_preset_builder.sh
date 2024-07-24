@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.34"
+self_current_version="1.0.35"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -42,6 +42,7 @@ REL=$(cat /etc/*release* | head -n 1)
 case "$REL" in
         *cent*) distr="rhel";;
 	*alma*) distr="rhel";;
+	*rocky*) distr="rhel";;
         *cloud*) distr="rhel";;
         *rhel*) distr="rhel";;
         *debian*) distr="debian";;
