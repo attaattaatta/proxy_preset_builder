@@ -292,7 +292,7 @@ then
 else
 	if [[ $panel_current_version -lt $panel_required_version ]]
 	then 
-		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/12c70d7c370959f9f8a2c45b3b72c0a9aade914c/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}\n"
+		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/master/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}\n"
 		exit 1
 	else
 		ISP_MGR_LIC_GOOD=1
