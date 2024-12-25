@@ -270,8 +270,8 @@ done
 
 printf "\n${GCV}ISP Manager version checking${NCV}\n"
 
-#minimum version 6.111.1
-panel_required_version="61111"
+#minimum version 6.11.02
+panel_required_version="61102"
 
 panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+' | sed 's@\.@@gi')"
 panel_release_name="$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
