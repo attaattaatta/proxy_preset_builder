@@ -402,8 +402,8 @@ cd "$SRC_DIR/ngx_brotli" && git submodule update --init
 
 cd "$SRC_DIR/incubator-pagespeed-ngx"
 
-# new PSOL need GLIBC => 3.4.20
-#wget -nc --no-check-certificate "https://downloads.apache.org/incubator/pagespeed/1.14.36.1/x64/psol-1.14.36.1-apache-incubating-x64.tar.gz"
+# new PSOL need GLIBC => 2.40
+#wget -nc --no-check-certificate "https://archive.apache.org/dist/incubator/pagespeed/1.14.36.1/x64/psol-1.14.36.1-apache-incubating-x64.tar.gz"
 #tar -xf psol-1.14.36.1-apache-incubating-x64.tar.gz
 
 # old PSOL
