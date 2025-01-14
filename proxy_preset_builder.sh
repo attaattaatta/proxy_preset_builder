@@ -807,7 +807,7 @@ then
 							if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
 							then
 								{
-							        	echo "skip-log-bin" >> /etc/my.cnf.d/mysql-server.cnf
+							        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
 									systemctl restart mysql mysqld mariadb &> /dev/null
 									\rm -f /var/lib/mysql/binlog.* &> /dev/null
 								} &> /dev/null
@@ -815,7 +815,7 @@ then
 							elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
 							then
 								{
-									echo "skip-log-bin" >> /etc/my.cnf.d/mariadb-server.cnf
+									printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
 									systemctl restart mysql mysqld mariadb &> /dev/null
 									\rm -f /var/lib/mysql/binlog.* &> /dev/null
 								} &> /dev/null
@@ -824,14 +824,14 @@ then
 							elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
 							then
 								{
-							        	echo "skip-log-bin" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+							        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
 									systemctl restart mysql mysqld mariadb
 									\rm -f /var/lib/mysql/binlog.* 
 								} &> /dev/null
 							elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
 							then
 								{
-									echo "skip-log-bin" >> /etc/mysql/mariadb.conf.d/50-server.cnf
+									printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
 									systemctl restart mysql mysqld mariadb
 									\rm -f /var/lib/mysql/binlog.* 
 								} &> /dev/null
@@ -845,7 +845,7 @@ then
 	
 						if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
 						then
-							echo "skip-log-bin" >> /etc/ispmysql/$mysql_choosen_version/custom.cnf
+							printf "\nskip-log-bin\n" >> /etc/ispmysql/$mysql_choosen_version/custom.cnf
 						fi
 	
 						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
