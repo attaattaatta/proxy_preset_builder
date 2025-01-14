@@ -855,7 +855,7 @@ then
 						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
 	
 						} &> /dev/null
-						sleep 11s
+						sleep 10s
 						#todo
 						#check_exit_and_restore_func
 	
