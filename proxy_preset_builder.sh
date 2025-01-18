@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.42"
+self_current_version="1.0.43"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -29,7 +29,7 @@ WE_NEED=('nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'open
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem &> /dev/null
+	if ! command -v $needitem >/dev/null 2>&1
 	then 
 		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
 	exit 1
@@ -261,7 +261,7 @@ WE_NEED=('/usr/local/mgr5/sbin/mgrctl')
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem &> /dev/null
+	if ! command -v $needitem >/dev/null 2>&1
 	then 
 		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
 	exit 1
@@ -372,7 +372,7 @@ git_check() {
 		EXIT_STATUS=0
 		trap 'EXIT_STATUS=1' ERR
 		
-		getent hosts $GIT_DOMAIN_NAME &> /dev/null || getent hosts $GIT_BACKUP_DOMAIN_NAME &> /dev/null
+		getent hosts $GIT_DOMAIN_NAME >/dev/null 2>&1 || getent hosts $GIT_BACKUP_DOMAIN_NAME >/dev/null 2>&1
 		
 		# check result and restore if error
 		printf "\nResolving $GIT_DOMAIN_NAME and $GIT_BACKUP_DOMAIN_NAME"
@@ -437,9 +437,9 @@ check_exit_and_restore_func() {
 		\rm -f "$NGINX_TEMPLATE" "$NGINX_SSL_TEMPLATE"
 		\rm -f /etc/nginx/vhosts-includes/apache_status_[0-9]*.conf
 		\rm -f /etc/nginx/vhosts-includes/nginx_status_[0-9]*.conf
-		} &> /dev/null
+		} >/dev/null 2>&1
 		
-		if $MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  &> /dev/null
+		if $MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  >/dev/null 2>&1
 		then
 			printf " - ${GCV}OK${NCV}\n"
 		else
@@ -449,9 +449,9 @@ check_exit_and_restore_func() {
 		printf "\n${LRV}Restoring last templates backup${NCV}\n"
 		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]
 		then
-			\cp -f -p --reflink=auto "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p --reflink=auto "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" &> /dev/null && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p --reflink=auto "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" &> /dev/null && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
+			\cp -f -p --reflink=auto "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p --reflink=auto "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p --reflink=auto "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" >/dev/null 2>&1 && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
 			# panel graceful restart
 			isp_panel_graceful_restart_func
 			exit 1
@@ -491,7 +491,7 @@ if [[ $VIRTUAL == "yes" ]]
 then
 
 	#Checking swap file exists and its settings
-	if ! grep -i "swap" /etc/fstab &> /dev/null
+	if ! grep -i "swap" /etc/fstab >/dev/null 2>&1
 	then
 		echo
 		read -p "No swap detected. Fix ? [Y/n]" -n 1 -r
@@ -535,10 +535,10 @@ then
 						\mkswap /swapfile
 						\chmod 600 /swapfile
 						\swapon /swapfile
-						} &> /dev/null
+						} >/dev/null 2>&1
 	
 	
-						if swapon --show | grep -i "/swapfile" &> /dev/null
+						if swapon --show | grep -i "/swapfile" >/dev/null 2>&1
 						then
 							echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
 							printf " - ${GCV}DONE${NCV}\n"
@@ -584,7 +584,7 @@ if [[ ${#TWEAKNEED[@]} -ne 0 ]]
 then
 	TWEAK_NEED="yes"
 fi
-} &> /dev/null
+} >/dev/null 2>&1
 
 if [[ $TWEAK_NEED == "yes" ]]
 then
@@ -607,9 +607,9 @@ then
 		
 		        systemctl daemon-reload
 		        systemctl restart ${service}.service
-			} &> /dev/null
+			} >/dev/null 2>&1
 	
-			if systemctl show ${service}.service | grep "LimitNOFILE=${NOFILE_LIMIT}" &> /dev/null
+			if systemctl show ${service}.service | grep "LimitNOFILE=${NOFILE_LIMIT}" >/dev/null 2>&1
 			then
 				printf "${GCV}${service} set file limit success${NCV}\n"
 			else
@@ -641,7 +641,7 @@ then
 
 	{
 	$MGRCTL feature | grep -i "PHP" | grep "active=off" || $MGRCTL feature | grep -i "opendkim" | grep "active=off"
-	} &> /dev/null
+	} >/dev/null 2>&1
 
 	then
 		echo
@@ -665,12 +665,12 @@ then
 
 			sleep 10;
 
-			} &> /dev/null
+			} >/dev/null 2>&1
 	
 			printf " - ${GCV}DONE${NCV}\n"	
 		else
 			# user chose not to enable ISP manager features 
-			printf "All PHP versions was not installed so as OpenDKIM \n"
+			printf "${YCV}All PHP versions was not installed so as OpenDKIM${NCV} \n"
 		fi
 	fi
 fi
@@ -681,206 +681,290 @@ ispmanager_tweak_php_and_mysql_settings_func() {
 
 if [[ -f /usr/local/mgr5/sbin/mgrctl ]]
 then
-	echo
-	read -p "Tweak some PHP and MySQL settings ? [Y/n]" -n 1 -r
-	echo
-	if ! [[ $REPLY =~ ^[Nn]$ ]]
-	then
-		# check isp lic
-		isp_panel_check_license_version
-	
+
+	# check ISP lic
+	isp_panel_check_license_version
+
+	# ISP mysql 8 include bugfix
+	isp_mysql_include_bugfix() {
 		# fix ISP panel mysql include bug
-		if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf &> /dev/null
-			then
+		if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf >/dev/null 2>&1; then
 			printf "\n${GCV}ISP panel MySQL 8 no include path bug was fixed${NCV}\n"
 			echo '!'"includedir /etc/mysql/mysql.conf.d/" >> /etc/mysql/my.cnf
-			systemctl restart mysql mysqld mariadb &> /dev/null
+			systemctl restart mysql mysqld mariadb >/dev/null 2>&1
 			sleep 5s
 		fi
-	
-		printf "\n${GCV}PHP${NCV}\n"
-		# get isp panel installed php versions into the array phpversions
-		phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
-		phpversions+=('Skip')
-		
-		# check that array not empty
-		if [[ ${#phpversions[@]} -eq 0 ]]
-		then
-			EXIT_STATUS=1
-			printf "\n${LRV}ERROR - Array phpversions empty. Check that PHP versions exists in ISP Manager panel.${NCV}\n"
+	}
+
+	# tweak ISP PHP
+	isp_php_tweak() {
+
+		if [ -z "$1" ]; then
+			printf "${LRV}No PHP version argument was passed to isp_php_tweak function.${NCV}\n"
 		else
-			# generating menu from array and user choosen php version to $php_choosen_version and apply
-			PS3='Choose PHP version to tweak:'
-			select php_choosen_version in "${phpversions[@]}"
-			do
-				if [[ $php_choosen_version == Skip || -z $php_choosen_version ]] 
-				then
-					break
-				else
-					printf "I can tweak PHP $php_choosen_version: max_execution_time to 300s, post_max_size to 1024m, upload_max_filesize to 1024m, memory_limit to 1024m, opcache.revalidate_freq to 0, max_input_vars to 150000, opcache.max_accelerated_files to 100000, opcache.memory_consumption to 300MB\nand enable PHP extensions: opcache, memcached, ioncube, imagick, bcmath, xsl\n"
-					printf "${GCV}"
-					read -p "Should I tweak these PHP settings? [Y/n]" -n 1 -r
-					printf "${NCV}"
-					if ! [[ $REPLY =~ ^[Nn]$ ]]
+			{
+			$MGRCTL phpconf.settings plid=$1 elid=$1 max_execution_time=300 memory_limit=1024 post_max_size=1024 upload_max_filesize=1024 sok=ok
+
+			# not installing nor activating opcache for 5x PHP
+			if [[ ! "$1" =~ (5[0-9]) ]]; then
+				$MGRCTL phpextensions.install plid=$1 elid=opcache elname=opcache sok=ok
+				$MGRCTL phpextensions.resume plid=$1 elid=opcache elname=opcache sok=ok
+			fi
+			
+			$MGRCTL phpextensions.resume plid=$1 elid=bcmath elname=bcmath sok=ok
+			$MGRCTL phpextensions.install plid=$1 elid=imagick elname=imagick sok=ok
+			$MGRCTL phpextensions.resume plid=$1 elid=imagick elname=imagick sok=ok
+			$MGRCTL phpextensions.install plid=$1 elid=ioncube elname=ioncube sok=ok
+			$MGRCTL phpextensions.resume plid=$1 elid=ioncube elname=ioncube sok=ok
+			$MGRCTL phpextensions.install plid=$1 elid=memcache elname=memcache sok=ok 
+			$MGRCTL phpextensions.resume plid=$1 elid=memcache elname=memcache sok=ok
+			$MGRCTL phpextensions.install plid=$1 elid=memcached elname=memcached sok=ok
+			$MGRCTL phpextensions.resume plid=$1 elid=memcached elname=memcached sok=ok
+			$MGRCTL phpextensions.install plid=$1 elid=mysql elname=mysql sok=ok
+			$MGRCTL phpextensions.resume plid=$1 elid=mysql elname=mysql sok=ok
+			$MGRCTL phpextensions.install plid=$1 elid=xsl elname=xsl sok=ok
+			$MGRCTL phpextensions.resume plid=$1 elid=xsl elname=xsl sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq value=0 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption value=300 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars value=150000 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
+			$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files value=100000 sok=ok
+			# tweaking native php version for phpmyadmin upload size large dumps
+			$MGRCTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
+
+			} >/dev/null 2>&1
+		fi
+	}
+
+	# tweak ISP MySQL
+	isp_mysql_tweak() {
+
+		if [ -z "$1" ]; then
+			printf "${LRV}No MySQL version argument was passed to isp_mysql_tweak function.${NCV}\n"
+		else
+			{
+			# check docker or not
+			if $MGRCTL db.server | grep "$1" | grep "docker=on" >/dev/null 2>&1
+			then
+			MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
+			else
+			MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
+			fi
+			
+			#native mysql version disable binlog if no replicas exists
+			if [[ $1_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" >/dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* >/dev/null 2>&1
+			then
+			# RHEL
+			if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
+			then
+				{
+			        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
+					systemctl restart mysql mysqld mariadb >/dev/null 2>&1
+					\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
+				} >/dev/null 2>&1
+			
+			elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
+			then
+				{
+					printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
+					systemctl restart mysql mysqld mariadb >/dev/null 2>&1
+					\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
+				} >/dev/null 2>&1
+			
+			# DEBIAN
+			elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
+			then
+				{
+			        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+					systemctl restart mysql mysqld mariadb
+					\rm -f /var/lib/mysql/binlog.* 
+				} >/dev/null 2>&1
+			elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
+			then
+				{
+					printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
+					systemctl restart mysql mysqld mariadb
+					\rm -f /var/lib/mysql/binlog.* 
+				} >/dev/null 2>&1
+			
+			# UNKNOWN
+			elif [[ $distr == "unknown" ]]
+			then
+			        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
+			fi
+			fi
+			
+			if [[ $1_DOCKER == "in_docker" ]]
+			then
+			printf "\nskip-log-bin\n" >> /etc/ispmysql/$1/custom.cnf
+			fi
+			
+			$MGRCTL db.server.settings.edit plid=$1 elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
+			$MGRCTL db.server.settings.edit plid=$1 elid=sql-mode name=sql-mode value='' str_value='' sok=ok
+			$MGRCTL db.server.settings.edit plid=$1 elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
+			$MGRCTL db.server.settings.edit plid=$1 elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
+			$MGRCTL db.server.settings.edit plid=$1 elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
+
+			sleep 10
+			} >/dev/null 2>&1
+		fi
+	}
+
+	# getting all PHP version from ISP panel and processing tweaks
+	isp_all_php_version_tweak() {	
+			
+			$MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*' | while read php_version; do 
+			printf "\nTweaking ${php_version}"
+			isp_php_tweak ${php_version}
+			printf " - ${GCV}DONE${NCV}"
+			done
+			echo
+	}
+
+	# getting all MySQL version from ISP panel and processing tweaks
+	isp_all_mysql_version_tweak() {
+			$MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*' | while read mysql_version; do 
+			printf "\nTweaking ${mysql_version}"
+			isp_mysql_tweak ${mysql_version}
+			printf " - ${GCV}DONE${NCV}"
+			done
+			echo
+	}
+
+	printf "\n${GCV}Tweaking PHP:${NCV}\nmax_execution_time = 300s\npost_max_size = 1024m\nupload_max_filesize = 1024m\nmemory_limit = 1024m\nopcache.revalidate_freq = 0\nmax_input_vars = 150000\nopcache.max_accelerated_files = 100000\nopcache.memory_consumption = 300MB\n\nand enable PHP extensions: opcache (not for PHP 5x), mysql, memcached, ioncube, imagick, bcmath, xsl\n"
+
+	printf "\n${GCV}Tweaking MySQL:${NCV}\ninnodb_strict_mode = off\nsql_mode = ''\ninnodb_flush_method = O_DIRECT\ntransaction_isolation = READ-COMMITTED\ninnodb_flush_log_at_trx_commit = 2\n\nand disable binlog if no replicas exists\n"
+
+	echo
+	printf "${GCV}"
+	printf "\nTweak all PHP version (and MySQL) settings or exact one PHP version (and MySQL) ?\n"
+	printf "${NCV}"
+	
+	options=("All PHP and MySQL" "All PHP only" "All MySQL only" "Exact PHP and MySQL versions" "Skip")
+
+	select opt in "${options[@]}"; do
+	case $opt in
+
+		"All MySQL only")
+
+			# applying bugfixes
+			isp_mysql_include_bugfix
+
+			# run all mysql versions tweak
+			isp_all_mysql_version_tweak
+
+			break
+			;;
+
+		"All PHP only")
+
+			# run all php versions tweak
+			isp_all_php_version_tweak
+
+			break
+			;;
+	
+		"All PHP and MySQL")
+
+			# applying bugfixes
+			isp_mysql_include_bugfix
+
+			# run all php versions tweak
+			isp_all_php_version_tweak
+
+			# run all mysql versions tweak
+			isp_all_mysql_version_tweak
+
+			break
+			;;
+	
+		"Exact PHP and MySQL version")
+			isp_mysql_include_bugfix
+			
+			printf "\n${GCV}PHP${NCV}\n"
+			# get isp panel installed php versions into the array phpversions
+			phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
+			phpversions+=('Skip')
+			
+			# check that array not empty
+			if [[ ${#phpversions[@]} -eq 0 ]]
+			then
+				EXIT_STATUS=1
+				printf "\n${LRV}ERROR - Array phpversions empty. Check that PHP versions exists in ISP Manager panel.${NCV}\n"
+			else
+				# generating menu from array and user choosen php version to $php_choosen_version and apply
+				PS3='Choose PHP version to tweak:'
+				select php_choosen_version in "${phpversions[@]}"
+				do
+					if [[ $php_choosen_version == Skip || -z $php_choosen_version ]] 
 					then
-						printf "\nRunning"
+						break
+					else
+						printf "\nTweaking ${php_choosen_version}"
 						EXIT_STATUS=0
 						trap 'EXIT_STATUS=1' ERR
-						{
-						$MGRCTL phpconf.settings plid=$php_choosen_version elid=$php_choosen_version max_execution_time=300 memory_limit=1024 post_max_size=1024 upload_max_filesize=1024 sok=ok
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=opcache elname=opcache sok=ok
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=bcmath elname=bcmath sok=ok
-						$MGRCTL phpextensions.install plid=$php_choosen_version elid=imagick elname=imagick sok=ok
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=imagick elname=imagick sok=ok
-						$MGRCTL phpextensions.install plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=ioncube elname=ioncube sok=ok
-						$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcache elname=memcache sok=ok 
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcache elname=memcache sok=ok
-						$MGRCTL phpextensions.install plid=$php_choosen_version elid=memcached elname=memcached sok=ok
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=memcached elname=memcached sok=ok
-						$MGRCTL phpextensions.install plid=$php_choosen_version elid=xsl elname=xsl sok=ok
-						$MGRCTL phpextensions.resume plid=$php_choosen_version elid=xsl elname=xsl sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.revalidate_freq value=0 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.memory_consumption value=300 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=max_input_vars value=150000 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
-						$MGRCTL phpconf.edit plid=$php_choosen_version elid=opcache.max_accelerated_files value=100000 sok=ok
-						# tweaking native php version for phpmyadmin upload size large dumps
-						$MGRCTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
-						} &> /dev/null
+
+						isp_php_tweak ${php_choosen_version}
 						
 						# todo
 						#check_exit_and_restore_func
 						printf " - ${GCV}DONE${NCV}\n"
 						break
-					else
-						printf "\n${YCV}PHP tweaking canceled${NCV}\n"
-						EXIT_STATUS=1
-						break
 					fi
-				fi
-			done
-		fi
-	
-		# get isp panel installed mysql versions into the array mysqlversions
-		mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
-		mysqlversions+=('Skip')
-		
-		# check that array not empty
-		if [[ ${#mysqlversions[@]} -eq 0 ]]
-		then
-			EXIT_STATUS=1
-			printf "\n${LRV}ERROR - Array mysqlversions empty. Check that MySQL versions exists in ISP Manager panel.${NCV}\n"
-		else
-			printf "\n${GCV}MySQL${NCV}\n"
-		
-			# generating menu from array and user choosen mysql version to $mysql_choosen_version and apply
-			PS3='Choose MySQL version to tweak:'
-			select mysql_choosen_version in "${mysqlversions[@]}"
-			do
-				if [[ $mysql_choosen_version == Skip || -z $mysql_choosen_version ]] 
-				then
-					break
-				else
-					printf "I can tweak MySQL - $mysql_choosen_version:\ninnodb_strict_mode to OFF, sql_mode to '', innodb_flush_method to O_DIRECT, transaction_isolation to READ-COMMITTED, innodb_flush_log_at_trx_commit to 2, disable binlog if no replicas exists\n"
-					printf "${GCV}"
-					read -p "Should I tweak these MySQL settings? [Y/n]" -n 1 -r
-					printf "${NCV}"
-					if ! [[ $REPLY =~ ^[Nn]$ ]]
+				done
+			fi
+			
+			# get isp panel installed mysql versions into the array mysqlversions
+			mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
+			mysqlversions+=('Skip')
+			
+			# check that array not empty
+			if [[ ${#mysqlversions[@]} -eq 0 ]]
+			then
+				EXIT_STATUS=1
+				printf "\n${LRV}ERROR - Array mysqlversions empty. Check that MySQL versions exists in ISP Manager panel.${NCV}\n"
+			else
+				printf "\n${GCV}MySQL${NCV}\n"
+			
+				# generating menu from array and user choosen mysql version to $mysql_choosen_version and apply
+				PS3='Choose MySQL version to tweak:'
+				select mysql_choosen_version in "${mysqlversions[@]}"
+				do
+					if [[ $mysql_choosen_version == Skip || -z $mysql_choosen_version ]] 
 					then
-						printf "\nRunning"
+						break 2
+					else
+						printf "\nTweaking ${mysql_choosen_version}"
 						EXIT_STATUS=0
 						trap 'EXIT_STATUS=1' ERR
-						{
-	
-						# check docker or not
-						if $MGRCTL db.server | grep "$mysql_choosen_version" | grep "docker=on" &> /dev/null
-						then
-							MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
-						else
-							MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
-						fi
-	
-						#native mysql version disable binlog if no replicas exists
-						if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" &> /dev/null && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* &> /dev/null
-						then
-							# RHEL
-							if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
-							then
-								{
-							        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
-									systemctl restart mysql mysqld mariadb &> /dev/null
-									\rm -f /var/lib/mysql/binlog.* &> /dev/null
-								} &> /dev/null
-	
-							elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
-							then
-								{
-									printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
-									systemctl restart mysql mysqld mariadb &> /dev/null
-									\rm -f /var/lib/mysql/binlog.* &> /dev/null
-								} &> /dev/null
-	
-							# DEBIAN
-							elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
-							then
-								{
-							        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
-									systemctl restart mysql mysqld mariadb
-									\rm -f /var/lib/mysql/binlog.* 
-								} &> /dev/null
-							elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
-							then
-								{
-									printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
-									systemctl restart mysql mysqld mariadb
-									\rm -f /var/lib/mysql/binlog.* 
-								} &> /dev/null
-	
-							# UNKNOWN
-							elif [[ $distr == "unknown" ]]
-							then
-							        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
-							fi
-						fi
-	
-						if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
-						then
-							printf "\nskip-log-bin\n" >> /etc/ispmysql/$mysql_choosen_version/custom.cnf
-						fi
-	
-						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
-						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=sql-mode name=sql-mode value='' str_value='' sok=ok
-						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
-						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
-						$MGRCTL db.server.settings.edit plid=$mysql_choosen_version elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
-	
-						} &> /dev/null
-						sleep 10s
-						#todo
-						#check_exit_and_restore_func
-	
-						sleep 5s
-	
+
+						isp_mysql_tweak ${mysql_choosen_version}
+			
 						printf " - ${GCV}DONE${NCV}\n"
-						break
-					else
-						printf "\n${YCV}MySQL tweaking canceled${NCV}\n"
-						EXIT_STATUS=1
-						break
+						break 2
 					fi
-				fi
-			done
-		fi
-	else
-		# user chose not to tweak PHP nor MySQL
-		EXIT_STATUS=0
-		printf "Tweak was canceled by user choice\n"
-	fi
+				done
+			fi
+			;;
+	
+			"Skip")
+	
+			# user chose not to tweak PHP nor MySQL
+			EXIT_STATUS=0
+			printf "Tweak was canceled by user choice\n"
+			break
+			;;
+	
+			 	*)
+			# bad key
+			printf "${LRV}Bad key, boozar.${NCV}\n"
+			;;
+		esac
+	done
 fi
 }
 
@@ -891,7 +975,7 @@ printf "\n${YCV}Making nginx configuration check${NCV}"
 if nginx_test_output=$({ nginx -t; } 2>&1)
 then
 	printf " - ${GCV}OK${NCV}\n"
-	nginx -s reload &> /dev/null
+	nginx -s reload >/dev/null 2>&1
 	EXIT_STATUS=0
 else
 	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
@@ -911,7 +995,7 @@ fi
 # detecting nginx push & pull support
 nginx_push_pull_module_support() {
 
-if 2>&1 nginx -V | grep -i "push-stream" &> /dev/null
+if 2>&1 nginx -V | grep -i "push-stream" >/dev/null 2>&1
 then 
 	NGINX_HAVE_PUSH_PULL=1
 else
@@ -1084,15 +1168,15 @@ then
 				EXIT_STATUS=0
 				trap 'EXIT_STATUS=1' ERR
 				
-				$MGRCTL preset.delete elid=$2 elname=$2 &> /dev/null
+				$MGRCTL preset.delete elid=$2 elname=$2 >/dev/null 2>&1
 				
 				# removing $2 inject
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE &> /dev/null
-				sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE &> /dev/null
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE &> /dev/null
-				sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE &> /dev/null
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE &> /dev/null
-				sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE &> /dev/null
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE >/dev/null 2>&1
+				sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE >/dev/null 2>&1
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE >/dev/null 2>&1
+				sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE >/dev/null 2>&1
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
+				sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
 				
 				#check result
 				check_exit_and_restore_func
@@ -1131,12 +1215,12 @@ then
 			for plist in $preset_list; do $MGRCTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel presets removed${NCV}\n"
 			# removing nginx templates
-			\rm -f $NGINX_SSL_TEMPLATE &> /dev/null
-			\rm -f $NGINX_TEMPLATE &> /dev/null
+			\rm -f $NGINX_SSL_TEMPLATE >/dev/null 2>&1
+			\rm -f $NGINX_TEMPLATE >/dev/null 2>&1
 			printf "\n${LRV}Custom nginx templates removed${NCV}\n"
 			# removing injects in $NGINX_MAIN_CONF_FILE
-			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE &> /dev/null
-			sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE &> /dev/null
+			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
+			sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
 			# panel graceful restart
 			isp_panel_graceful_restart_func
 		else
@@ -1160,7 +1244,7 @@ APACHE_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/apache_status_$RANDOM_N.conf
 #todo
 #FPM_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/fpm_status.conf"
 
-if nginx -t &> /dev/null
+if nginx -t >/dev/null 2>&1
 then
 	printf "\n${GCV}Injecting nginx status page at\n$NGX_STATUS_PAGE_FILE\n$APACHE_STATUS_PAGE_FILE\n$FPM_STATUS_PAGE_FILE${NCV}\n"
 	if 
@@ -1173,13 +1257,13 @@ then
 		#todo
 		#printf "\nlocation ~* /fpm-status-$RANDOM_N { allow all; fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name; include fastcgi_params; fastcgi_pass unix:/replace_with_fpm_pool_socket_file_path }\n" > "$FPM_STATUS_PAGE_FILE"
 	fi
-	} &> /dev/null
+	} >/dev/null 2>&1
 	
 	then
-		if nginx -t &> /dev/null
+		if nginx -t >/dev/null 2>&1
 		then
 			printf "\n${GCV}OK${NCV}\n"
-			nginx -s reload &> /dev/null
+			nginx -s reload >/dev/null 2>&1
 			EXIT_STATUS=0
 		else
 			printf "\n${LRV}FAIL (nginx -t)${NCV}\n"
@@ -1206,32 +1290,32 @@ then
 	exit 1
 fi
 
-if apachectl configtest  &> /dev/null
+if apachectl configtest  >/dev/null 2>&1
 then
 	if [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL" ]]
 	then
 		printf "\n${GCV}Injecting apache status page at $APACHE_STATUS_PAGE_INJECT_FILE_RHEL${NCV}"
 		printf "$APACHE_STATUS_PAGE_INJECT" >> "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL"
-		if apachectl configtest &> /dev/null
+		if apachectl configtest >/dev/null 2>&1
 		then
 			printf " - ${GCV}OK${NCV}\n"
-			apachectl graceful  &> /dev/null
+			apachectl graceful  >/dev/null 2>&1
 		else
 			printf " - ${LRV}FAIL (apachectl configtest)${NCV}\n"
-			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" &> /dev/null
+			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" >/dev/null 2>&1
 			exit 1
 		fi
 	elif [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" ]]
 	then
 		printf "\n${GCV}Injecting apache status page at $APACHE_STATUS_PAGE_INJECT_FILE_DEB${NCV}"
 		printf "$APACHE_STATUS_PAGE_INJECT" >> "$APACHE_STATUS_PAGE_INJECT_FILE_DEB"
-		if apachectl configtest &> /dev/null
+		if apachectl configtest >/dev/null 2>&1
 		then
 			printf " - ${GCV}OK${NCV}\n"
-			apachectl graceful  &> /dev/null
+			apachectl graceful  >/dev/null 2>&1
 		else
 			printf " - ${LRV}FAIL (apachectl configtest)${NCV}\n"
-			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" &> /dev/null
+			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" >/dev/null 2>&1
 			exit 1
 		fi
 	else
@@ -1258,11 +1342,11 @@ if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\n
 then
 	# execute recompilation script
 	bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" 
-	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
 	exit 0
 else
 	printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
-	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
 	EXIT_STATUS=1
 	exit 1
 fi
@@ -1299,7 +1383,7 @@ if ! [[ $($MGRCTL feature | grep "name=web" | grep -i fpm) ]]
 then
 	printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
 	EXIT_STATUS=0
-	$MGRCTL feature.edit elid=web package_php package_php-fpm=on sok=ok &> /dev/null
+	$MGRCTL feature.edit elid=web package_php package_php-fpm=on sok=ok >/dev/null 2>&1
 	check_exit_and_restore_func
 	printf " - ${GCV}OK${NCV}\n"
 	# feature.edit return OK but actual install continues, so we need to sleep some time
@@ -1345,9 +1429,9 @@ then
 		exit 1
 	else
 		printf "\nNGINX default template exists. Copying it to $NGINX_TEMPLATE\n"
-		\cp -p --reflink=auto "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" &> /dev/null
+		\cp -p --reflink=auto "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" >/dev/null 2>&1
 		# fix importing default ssl template
-		sed -i 's@import etc/templates/default/@import etc/templates/@gi' "$NGINX_TEMPLATE" &> /dev/null
+		sed -i 's@import etc/templates/default/@import etc/templates/@gi' "$NGINX_TEMPLATE" >/dev/null 2>&1
 	fi
 fi
 
@@ -1359,7 +1443,7 @@ then
 		exit 1
 	else
 		printf "NGINX default ssl template exists. Copying it to $NGINX_SSL_TEMPLATE\n"
-		\cp -p --reflink=auto "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" &> /dev/null
+		\cp -p --reflink=auto "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1
 	fi
 fi
 
@@ -1416,7 +1500,7 @@ do
 		limit_dirindex_var=index.php
 	fi
 	# check for error / success
-	if $MGRCTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok &> /dev/null
+	if $MGRCTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok >/dev/null 2>&1
 	then
 		printf " - ${GCV}OK${NCV}\n"
 		preset_raise_error="0"
@@ -1690,19 +1774,19 @@ do
 							# execute recompilation script
 							printf "This will take some time\nRecompiling"
 							
-							if printf "1\n" | bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+							if printf "1\n" | bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
 							then
 								printf " - ${GCV}OK${NCV}\n"
-								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
 							else
 								printf " - ${LRV}FAIL${NCV}\n"
-								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
 								EXIT_STATUS=1
 								check_exit_and_restore_func
 							fi
 						else
 							printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
-							\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" &> /dev/null
+							\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
 							EXIT_STATUS=1
 							check_exit_and_restore_func
 						fi
@@ -1751,11 +1835,11 @@ do
 				if [[ -f "$NGINX_MAIN_CONF_FILE" ]]
 				then 
 					# we have main conf, check includes
-					if ! grep -v "#" $NGINX_MAIN_CONF_FILE | grep "include /etc/nginx/conf.d/\*.conf.*;" &> /dev/null
+					if ! grep -v "#" $NGINX_MAIN_CONF_FILE | grep "include /etc/nginx/conf.d/\*.conf.*;" >/dev/null 2>&1
 					then
 						# nginx's include /etc/nginx/conf.d/*.conf.* was not found
 						# check that we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
-						if ! grep "$PROXY_PREFIX$proxy_target" $NGINX_MAIN_CONF_FILE &> /dev/null
+						if ! grep "$PROXY_PREFIX$proxy_target" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
 						then
 							sed -i "s@http {@&\n# $PROXY_PREFIX$proxy_target\_START_DO_NOT_REMOVE\n# date added - $current_date_time\n# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE\n@g" $NGINX_MAIN_CONF_FILE
 							# download
@@ -1763,7 +1847,7 @@ do
 							
 							# adding inject if /etc/nginx/conf.d/*.conf.* was not found
 							printf "Updating $NGINX_MAIN_CONF_FILE\n"
-							sed -i "s@# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE@    include\t$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file;\n&@g" $NGINX_MAIN_CONF_FILE &> /dev/null
+							sed -i "s@# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE@    include\t$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file;\n&@g" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
 						else
 							# we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
 							printf "\n${LRV}ERROR - $existing $PROXY_PREFIX$proxy_target found in $NGINX_MAIN_CONF_FILE\nUse \"$BASH_SOURCE del $PROXY_PREFIX$proxy_target\" to remove it${NCV}\n"
@@ -1800,7 +1884,7 @@ do
 				
 				# set status pages for nginx and apache
 				BITRIX_FPM_STATUS_SET=1
-				#set_status_pages &> /dev/null
+				#set_status_pages >/dev/null 2>&1
 				
 				# tweak
 				run_all_tweaks
