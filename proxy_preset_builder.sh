@@ -640,12 +640,12 @@ then
 	if 
 
 	{
-	$MGRCTL feature | grep -i "PHP 8.3" | grep "active=off" || $MGRCTL feature | grep -i "PHP 8.2" | grep "active=off" || $MGRCTL feature | grep -i "PHP 8.1" | grep "active=off"  || $MGRCTL feature | grep -i "opendkim" | grep "active=off"
+	$MGRCTL feature | grep -i "PHP" | grep "active=off" || $MGRCTL feature | grep -i "opendkim" | grep "active=off"
 	} &> /dev/null
 
 	then
 		echo
-		read -p "Install opendkim, php 7.2, all php 8 features in ISP panel ? [Y/n]" -n 1 -r
+		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
 		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]
 		then
@@ -654,18 +654,23 @@ then
 			printf "\nRunning"
 	
 			{
+
+			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85")
+
 			$MGRCTL feature.edit elid=email package_opendkim=on sok=ok
 			$MGRCTL feature.edit elid=email package_clamav=off package_clamav-postfix=off package_clamav-sendmai=off sok=ok
-			$MGRCTL feature.edit elid=altphp72 package_ispphp72_fpm=on package_ispphp72_mod_apache=on packagegroup_altphp72gr=ispphp72 sok=ok
-			$MGRCTL feature.edit elid=altphp81 package_ispphp81_fpm=on package_ispphp81_mod_apache=on packagegroup_altphp81gr=ispphp81 sok=ok
-			$MGRCTL feature.edit elid=altphp82 package_ispphp82_fpm=on package_ispphp82_mod_apache=on packagegroup_altphp82gr=ispphp82 sok=ok
-			$MGRCTL feature.edit elid=altphp83 package_ispphp83_fpm=on package_ispphp83_mod_apache=on packagegroup_altphp83gr=ispphp83 sok=ok
+			for version in "${isp_php_versions[@]}"; do 
+				$MGRCTL feature.edit elid=altphp${version} package_ispphp${version}_fpm=on package_ispphp${version}_mod_apache=on packagegroup_altphp${version}gr=ispphp${version} sok=ok
+			done
+
+			sleep 10;
+
 			} &> /dev/null
 	
 			printf " - ${GCV}DONE${NCV}\n"	
 		else
 			# user chose not to enable ISP manager features 
-			printf "Features was not enabled\n"
+			printf "All PHP versions was not installed so as OpenDKIM \n"
 		fi
 	fi
 fi
