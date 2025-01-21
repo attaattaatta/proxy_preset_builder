@@ -709,6 +709,11 @@ then
 			if [[ ! "$1" =~ (5[0-9]) ]]; then
 				$MGRCTL phpextensions.install plid=$1 elid=opcache elname=opcache sok=ok
 				$MGRCTL phpextensions.resume plid=$1 elid=opcache elname=opcache sok=ok
+				$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq value=0 sok=ok
+				$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
+				$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption value=300 sok=ok
+				$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
+				$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files value=100000 sok=ok
 			fi
 			
 			$MGRCTL phpextensions.resume plid=$1 elid=bcmath elname=bcmath sok=ok
@@ -725,14 +730,10 @@ then
 			$MGRCTL phpextensions.install plid=$1 elid=xsl elname=xsl sok=ok
 			$MGRCTL phpextensions.resume plid=$1 elid=xsl elname=xsl sok=ok
 			$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq value=0 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption value=300 sok=ok
+
 			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
 			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars value=150000 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files value=100000 sok=ok
 			# tweaking native php version for phpmyadmin upload size large dumps
 			$MGRCTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
 
