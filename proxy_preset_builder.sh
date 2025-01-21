@@ -882,7 +882,7 @@ then
 			break
 			;;
 	
-		"Exact PHP and MySQL version")
+		"Exact PHP and MySQL versions")
 			isp_mysql_include_bugfix
 			
 			printf "\n${GCV}PHP${NCV}\n"
