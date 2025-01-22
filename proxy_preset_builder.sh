@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.43"
+self_current_version="1.0.44"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -477,6 +477,7 @@ then
 else
 	tweak_swapfile_func
 	tweak_openfiles_func
+	tweak_tuned_func
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
 
@@ -630,6 +631,69 @@ then
 else
 	printf "\nTweak files descriptors not needed or ${GCV}already done${NCV}\n"
 fi
+}
+
+# install and config tuned tweaker function
+tweak_tuned_func() {
+
+if ! systemctl | grep -i tuned >/dev/null 2>&1; then
+
+	printf "\n${GCV}Installing and configuring tuned service${NCV}\n"
+
+	if [[ $distr == "rhel" ]]; then
+	
+		{
+		if ! which tuned; then
+	\yum -y install tuned;
+		fi
+		} >/dev/null 2>&1
+	
+	
+	elif [[ $distr == "debian" ]]; then
+	
+		{
+		if ! which tuned; then
+	\apt-get -y install tuned;
+		fi
+		} >/dev/null 2>&1
+	
+	else
+	        printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
+	        break
+	fi
+	
+	if [[ $DEDICATED == "yes" ]]; then
+
+		printf "\n${GCV}Current CPU frequencies:${NCV}\n"
+		grep -i mhz /proc/cpuinfo
+
+		if which tuned-adm >/dev/null 2>&1; then
+			tuned-adm profile throughput-performance
+			systemctl enable --now tuned
+			tuned-adm active
+
+			printf "\n${GCV}Current CPU frequencies:${NCV}\n"
+			grep -i mhz /proc/cpuinfo
+
+		else
+			printf "\n${LRV}Sorry, tuned-adm utility was not found${NCV}\n"
+		fi
+
+	else
+		if which tuned-adm >/dev/null 2>&1; then
+			tuned-adm profile virtual-guest
+			systemctl enable --now tuned
+			tuned-adm active
+		else
+			printf "\n${LRV}Sorry, tuned-adm utility was not found${NCV}\n"
+		fi
+	fi
+
+else
+	printf "\nTweak tuned not needed or ${GCV}already done${NCV}\n"
+	tuned-adm active
+fi
+
 }
 
 # Install opendkim and php 7.2 features in ISP panel
