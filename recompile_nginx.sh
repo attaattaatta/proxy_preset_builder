@@ -451,10 +451,10 @@ install_other_staff_func
 install_debian_dependencies_func() {
 
 # install debian dependencies
-apt update
-for package in build-essential wget curl git gcc unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev cmake
+apt-get update
+for package in build-essential wget curl git gcc unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake
 do
-apt -y install $package
+apt-get -y install $package
 done
 #
 
