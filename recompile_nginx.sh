@@ -12,7 +12,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # Show script version
-self_current_version="1.0.3"
+self_current_version="1.0.4"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n\n${NCV}"
 
 # check privileges
@@ -266,12 +266,13 @@ if [[ $? -eq 0 ]]; then
 	
 	printf "\n${GCV}Completed${NCV}\nLog - $NGX_RECOMPILE_LOG_FILE\n"
 	exit 0
-	}
 
 else
 	printf "\n${LRV}Compilation failed${NCV}\nLog - $NGX_RECOMPILE_LOG_FILE\n"
 	exit 1
 fi
+
+}
 
 ngx_compilation_default_func() {
 
