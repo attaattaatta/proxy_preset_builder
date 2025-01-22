@@ -11,6 +11,10 @@ LRV="\033[1;91m"
 YCV="\033[01;33m"
 NCV="\033[0m"
 
+# Show script version
+self_current_version="1.0.3"
+printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n\n${NCV}"
+
 # check privileges
 if [[ $EUID -ne 0 ]]
 then
@@ -58,9 +62,6 @@ then
 	printf "\n\n${LRV}ERROR - No arguments allowed${NCV}\n"
 	exit 1
 fi
-
-# script version
-self_current_version="1.0.2"
 
 # check OS
 shopt -s nocasematch
@@ -145,7 +146,7 @@ nginx_obj_sanity_check() {
 
 printf "\n${GCV}Making objs/nginx check${NCV}"
 
-\mv /usr/share/nginx/modules /usr/share/nginx/modules_ 2>&1
+\mv /usr/share/nginx/modules /usr/share/nginx/modules_ >/dev/null 2>&1
 
 if nginx_test_output_objs=$({ "$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t; } 2>&1)
 
@@ -229,40 +230,48 @@ fi
 
 # nginx making
 make -j$(nproc) >> $NGX_RECOMPILE_LOG_FILE 2>&1
-ngx_check_dynamic_modules_func
-nginx_obj_sanity_check
 
-{
-# nginx install
-make install
+# check success or not
+if [[ $? -eq 0 ]]; then
+	ngx_check_dynamic_modules_func
+	nginx_obj_sanity_check
 
-# make cleanup
-make clean
-} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+	{
+	# nginx install
+	make install
+	
+	# make cleanup
+	make clean
+	} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+	
+	nginx_conf_sanity_check
+	nginx_compilcation_args_func
+	
+	{
+	
+	service nginx restart
+	
+	if [[ $distr == "rhel" ]]
+	then
+		yum versionlock add nginx*
+		yum versionlock status
+	fi
+	
+	if [[ $distr == "debian" ]]
+	then
+		apt-mark hold nginx*
+	fi
+	
+	} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+	
+	printf "\n${GCV}Completed${NCV}\nLog - $NGX_RECOMPILE_LOG_FILE\n"
+	exit 0
+	}
 
-nginx_conf_sanity_check
-nginx_compilcation_args_func
-
-{
-
-service nginx restart
-
-if [[ $distr == "rhel" ]]
-then
-	yum versionlock add nginx*
-	yum versionlock status
+else
+	printf "\n${LRV}Compilation failed${NCV}\nLog - $NGX_RECOMPILE_LOG_FILE\n"
+	exit 1
 fi
-
-if [[ $distr == "debian" ]]
-then
-	apt-mark hold nginx*
-fi
-
-} >> $NGX_RECOMPILE_LOG_FILE 2>&1
-
-printf "\n${GCV}Completed${NCV}\nLog - $NGX_RECOMPILE_LOG_FILE\n"
-exit 0
-}
 
 ngx_compilation_default_func() {
 
