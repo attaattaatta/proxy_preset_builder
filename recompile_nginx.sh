@@ -437,7 +437,7 @@ fi
 # install rhel dependencies
 yum -y install epel-release
 yum -y groupinstall 'Development Tools'
-for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake perl-IPC-Cmd libcurl-devel
+for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake perl-IPC-Cmd libcurl-devel perl-devel
 do
 yum -y install $package
 done
