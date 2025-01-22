@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.44"
+self_current_version="1.0.45"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -821,49 +821,49 @@ then
 			fi
 			
 			#native mysql version disable binlog if no replicas exists
-			if [[ $1_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" >/dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* >/dev/null 2>&1
+			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" >/dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* >/dev/null 2>&1
 			then
-			# RHEL
-			if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
-			then
-				{
-			        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
-					systemctl restart mysql mysqld mariadb >/dev/null 2>&1
-					\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
-				} >/dev/null 2>&1
-			
-			elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
-			then
-				{
-					printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
-					systemctl restart mysql mysqld mariadb >/dev/null 2>&1
-					\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
-				} >/dev/null 2>&1
-			
-			# DEBIAN
-			elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
-			then
-				{
-			        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
-					systemctl restart mysql mysqld mariadb
-					\rm -f /var/lib/mysql/binlog.* 
-				} >/dev/null 2>&1
-			elif [[ $distr == "debian" ]] && [[-f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
-			then
-				{
-					printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
-					systemctl restart mysql mysqld mariadb
-					\rm -f /var/lib/mysql/binlog.* 
-				} >/dev/null 2>&1
-			
-			# UNKNOWN
-			elif [[ $distr == "unknown" ]]
-			then
-			        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
+				# RHEL
+				if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
+				then
+					{
+				        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
+						systemctl restart mysql mysqld mariadb >/dev/null 2>&1
+						\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
+					} >/dev/null 2>&1
+				
+				elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
+				then
+					{
+						printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
+						systemctl restart mysql mysqld mariadb >/dev/null 2>&1
+						\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
+					} >/dev/null 2>&1
+				
+				# DEBIAN
+				elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
+				then
+					{
+				        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+						systemctl restart mysql mysqld mariadb
+						\rm -f /var/lib/mysql/binlog.* 
+					} >/dev/null 2>&1
+				elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
+				then
+					{
+						printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
+						systemctl restart mysql mysqld mariadb
+						\rm -f /var/lib/mysql/binlog.* 
+					} >/dev/null 2>&1
+				
+				# UNKNOWN
+				elif [[ $distr == "unknown" ]]
+				then
+				        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
+				fi
 			fi
-			fi
 			
-			if [[ $1_DOCKER == "in_docker" ]]
+			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
 			then
 			printf "\nskip-log-bin\n" >> /etc/ispmysql/$1/custom.cnf
 			fi
