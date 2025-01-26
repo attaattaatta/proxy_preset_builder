@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.46"
+self_current_version="1.0.47"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -197,7 +197,7 @@ fi
 # isp vars
 MGR_PATH="/usr/local/mgr5"
 MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
-MGR_MAIN_CONF_FILE="$MGR_PATH/var/ispmgr.log"
+MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
 
 # allowed script actions
 ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
@@ -732,7 +732,7 @@ then
 			latest_php_avail_in_panel=$($MGRCTL feature | grep altphp | tail -n 1 | cut -d'=' -f2 | cut -d' ' -f1)
 
 			# running while cycle until we found latest php or timed out
-			timeout_duration=300
+			timeout_duration=600
 			start_time=$(date +%s)
 			} >/dev/null 2>&1
 			
@@ -742,7 +742,7 @@ then
 			    elapsed_time=$((current_time - start_time))
 			
 			    if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
-			         printf "${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check "$MGRCTL feature" ${NCV}\n"
+			         printf "\n${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check "$MGRCTL feature" ${NCV}\n"
 			         break
 			    fi
 			
