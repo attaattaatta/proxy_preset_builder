@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.45"
+self_current_version="1.0.46"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -197,6 +197,7 @@ fi
 # isp vars
 MGR_PATH="/usr/local/mgr5"
 MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
+MGR_MAIN_CONF_FILE="$MGR_PATH/var/ispmgr.log"
 
 # allowed script actions
 ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
@@ -480,6 +481,7 @@ else
 	tweak_tuned_func
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
+	ispmanager_add_nginx_bad_robot_conf
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
@@ -696,7 +698,7 @@ fi
 
 }
 
-# Install opendkim and php 7.2 features in ISP panel
+# Install opendkim and php features in ISP panel
 ispmanager_enable_features_func() {
 
 if [[ -f /usr/local/mgr5/sbin/mgrctl ]]
@@ -718,8 +720,7 @@ then
 			printf "\nRunning"
 	
 			{
-
-			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85")
+			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85" "90" "91" "92")
 
 			$MGRCTL feature.edit elid=email package_opendkim=on sok=ok
 			$MGRCTL feature.edit elid=email package_clamav=off package_clamav-postfix=off package_clamav-sendmai=off sok=ok
@@ -727,11 +728,32 @@ then
 				$MGRCTL feature.edit elid=altphp${version} package_ispphp${version}_fpm=on package_ispphp${version}_mod_apache=on packagegroup_altphp${version}gr=ispphp${version} sok=ok
 			done
 
-			sleep 10;
+			# latest avail altphp
+			latest_php_avail_in_panel=$($MGRCTL feature | grep altphp | tail -n 1 | cut -d'=' -f2 | cut -d' ' -f1)
 
+			# running while cycle until we found latest php or timed out
+			timeout_duration=300
+			start_time=$(date +%s)
 			} >/dev/null 2>&1
-	
-			printf " - ${GCV}DONE${NCV}\n"	
+			
+			while true; do
+			    # timeout check
+			    current_time=$(date +%s)
+			    elapsed_time=$((current_time - start_time))
+			
+			    if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
+			         printf "${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check "$MGRCTL feature" ${NCV}\n"
+			         break
+			    fi
+			
+			    # checking for latest_php_avail_in_panel is installed
+			    if $MGRCTL feature | grep -i ${latest_php_avail_in_panel} | grep -i "Apache module" | grep -i "active=on" > /dev/null 2>&1; then
+			        printf " - ${GCV}DONE${NCV}\n"
+			        break
+			    else
+			        sleep 5
+			    fi
+			done
 		else
 			# user chose not to enable ISP manager features 
 			printf "${YCV}All PHP versions was not installed so as OpenDKIM${NCV} \n"
@@ -769,8 +791,10 @@ then
 			{
 			$MGRCTL phpconf.settings plid=$1 elid=$1 max_execution_time=300 memory_limit=1024 post_max_size=1024 upload_max_filesize=1024 sok=ok
 
-			# not installing nor activating opcache for 5x PHP
-			if [[ ! "$1" =~ (5[0-9]) ]]; then
+			# if 5x PHP disable opcache extension, else configuring it
+			if [[ "$1" =~ (5[0-9]) ]]; then
+				$MGRCTL phpextensions.suspend plid=$1 elid=opcache elname=opcache sok=ok
+			else
 				$MGRCTL phpextensions.install plid=$1 elid=opcache elname=opcache sok=ok
 				$MGRCTL phpextensions.resume plid=$1 elid=opcache elname=opcache sok=ok
 				$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq value=0 sok=ok
@@ -778,6 +802,7 @@ then
 				$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption value=300 sok=ok
 				$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
 				$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files value=100000 sok=ok
+
 			fi
 			
 			$MGRCTL phpextensions.resume plid=$1 elid=bcmath elname=bcmath sok=ok
@@ -1031,6 +1056,59 @@ then
 		esac
 	done
 fi
+}
+
+# tweaker add nginx bad robot conf
+ispmanager_add_nginx_bad_robot_conf() {
+
+	echo
+	read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
+	if ! [[ $REPLY =~ ^[Nn]$ ]]
+	then
+
+		nginx_bad_robot_file_url="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
+		nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
+	
+		# checking nginx configuration sanity
+		nginx_conf_sanity_check_fast
+
+		# adding nginx bad_robot.conf file
+		printf "Downloading bad_robot.conf to ${nginx_bad_robot_file_local}"	
+		{
+		if command -v wget &> /dev/null; then 
+			 \wget --timeout 4 --no-check-certificate -q -O "$nginx_bad_robot_file_local" "$nginx_bad_robot_file_url" 
+		else
+			printf "GET $nginx_bad_robot_file_url HTTP/1.1\nHost:raw.githubusercontent.com\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect raw.githubusercontent.com:443 -quiet | sed '1,/^\s$/d' > "$nginx_bad_robot_file_local"
+		fi
+		}  >/dev/null 2>&1
+		# checking bad_robot file exist in nginx config
+		if 2>&1 nginx -T | grep -i BlackWidow >/dev/null 2>&1; then
+			printf " - ${GCV}DONE${NCV}"
+		else
+			printf " - ${LRV}FAIL${NCV}"
+		fi
+	
+		# checking nginx configuration sanity again
+		nginx_conf_sanity_check_fast
+	else
+		# user chose not to install bad_robot.conf in nginx 
+		printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
+	fi
+}
+
+# check nginx conf and reload configuration fast
+nginx_conf_sanity_check_fast() {
+	
+	printf "\n${YCV}Making nginx configuration check${NCV}"
+	if nginx_test_output=$({ nginx -t; } 2>&1); then
+		printf " - ${GCV}OK${NCV}\n"
+		nginx -s reload >/dev/null 2>&1
+		EXIT_STATUS=0
+	else
+		printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
+		EXIT_STATUS=1
+	fi
+
 }
 
 # check nginx conf and reload configuration
