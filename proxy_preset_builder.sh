@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.47"
+self_current_version="1.0.49"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -479,19 +479,30 @@ else
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
+	bitrix_env_check
+	bitrix_fixes
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
-	ispmanager_add_nginx_bad_robot_conf
+	tweak_add_nginx_bad_robot_conf
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
 }
 
+bitrix_env_check() {
+
+# detecting bitrix and bitrix alike environments
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f /usr/local/mgr5/sbin/mgrctl ]] >/dev/null 2>&1 ; then
+	printf "\n${GCV}Bitrix environment or it's derivative detected${NCV}\n"
+	BITRIXALIKE="yes"
+fi
+
+}
+
 # check swap file exists if this is virtual server
 tweak_swapfile_func() {
 
-if [[ $VIRTUAL == "yes" ]]
-then
+if [[ $VIRTUAL == "yes" ]]; then
 
 	#Checking swap file exists and its settings
 	if ! grep -i "swap" /etc/fstab >/dev/null 2>&1
@@ -698,6 +709,66 @@ fi
 
 }
 
+# fixing bitrix bugs
+bitrix_fixes() {
+
+if [[ $BITRIXALIKE == "yes" ]]; then
+
+	bitrix_php_version=$(\php -v | head -n 1 | awk '{print $2}' | sed 's/\.[^.]*$//')
+
+	# check nginx ports exposure in http_host var, if success then fix it
+	if 2>&1 nginx -T | grep -i "\$host:80" >/dev/null 2>&1 || 2>&1 nginx -T | grep -i "\$host:443" >/dev/null 2>&1; then
+		echo
+		read -p "Hide nginx port exposure in http_host variable and add X-Forwarded-Proto ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			nginx_conf_sanity_check_fast
+			printf "\nFixing nginx port exposure in http_host variable and adding X-Forwarded-Proto"
+			# fixing nginx port expose in http_host variable and adding X-Forwarded-Proto
+			{
+			grep -riIl "\$host:443;" /etc/nginx/bx/* | xargs sed -i 's@\$host:443;@\$host;\n    proxy_set_header X-Forwarded-Proto \$scheme;\n@gi' 
+			grep -riIl "\$host:80;" /etc/nginx/bx/* | xargs sed -i 's@\$host:80;@\$host;\n    proxy_set_header X-Forwarded-Proto \$scheme;\n@gi'
+			} >/dev/null 2>&1
+		
+			if 2>&1 nginx -T | grep -i "\$host:80" >/dev/null 2>&1 || 2>&1 nginx -T | grep -i "\$host:443" >/dev/null 2>&1; then
+				printf " - ${LRV}FAIL${NCV}\n"	
+			else
+				printf " - ${GCV}OK${NCV}\n"
+			fi
+			nginx_conf_sanity_check_fast
+		fi
+	else
+		printf "\nFixing nginx port exposure in http_host variable and adding X-Forwarded-Proto not needed or ${GCV}already done${NCV}\n"
+	fi
+
+	# check if cURL PHP not enabled
+	if ! \php -m | grep -i curl >/dev/null 2>&1; then
+		echo
+		read -p "Enable PHP cURL extension ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+
+			printf "Enabling cURL extension for PHP ${bitrix_php_version}"
+			{
+			\apt install -y php${bitrix_php_version}-curl || \mv -f /etc/php.d/20-curl.ini.disabled /etc/php.d/20-curl.ini 
+			sleep 1
+			} >/dev/null 2>&1
+		 		
+			if \php -m | grep -i curl >/dev/null 2>&1; then
+				systemctl restart httpd* apache2* php-fpm*
+				printf " - ${GCV}OK${NCV}\n"
+			else
+				printf " - ${LRV}FAIL${NCV}\n"
+			fi
+		fi
+	else
+		printf "\nEnable PHP cURL extension not needed or ${GCV}already done${NCV}\n"
+	fi
+	
+else
+	# not bitrix env or user chosen not to fix Bitrix env
+	printf "\nSkipping Bitrix environment tweaks, not detected one or skipped\n"
+fi
+}
+
 # Install opendkim and php features in ISP panel
 ispmanager_enable_features_func() {
 
@@ -706,7 +777,7 @@ then
 	if 
 
 	{
-	$MGRCTL feature | grep -i "PHP" | grep "active=off" || $MGRCTL feature | grep -i "opendkim" | grep "active=off"
+	$MGRCTL feature | grep "PHP" | grep "active=off" || $MGRCTL feature | grep -i "opendkim" | grep "active=off"
 	} >/dev/null 2>&1
 
 	then
@@ -765,9 +836,7 @@ fi
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
 
-if [[ -f /usr/local/mgr5/sbin/mgrctl ]]
-then
-
+if [[ -f /usr/local/mgr5/sbin/mgrctl ]]; then
 	# check ISP lic
 	isp_panel_check_license_version
 
@@ -925,13 +994,13 @@ then
 			echo
 	}
 
-	printf "\n${GCV}Tweaking PHP:${NCV}\nmax_execution_time = 300s\npost_max_size = 1024m\nupload_max_filesize = 1024m\nmemory_limit = 1024m\nopcache.revalidate_freq = 0\nmax_input_vars = 150000\nopcache.max_accelerated_files = 100000\nopcache.memory_consumption = 300MB\n\nand enable PHP extensions: opcache (not for PHP 5x), mysql, memcached, ioncube, imagick, bcmath, xsl\n"
+	printf "\n${GCV}Tweaking PHP include:${NCV}\nmax_execution_time = 300s\npost_max_size = 1024m\nupload_max_filesize = 1024m\nmemory_limit = 1024m\nopcache.revalidate_freq = 0\nmax_input_vars = 150000\nopcache.max_accelerated_files = 100000\nopcache.memory_consumption = 300MB\n\nand enable PHP extensions: opcache (not for PHP 5x), mysql, memcached, ioncube, imagick, bcmath, xsl\n"
 
-	printf "\n${GCV}Tweaking MySQL:${NCV}\ninnodb_strict_mode = off\nsql_mode = ''\ninnodb_flush_method = O_DIRECT\ntransaction_isolation = READ-COMMITTED\ninnodb_flush_log_at_trx_commit = 2\n\nand disable binlog if no replicas exists\n"
+	printf "\n${GCV}Tweaking MySQL include:${NCV}\ninnodb_strict_mode = off\nsql_mode = ''\ninnodb_flush_method = O_DIRECT\ntransaction_isolation = READ-COMMITTED\ninnodb_flush_log_at_trx_commit = 2\n\nand disable binlog if no replicas exists\n"
 
 	echo
 	printf "${GCV}"
-	printf "\nTweak all PHP version (and MySQL) settings or exact one PHP version (and MySQL) ?\n"
+	printf "\nApply above tweaks to all PHP version (and MySQL) or exact version ?\n"
 	printf "${NCV}"
 	
 	options=("All PHP and MySQL" "All PHP only" "All MySQL only" "Exact PHP and MySQL versions" "Skip")
@@ -1059,18 +1128,55 @@ fi
 }
 
 # tweaker add nginx bad robot conf
-ispmanager_add_nginx_bad_robot_conf() {
+tweak_add_nginx_bad_robot_conf() {
+
+if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 
 	echo
 	read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
-	if ! [[ $REPLY =~ ^[Nn]$ ]]
-	then
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
-		nginx_bad_robot_file_url="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
-		nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
-	
 		# checking nginx configuration sanity
 		nginx_conf_sanity_check_fast
+
+		nginx_bad_robot_file_url="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
+
+		# placing file depending the environment
+		# if ISP Manager
+		if [[ -f /usr/local/mgr5/sbin/mgrctl ]]; then
+			nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
+		# if Bitrix
+		elif [[ $BITRIXALIKE == "yes" ]]; then
+
+			# Bitrix Env 9
+			bitrix_env9_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
+
+			# Other one bitrix "Vanilla"
+			bitrix_other_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
+
+			# Bitrix Env 9
+			if [[ -f $bitrix_env9_nginx_general_conf ]]; then
+				nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
+				if ! grep -q "bad_robot.conf" $bitrix_env9_nginx_general_conf >/dev/null 2>&1; then
+					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_env9_nginx_general_conf
+				fi
+			# fix could not build optimal proxy_headers_hash
+			printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
+
+			# Other one bitrix "vanilla"
+			elif [[ -f $bitrix_other_nginx_general_conf ]]; then
+				nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
+				if ! grep -q "bad_robot.conf" $bitrix_other_nginx_general_conf >/dev/null 2>&1; then
+					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_other_nginx_general_conf
+				fi
+			else
+				printf "\n${LRV}Error. Unknown bitrix environment.${NCV}\n"
+				return
+			fi
+		else
+			printf "\n${LRV}Error. Unknown environment. Don't know where to place the include.${NCV}\n"
+			return
+		fi
 
 		# adding nginx bad_robot.conf file
 		printf "Downloading bad_robot.conf to ${nginx_bad_robot_file_local}"	
@@ -1081,6 +1187,7 @@ ispmanager_add_nginx_bad_robot_conf() {
 			printf "GET $nginx_bad_robot_file_url HTTP/1.1\nHost:raw.githubusercontent.com\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect raw.githubusercontent.com:443 -quiet | sed '1,/^\s$/d' > "$nginx_bad_robot_file_local"
 		fi
 		}  >/dev/null 2>&1
+
 		# checking bad_robot file exist in nginx config
 		if 2>&1 nginx -T | grep -i BlackWidow >/dev/null 2>&1; then
 			printf " - ${GCV}DONE${NCV}"
@@ -1094,6 +1201,9 @@ ispmanager_add_nginx_bad_robot_conf() {
 		# user chose not to install bad_robot.conf in nginx 
 		printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
 	fi
+else
+	printf "\nAdding nginx blocking of annoying bots not needed or ${GCV}already done${NCV}\n" 
+fi
 }
 
 # check nginx conf and reload configuration fast
