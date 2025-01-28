@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.50"
+self_current_version="1.0.51"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -793,7 +793,17 @@ if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
 		echo
 		read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-			download_admin_sh
+			if \cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') >/dev/null 2>&1; then
+				# backup previous
+				printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M')"
+				# dowload new
+				download_admin_sh
+			else
+				# backup failed
+				printf "\n${LRV}Backup ${ADMIN_SH_BITRIX_FILE_LOCAL} to ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') FAILED${NCV}"
+				printf "\n${LRV}Skipped download.${NCV}\n"
+				return
+			fi
 		else
 			printf "\nUpdate of ${ADMIN_SH_BITRIX_FILE_LOCAL} skipped\n"
 		fi
@@ -802,6 +812,7 @@ if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
 	fi
 
 else
+	# dowload new
 	download_admin_sh
 fi
 
