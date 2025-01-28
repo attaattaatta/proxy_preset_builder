@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.49"
+self_current_version="1.0.50"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -198,6 +198,12 @@ fi
 MGR_PATH="/usr/local/mgr5"
 MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
 MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
+
+# bitrix vars
+ADMIN_SH_BITRIX_FILE_LOCAL="/root/admin.sh"
+ADMIN_SH_BITRIX_FILE_URL=""
+ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=""
+ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=""
 
 # allowed script actions
 ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
@@ -481,22 +487,13 @@ else
 	tweak_tuned_func
 	bitrix_env_check
 	bitrix_fixes
+	bitrix_install_update_admin_sh
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
 	tweak_add_nginx_bad_robot_conf
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
-}
-
-bitrix_env_check() {
-
-# detecting bitrix and bitrix alike environments
-if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f /usr/local/mgr5/sbin/mgrctl ]] >/dev/null 2>&1 ; then
-	printf "\n${GCV}Bitrix environment or it's derivative detected${NCV}\n"
-	BITRIXALIKE="yes"
-fi
-
 }
 
 # check swap file exists if this is virtual server
@@ -709,6 +706,107 @@ fi
 
 }
 
+bitrix_env_check() {
+
+# detecting bitrix and bitrix alike environments
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f /usr/local/mgr5/sbin/mgrctl ]] >/dev/null 2>&1 ; then
+
+	# bitrix GT (nginx+apache+fpm)
+	if apachectl -D DUMP_MODULES | grep proxy_fcgi >/dev/null 2>&1; then
+		printf "\n${GCV}Bitrix GT${NCV} environment detected\n"
+		BITRIX="GT"
+	# bitrix ENV (nginx+apache)
+	elif [[ -d /opt/webdir ]]; then
+		bitrix_env_version=$(egrep -o 'BITRIX_VA_VER=[0-9\.]+' /root/.bash_profile | awk -F'=' '{print $2}' )
+		printf "\n${GCV}Bitrix ${bitrix_env_version}${NCV} environment detected\n"
+		BITRIX="ENV"
+	# bitrix VANILLA (nginx+apache)
+	elif 2>&1 nginx -T | grep -i "server httpd:8090" >/dev/null 2>&1; then
+		printf "\n${GCV}Bitrix Vanilla${NCV} environment detected\n"
+		BITRIX="VANILLA"
+	# bitrix OTHER
+	else
+		printf "\n${GCV}Bitrix${NCV} environment derivative detected\n"
+		BITRIX="OTHER"
+	fi
+
+BITRIXALIKE="yes"
+fi
+
+}
+
+download_admin_sh() {
+
+printf "\nDownloading admin.sh to ${ADMIN_SH_BITRIX_FILE_LOCAL}"
+
+{
+if command -v wget &> /dev/null; then 
+	\wget --timeout 4 --no-check-certificate -q -O "$ADMIN_SH_BITRIX_FILE_LOCAL" "$ADMIN_SH_BITRIX_FILE_URL" 
+else
+	printf "GET $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | sed '1,/^\s$/d' > "$ADMIN_SH_BITRIX_FILE_LOCAL"
+fi
+}  >/dev/null 2>&1
+
+# get filesize in bytes for downloaded ADMIN_SH_BITRIX_FILE_LOCAL file
+ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
+
+# if both file sizes differs then something failed
+if [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -eq $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
+	printf " - ${GCV}DONE${NCV}\n"
+else
+	printf " - ${LRV}FAIL${NCV}\n"
+fi
+
+}
+
+bitrix_install_update_admin_sh() {
+
+if [[ BITRIX="GT" ]]; then
+	if cat /etc/*rele* | grep "CentOS Linux 7" >/dev/null 2>&1; then
+		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin.sh"
+	else
+		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-gt.sh"
+	fi
+elif [[ BITRIX="VANILLA" ]]; then
+	ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-vanilla.sh"
+else
+	return
+fi
+
+# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
+{
+if command -v wget &> /dev/null; then 
+	ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
+else
+	ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
+fi
+}  >/dev/null 2>&1
+
+# get / update admin.sh for GT or Vanilla
+if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
+	
+	# get filesize in bytes for existing ADMIN_SH_BITRIX_FILE_LOCAL file
+	ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
+
+	# if ADMIN_SH_BITRIX_FILE_REMOTE_SIZE defined, remote file size not null and both file sizes differs ask user for update
+	if [[ ! -z $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -ne $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
+		echo
+		read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			download_admin_sh
+		else
+			printf "\nUpdate of ${ADMIN_SH_BITRIX_FILE_LOCAL} skipped\n"
+		fi
+	else
+		printf "\nFile ${ADMIN_SH_BITRIX_FILE_LOCAL} is ${GCV}up to date${NCV}\n"
+	fi
+
+else
+	download_admin_sh
+fi
+
+}
+
 # fixing bitrix bugs
 bitrix_fixes() {
 
@@ -767,6 +865,7 @@ else
 	# not bitrix env or user chosen not to fix Bitrix env
 	printf "\nSkipping Bitrix environment tweaks, not detected one or skipped\n"
 fi
+
 }
 
 # Install opendkim and php features in ISP panel
@@ -1148,29 +1247,26 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 		# if Bitrix
 		elif [[ $BITRIXALIKE == "yes" ]]; then
 
-			# Bitrix Env 9
-			bitrix_env9_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
-
-			# Other one bitrix "Vanilla"
-			bitrix_other_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
-
-			# Bitrix Env 9
-			if [[ -f $bitrix_env9_nginx_general_conf ]]; then
+			# Bitrix Env or GT
+			if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
+				bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
 				nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
-				if ! grep -q "bad_robot.conf" $bitrix_env9_nginx_general_conf >/dev/null 2>&1; then
-					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_env9_nginx_general_conf
-				fi
 			# fix could not build optimal proxy_headers_hash
 			printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
 
 			# Other one bitrix "vanilla"
-			elif [[ -f $bitrix_other_nginx_general_conf ]]; then
+			elif [[ $BITRIX == "VANILLA" ]]; then
+				bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
 				nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
-				if ! grep -q "bad_robot.conf" $bitrix_other_nginx_general_conf >/dev/null 2>&1; then
-					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_other_nginx_general_conf
-				fi
 			else
 				printf "\n${LRV}Error. Unknown bitrix environment.${NCV}\n"
+				return
+			fi
+
+			if [[ ! -z $bitrix_nginx_general_conf ]] && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf >/dev/null 2>&1; then
+					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_nginx_general_conf
+			else
+				printf "\n${LRV}Error. bitrix_nginx_general_conf is not set. Include failed.${NCV}\n"
 				return
 			fi
 		else
