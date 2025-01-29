@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.51"
+self_current_version="1.0.52"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -761,59 +761,62 @@ fi
 
 bitrix_install_update_admin_sh() {
 
-if [[ BITRIX="GT" ]]; then
-	if cat /etc/*rele* | grep "CentOS Linux 7" >/dev/null 2>&1; then
-		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin.sh"
+if [[ $BITRIXALIKE == "yes" ]]; then
+
+	if [[ BITRIX="GT" ]]; then
+		if cat /etc/*rele* | grep "CentOS Linux 7" >/dev/null 2>&1; then
+			ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin.sh"
+		else
+			ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-gt.sh"
+		fi
+	elif [[ BITRIX="VANILLA" ]]; then
+		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-vanilla.sh"
 	else
-		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-gt.sh"
+		return
 	fi
-elif [[ BITRIX="VANILLA" ]]; then
-	ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-vanilla.sh"
-else
-	return
-fi
-
-# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
-{
-if command -v wget &> /dev/null; then 
-	ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
-else
-	ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
-fi
-}  >/dev/null 2>&1
-
-# get / update admin.sh for GT or Vanilla
-if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
 	
-	# get filesize in bytes for existing ADMIN_SH_BITRIX_FILE_LOCAL file
-	ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
-
-	# if ADMIN_SH_BITRIX_FILE_REMOTE_SIZE defined, remote file size not null and both file sizes differs ask user for update
-	if [[ ! -z $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -ne $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
-		echo
-		read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-			if \cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') >/dev/null 2>&1; then
-				# backup previous
-				printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M')"
-				# dowload new
-				download_admin_sh
+	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
+	{
+	if command -v wget &> /dev/null; then 
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
+	else
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
+	fi
+	}  >/dev/null 2>&1
+	
+	# get / update admin.sh for GT or Vanilla
+	if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
+		
+		# get filesize in bytes for existing ADMIN_SH_BITRIX_FILE_LOCAL file
+		ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
+	
+		# if ADMIN_SH_BITRIX_FILE_REMOTE_SIZE defined, remote file size not null and both file sizes differs ask user for update
+		if [[ ! -z $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -ne $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
+			echo
+			read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
+			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+				if \cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') >/dev/null 2>&1; then
+					# backup previous
+					printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M')"
+					# dowload new
+					download_admin_sh
+				else
+					# backup failed
+					printf "\n${LRV}Backup ${ADMIN_SH_BITRIX_FILE_LOCAL} to ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') FAILED${NCV}"
+					printf "\n${LRV}Skipped download.${NCV}\n"
+					return
+				fi
 			else
-				# backup failed
-				printf "\n${LRV}Backup ${ADMIN_SH_BITRIX_FILE_LOCAL} to ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') FAILED${NCV}"
-				printf "\n${LRV}Skipped download.${NCV}\n"
-				return
+				printf "\nUpdate of ${ADMIN_SH_BITRIX_FILE_LOCAL} skipped\n"
 			fi
 		else
-			printf "\nUpdate of ${ADMIN_SH_BITRIX_FILE_LOCAL} skipped\n"
+			printf "\nFile ${ADMIN_SH_BITRIX_FILE_LOCAL} is ${GCV}up to date${NCV}\n"
 		fi
+	
 	else
-		printf "\nFile ${ADMIN_SH_BITRIX_FILE_LOCAL} is ${GCV}up to date${NCV}\n"
+		# dowload new
+		download_admin_sh
 	fi
-
-else
-	# dowload new
-	download_admin_sh
 fi
 
 }
