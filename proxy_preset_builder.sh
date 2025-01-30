@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.52"
+self_current_version="1.0.53"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -196,6 +196,7 @@ fi
 
 # isp vars
 MGR_PATH="/usr/local/mgr5"
+MGRBIN="$MGR_PATH/sbin/mgrctl"
 MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
 MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
 
@@ -264,7 +265,7 @@ then
 fi
 
 #check mgrctl
-WE_NEED=('/usr/local/mgr5/sbin/mgrctl')
+WE_NEED=("$MGRBIN")
 
 for needitem in "${WE_NEED[@]}"
 do
@@ -709,7 +710,7 @@ fi
 bitrix_env_check() {
 
 # detecting bitrix and bitrix alike environments
-if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f /usr/local/mgr5/sbin/mgrctl ]] >/dev/null 2>&1 ; then
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGRBIN ]] >/dev/null 2>&1 ; then
 
 	# bitrix GT (nginx+apache+fpm)
 	if apachectl -D DUMP_MODULES | grep proxy_fcgi >/dev/null 2>&1; then
@@ -885,7 +886,7 @@ fi
 # Install opendkim and php features in ISP panel
 ispmanager_enable_features_func() {
 
-if [[ -f /usr/local/mgr5/sbin/mgrctl ]]
+if [[ -f $MGRBIN ]]
 then
 	if 
 
@@ -949,7 +950,7 @@ fi
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
 
-if [[ -f /usr/local/mgr5/sbin/mgrctl ]]; then
+if [[ -f $MGRBIN ]]; then
 	# check ISP lic
 	isp_panel_check_license_version
 
@@ -1256,7 +1257,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 
 		# placing file depending the environment
 		# if ISP Manager
-		if [[ -f /usr/local/mgr5/sbin/mgrctl ]]; then
+		if [[ -f $MGRBIN ]]; then
 			nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
 		# if Bitrix
 		elif [[ $BITRIXALIKE == "yes" ]]; then
