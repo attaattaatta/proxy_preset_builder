@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.53"
+self_current_version="1.0.54"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -196,8 +196,8 @@ fi
 
 # isp vars
 MGR_PATH="/usr/local/mgr5"
-MGRBIN="$MGR_PATH/sbin/mgrctl"
-MGRCTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
+MGR_BIN="$MGR_PATH/sbin/mgrctl"
+MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
 MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
 
 # bitrix vars
@@ -265,7 +265,7 @@ then
 fi
 
 #check mgrctl
-WE_NEED=("$MGRBIN")
+WE_NEED=("$MGR_BIN")
 
 for needitem in "${WE_NEED[@]}"
 do
@@ -276,17 +276,15 @@ do
 	fi
 done
 
-printf "\n${GCV}ISP Manager version checking${NCV}\n"
-
 #minimum version 6.11.02
 panel_required_version="61102"
 
-panel_current_version="$($MGRCTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+' | sed 's@\.@@gi')"
-panel_release_name="$($MGRCTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
+panel_current_version="$($MGR_CTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+' | sed 's@\.@@gi')"
+panel_release_name="$($MGR_CTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
 
 if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]
 then
-	printf "\n${LRV}ERROR - Cannot get ISP Manager panel version or release name.\nPlease check \"$MGRCTL license.info\" command${NCV}\n"
+	printf "\n${LRV}ERROR - Cannot get ISP Manager panel version or release name.\nPlease check \"$MGR_CTL license.info\" command${NCV}\n"
 	exit 1
 fi
 
@@ -304,10 +302,8 @@ else
 		exit 1
 	else
 		ISP_MGR_LIC_GOOD=1
-		printf "ISP Manager version ($panel_current_version) suits\n"
 	fi
 		ISP_MGR_VER_GOOD=1
-		printf "ISP Manager release ($panel_release_name) suits\n"
 fi
 # unset case insence for regexp
 shopt -u nocasematch
@@ -326,7 +322,7 @@ isp_panel_graceful_restart_func() {
 printf "\n${LRV}ISP panel restarting${NCV}"
 EXIT_STATUS=0
 trap 'EXIT_STATUS=1' ERR
-$MGRCTL -R
+$MGR_CTL -R
 check_exit_and_restore_func
 printf " - ${GCV}OK${NCV}\n"
 printf "\n${YCV}Do not forget to raise ISP Panel default PHP-FPM pool manager to static and children number (nproc is $(nproc)) ${NCV}\n"
@@ -447,7 +443,7 @@ check_exit_and_restore_func() {
 		\rm -f /etc/nginx/vhosts-includes/nginx_status_[0-9]*.conf
 		} >/dev/null 2>&1
 		
-		if $MGRCTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  >/dev/null 2>&1
+		if $MGR_CTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  >/dev/null 2>&1
 		then
 			printf " - ${GCV}OK${NCV}\n"
 		else
@@ -489,6 +485,7 @@ else
 	bitrix_env_check
 	bitrix_fixes
 	bitrix_install_update_admin_sh
+	ispmanager_switch_cgi_mod_func
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
 	tweak_add_nginx_bad_robot_conf
@@ -710,7 +707,7 @@ fi
 bitrix_env_check() {
 
 # detecting bitrix and bitrix alike environments
-if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGRBIN ]] >/dev/null 2>&1 ; then
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ; then
 
 	# bitrix GT (nginx+apache+fpm)
 	if apachectl -D DUMP_MODULES | grep proxy_fcgi >/dev/null 2>&1; then
@@ -878,28 +875,60 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	
 else
 	# not bitrix env or user chosen not to fix Bitrix env
-	printf "\nSkipping Bitrix environment tweaks, not detected one or skipped\n"
+	printf "\nSkipping Bitrix environment tweaks, ${GCV}not detected${NCV} or skipped\n"
 fi
 
+}
+
+
+ispmanager_switch_cgi_mod_func() {
+
+if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" >/dev/null 2>&1; then
+	echo
+	read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		# check isp lic
+		isp_panel_check_license_version
+
+		# Switching php-cgi sites to mod-php
+		$MGR_CTL webdomain | grep -i "PHP CGI" | while read -r cgi_enabled_site; do 
+			name=$(echo "$cgi_enabled_site" | grep -oP 'name=\K[^ ]+')
+			php_version=$(echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | grep -o native || echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | sed 's@\.@@gi' | sed -n 's/^\([0-9]\{2\}\).*/isp-php\1/p')
+
+			if [[ -n $name && -n $php_version ]]; then 
+				printf "Switching ${GCV}$name $php_version${NCV} from PHP-CGI to PHP Module - "
+				$MGR_CTL site.edit elid=${name} site_php_mode=php_mode_mod site_php_fpm_version=${php_version} site_php_cgi_version=${php_version} site_php_apache_version=${php_version} sok=ok
+			fi
+		done
+
+		# Disable php-cgi for all users
+		echo
+		$MGR_CTL user | grep "limit_php_mode_cgi=on" | grep -oP 'name=\K[^ ]+' | while read -r user; do 
+			printf "Disabling PHP-CGI for ${GCV}$user${NCV} - "
+			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on limit_php_mode_cgi=off limit_php_mode_fcgi_nginxfpm=on limit_ssl=on limit_cgi=on sok=ok
+		done
+	fi
+else
+	printf "\nSwitch or disable php-cgi not needed or ${GCV}already done${NCV}\n"
+fi
 }
 
 # Install opendkim and php features in ISP panel
 ispmanager_enable_features_func() {
 
-if [[ -f $MGRBIN ]]
+if [[ -f $MGR_BIN ]]
 then
 	if 
 
 	{
-	$MGRCTL feature | grep "PHP" | grep "active=off" || $MGRCTL feature | grep -i "opendkim" | grep "active=off"
+	$MGR_CTL feature | grep "PHP" | grep "active=off" || $MGR_CTL feature | grep -i "opendkim" | grep "active=off"
 	} >/dev/null 2>&1
 
 	then
 		echo
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]
-		then
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			# check isp lic
 			isp_panel_check_license_version
 			printf "\nRunning"
@@ -907,14 +936,14 @@ then
 			{
 			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85" "90" "91" "92")
 
-			$MGRCTL feature.edit elid=email package_opendkim=on sok=ok
-			$MGRCTL feature.edit elid=email package_clamav=off package_clamav-postfix=off package_clamav-sendmai=off sok=ok
+			$MGR_CTL feature.edit elid=email package_opendkim=on sok=ok
+			$MGR_CTL feature.edit elid=email package_clamav=off package_clamav-postfix=off package_clamav-sendmai=off sok=ok
 			for version in "${isp_php_versions[@]}"; do 
-				$MGRCTL feature.edit elid=altphp${version} package_ispphp${version}_fpm=on package_ispphp${version}_mod_apache=on packagegroup_altphp${version}gr=ispphp${version} sok=ok
+				$MGR_CTL feature.edit elid=altphp${version} package_ispphp${version}_fpm=on package_ispphp${version}_mod_apache=on packagegroup_altphp${version}gr=ispphp${version} sok=ok
 			done
 
 			# latest avail altphp
-			latest_php_avail_in_panel=$($MGRCTL feature | grep altphp | tail -n 1 | cut -d'=' -f2 | cut -d' ' -f1)
+			latest_php_avail_in_panel=$($MGR_CTL feature | grep altphp | tail -n 1 | cut -d'=' -f2 | cut -d' ' -f1)
 
 			# running while cycle until we found latest php or timed out
 			timeout_duration=600
@@ -927,12 +956,12 @@ then
 			    elapsed_time=$((current_time - start_time))
 			
 			    if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
-			         printf "\n${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check "$MGRCTL feature" ${NCV}\n"
+			         printf "\n${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check "$MGR_CTL feature" ${NCV}\n"
 			         break
 			    fi
 			
 			    # checking for latest_php_avail_in_panel is installed
-			    if $MGRCTL feature | grep -i ${latest_php_avail_in_panel} | grep -i "Apache module" | grep -i "active=on" > /dev/null 2>&1; then
+			    if $MGR_CTL feature | grep -i ${latest_php_avail_in_panel} | grep -i "Apache module" | grep -i "active=on" > /dev/null 2>&1; then
 			        printf " - ${GCV}DONE${NCV}\n"
 			        break
 			    else
@@ -950,7 +979,7 @@ fi
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
 
-if [[ -f $MGRBIN ]]; then
+if [[ -f $MGR_BIN ]]; then
 	# check ISP lic
 	isp_panel_check_license_version
 
@@ -972,42 +1001,42 @@ if [[ -f $MGRBIN ]]; then
 			printf "${LRV}No PHP version argument was passed to isp_php_tweak function.${NCV}\n"
 		else
 			{
-			$MGRCTL phpconf.settings plid=$1 elid=$1 max_execution_time=300 memory_limit=1024 post_max_size=1024 upload_max_filesize=1024 sok=ok
+			$MGR_CTL phpconf.settings plid=$1 elid=$1 max_execution_time=300 memory_limit=1024 post_max_size=1024 upload_max_filesize=1024 sok=ok
 
 			# if 5x PHP disable opcache extension, else configuring it
 			if [[ "$1" =~ (5[0-9]) ]]; then
-				$MGRCTL phpextensions.suspend plid=$1 elid=opcache elname=opcache sok=ok
+				$MGR_CTL phpextensions.suspend plid=$1 elid=opcache elname=opcache sok=ok
 			else
-				$MGRCTL phpextensions.install plid=$1 elid=opcache elname=opcache sok=ok
-				$MGRCTL phpextensions.resume plid=$1 elid=opcache elname=opcache sok=ok
-				$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq value=0 sok=ok
-				$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
-				$MGRCTL phpconf.edit plid=$1 elid=opcache.memory_consumption value=300 sok=ok
-				$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
-				$MGRCTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files value=100000 sok=ok
+				$MGR_CTL phpextensions.install plid=$1 elid=opcache elname=opcache sok=ok
+				$MGR_CTL phpextensions.resume plid=$1 elid=opcache elname=opcache sok=ok
+				$MGR_CTL phpconf.edit plid=$1 elid=opcache.revalidate_freq value=0 sok=ok
+				$MGR_CTL phpconf.edit plid=$1 elid=opcache.memory_consumption apache_value=300 cgi_value=300 fpm_value=300 sok=ok
+				$MGR_CTL phpconf.edit plid=$1 elid=opcache.memory_consumption value=300 sok=ok
+				$MGR_CTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files apache_value=100000 cgi_value=100000 fpm_value=100000 sok=ok
+				$MGR_CTL phpconf.edit plid=$1 elid=opcache.max_accelerated_files value=100000 sok=ok
 
 			fi
 			
-			$MGRCTL phpextensions.resume plid=$1 elid=bcmath elname=bcmath sok=ok
-			$MGRCTL phpextensions.install plid=$1 elid=imagick elname=imagick sok=ok
-			$MGRCTL phpextensions.resume plid=$1 elid=imagick elname=imagick sok=ok
-			$MGRCTL phpextensions.install plid=$1 elid=ioncube elname=ioncube sok=ok
-			$MGRCTL phpextensions.resume plid=$1 elid=ioncube elname=ioncube sok=ok
-			$MGRCTL phpextensions.install plid=$1 elid=memcache elname=memcache sok=ok 
-			$MGRCTL phpextensions.resume plid=$1 elid=memcache elname=memcache sok=ok
-			$MGRCTL phpextensions.install plid=$1 elid=memcached elname=memcached sok=ok
-			$MGRCTL phpextensions.resume plid=$1 elid=memcached elname=memcached sok=ok
-			$MGRCTL phpextensions.install plid=$1 elid=mysql elname=mysql sok=ok
-			$MGRCTL phpextensions.resume plid=$1 elid=mysql elname=mysql sok=ok
-			$MGRCTL phpextensions.install plid=$1 elid=xsl elname=xsl sok=ok
-			$MGRCTL phpextensions.resume plid=$1 elid=xsl elname=xsl sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
+			$MGR_CTL phpextensions.resume plid=$1 elid=bcmath elname=bcmath sok=ok
+			$MGR_CTL phpextensions.install plid=$1 elid=imagick elname=imagick sok=ok
+			$MGR_CTL phpextensions.resume plid=$1 elid=imagick elname=imagick sok=ok
+			$MGR_CTL phpextensions.install plid=$1 elid=ioncube elname=ioncube sok=ok
+			$MGR_CTL phpextensions.resume plid=$1 elid=ioncube elname=ioncube sok=ok
+			$MGR_CTL phpextensions.install plid=$1 elid=memcache elname=memcache sok=ok 
+			$MGR_CTL phpextensions.resume plid=$1 elid=memcache elname=memcache sok=ok
+			$MGR_CTL phpextensions.install plid=$1 elid=memcached elname=memcached sok=ok
+			$MGR_CTL phpextensions.resume plid=$1 elid=memcached elname=memcached sok=ok
+			$MGR_CTL phpextensions.install plid=$1 elid=mysql elname=mysql sok=ok
+			$MGR_CTL phpextensions.resume plid=$1 elid=mysql elname=mysql sok=ok
+			$MGR_CTL phpextensions.install plid=$1 elid=xsl elname=xsl sok=ok
+			$MGR_CTL phpextensions.resume plid=$1 elid=xsl elname=xsl sok=ok
+			$MGR_CTL phpconf.edit plid=$1 elid=opcache.revalidate_freq apache_value=0 cgi_value=0 fpm_value=0 sok=ok
 
-			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
-			$MGRCTL phpconf.edit plid=$1 elid=max_input_vars value=150000 sok=ok
+			$MGR_CTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+			$MGR_CTL phpconf.edit plid=$1 elid=max_input_vars apache_value=150000 cgi_value=150000 fpm_value=150000 sok=ok
+			$MGR_CTL phpconf.edit plid=$1 elid=max_input_vars value=150000 sok=ok
 			# tweaking native php version for phpmyadmin upload size large dumps
-			$MGRCTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
+			$MGR_CTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
 
 			} >/dev/null 2>&1
 		fi
@@ -1021,7 +1050,7 @@ if [[ -f $MGRBIN ]]; then
 		else
 			{
 			# check docker or not
-			if $MGRCTL db.server | grep "$1" | grep "docker=on" >/dev/null 2>&1
+			if $MGR_CTL db.server | grep "$1" | grep "docker=on" >/dev/null 2>&1
 			then
 			MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
 			else
@@ -1076,11 +1105,11 @@ if [[ -f $MGRBIN ]]; then
 			printf "\nskip-log-bin\n" >> /etc/ispmysql/$1/custom.cnf
 			fi
 			
-			$MGRCTL db.server.settings.edit plid=$1 elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
-			$MGRCTL db.server.settings.edit plid=$1 elid=sql-mode name=sql-mode value='' str_value='' sok=ok
-			$MGRCTL db.server.settings.edit plid=$1 elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
-			$MGRCTL db.server.settings.edit plid=$1 elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
-			$MGRCTL db.server.settings.edit plid=$1 elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
+			$MGR_CTL db.server.settings.edit plid=$1 elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
+			$MGR_CTL db.server.settings.edit plid=$1 elid=sql-mode name=sql-mode value='' str_value='' sok=ok
+			$MGR_CTL db.server.settings.edit plid=$1 elid=innodb-flush-method name=innodb-flush-method value=O_DIRECT str_value=O_DIRECT sok=ok
+			$MGR_CTL db.server.settings.edit plid=$1 elid=innodb-flush-log-at-trx-commit name=innodb-flush-log-at-trx-commit value=2 int_value=2 str_value=2 sok=ok
+			$MGR_CTL db.server.settings.edit plid=$1 elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
 
 			sleep 10
 			} >/dev/null 2>&1
@@ -1090,7 +1119,7 @@ if [[ -f $MGRBIN ]]; then
 	# getting all PHP version from ISP panel and processing tweaks
 	isp_all_php_version_tweak() {	
 			
-			$MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*' | while read php_version; do 
+			$MGR_CTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*' | while read php_version; do 
 			printf "\nTweaking ${php_version}"
 			isp_php_tweak ${php_version}
 			printf " - ${GCV}DONE${NCV}"
@@ -1100,7 +1129,7 @@ if [[ -f $MGRBIN ]]; then
 
 	# getting all MySQL version from ISP panel and processing tweaks
 	isp_all_mysql_version_tweak() {
-			$MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*' | while read mysql_version; do 
+			$MGR_CTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*' | while read mysql_version; do 
 			printf "\nTweaking ${mysql_version}"
 			isp_mysql_tweak ${mysql_version}
 			printf " - ${GCV}DONE${NCV}"
@@ -1160,7 +1189,7 @@ if [[ -f $MGRBIN ]]; then
 			
 			printf "\n${GCV}PHP${NCV}\n"
 			# get isp panel installed php versions into the array phpversions
-			phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGRCTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
+			phpversions=(); while IFS= read -r version; do phpversions+=( "$version" ); done < <( $MGR_CTL phpversions | grep -E 'apache=on|fpm=on' | awk '{print $1}' | grep -o -P '(?<=key=).*')
 			phpversions+=('Skip')
 			
 			# check that array not empty
@@ -1192,7 +1221,7 @@ if [[ -f $MGRBIN ]]; then
 			fi
 			
 			# get isp panel installed mysql versions into the array mysqlversions
-			mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGRCTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
+			mysqlversions=(); while IFS= read -r version; do mysqlversions+=( "$version" ); done < <( $MGR_CTL db.server | grep -E 'type=mysql' | awk '{print $2}' | grep -o -P '(?<=name=).*')
 			mysqlversions+=('Skip')
 			
 			# check that array not empty
@@ -1257,7 +1286,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 
 		# placing file depending the environment
 		# if ISP Manager
-		if [[ -f $MGRBIN ]]; then
+		if [[ -f $MGR_BIN ]]; then
 			nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
 		# if Bitrix
 		elif [[ $BITRIXALIKE == "yes" ]]; then
@@ -1495,8 +1524,8 @@ then
 			backup_func
 			
 			# removing all $PROXY_PREFIX presets
-			preset_list=$($MGRCTL preset | awk -F '=' '{print $3}' | grep -E "$PROXY_PREFIX.+")
-			for plist in $preset_list; do $MGRCTL preset.delete elid=$plist elname=$plist; done
+			preset_list=$($MGR_CTL preset | awk -F '=' '{print $3}' | grep -E "$PROXY_PREFIX.+")
+			for plist in $preset_list; do $MGR_CTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel %%$PROXY_PREFIX%% presets was removed${NCV}\n"
 		
 			# removing all $PROXY_PREFIX  injects
@@ -1514,7 +1543,7 @@ then
 			exit 0
 		fi
 	# check that this preset exists in panel, and if exists delete it with inject
-	elif [[ ! -z "$2"  ]]  && [[  ! -z $($MGRCTL preset | awk -F '=' '{print $3}' | grep -E "$2") ]]
+	elif [[ ! -z "$2"  ]]  && [[  ! -z $($MGR_CTL preset | awk -F '=' '{print $3}' | grep -E "$2") ]]
 		then
 			echo
 			printf "${LRV}"
@@ -1532,7 +1561,7 @@ then
 				EXIT_STATUS=0
 				trap 'EXIT_STATUS=1' ERR
 				
-				$MGRCTL preset.delete elid=$2 elname=$2 >/dev/null 2>&1
+				$MGR_CTL preset.delete elid=$2 elname=$2 >/dev/null 2>&1
 				
 				# removing $2 inject
 				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE >/dev/null 2>&1
@@ -1575,8 +1604,8 @@ then
 		then
 			backup_func
 			# removing all presets 
-			preset_list=$($MGRCTL preset | awk -F '=' '{print $3}')
-			for plist in $preset_list; do $MGRCTL preset.delete elid=$plist elname=$plist; done
+			preset_list=$($MGR_CTL preset | awk -F '=' '{print $3}')
+			for plist in $preset_list; do $MGR_CTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel presets removed${NCV}\n"
 			# removing nginx templates
 			\rm -f $NGINX_SSL_TEMPLATE >/dev/null 2>&1
@@ -1743,17 +1772,17 @@ main_func() {
 isp_panel_check_license_version
 
 # enabling ISP PHP-FPM FastCGI feature
-if ! [[ $($MGRCTL feature | grep "name=web" | grep -i fpm) ]]
+if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
 then
 	printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
 	EXIT_STATUS=0
-	$MGRCTL feature.edit elid=web package_php package_php-fpm=on sok=ok >/dev/null 2>&1
+	$MGR_CTL feature.edit elid=web package_php package_php-fpm=on sok=ok >/dev/null 2>&1
 	check_exit_and_restore_func
 	printf " - ${GCV}OK${NCV}\n"
 	# feature.edit return OK but actual install continues, so we need to sleep some time
 	printf "\n${GCV}Waiting 60 seconds for ISP Panel PHP-FPM FastCGI feature install${NCV}"
 	sleep 60
-	if ! [[ $($MGRCTL feature | grep "name=web" | grep -i fpm) ]]
+	if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
 	then
 		printf "\n${LRV}ISP Manager PHP-FPM FastCGI feature still not exists\nCheck /usr/local/mgr5/var/pkg.log logfile${NCV}"
 		exit 1
@@ -1764,10 +1793,10 @@ fi
 if [[ "$#" -lt 1 ]]
 then
 	# check if any presets exist
-	if [[ $($MGRCTL preset) ]]
+	if [[ $($MGR_CTL preset) ]]
 	then
 		printf "\n${GCV}Listing existing templates:${NCV}\n---------------\n"
-		$MGRCTL preset | awk -F '=' '{print $3}'
+		$MGR_CTL preset | awk -F '=' '{print $3}'
 		echo "---------------"
 	else
 		printf "\n${GCV}There is no existing templates in the ISP panel${NCV}\n"
@@ -1864,7 +1893,7 @@ do
 		limit_dirindex_var=index.php
 	fi
 	# check for error / success
-	if $MGRCTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok >/dev/null 2>&1
+	if $MGR_CTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok >/dev/null 2>&1
 	then
 		printf " - ${GCV}OK${NCV}\n"
 		preset_raise_error="0"
