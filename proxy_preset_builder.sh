@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.54"
+self_current_version="1.0.55"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -482,13 +482,14 @@ else
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
-	bitrix_env_check
-	bitrix_fixes
-	bitrix_install_update_admin_sh
+	bitrix_env_check_func
+	bitrix_fixes_func
+	bitrix_install_update_admin_sh_func
 	ispmanager_switch_cgi_mod_func
+	ispmanager_enable_h2_func
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
-	tweak_add_nginx_bad_robot_conf
+	tweak_add_nginx_bad_robot_conf_func
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
@@ -704,7 +705,7 @@ fi
 
 }
 
-bitrix_env_check() {
+bitrix_env_check_func() {
 
 # detecting bitrix and bitrix alike environments
 if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ; then
@@ -757,7 +758,7 @@ fi
 
 }
 
-bitrix_install_update_admin_sh() {
+bitrix_install_update_admin_sh_func() {
 
 if [[ $BITRIXALIKE == "yes" ]]; then
 
@@ -820,7 +821,7 @@ fi
 }
 
 # fixing bitrix bugs
-bitrix_fixes() {
+bitrix_fixes_func() {
 
 if [[ $BITRIXALIKE == "yes" ]]; then
 
@@ -880,6 +881,26 @@ fi
 
 }
 
+
+ispmanager_enable_h2_func() {
+
+if [[ -f $MGR_BIN ]] && $MGR_CTL websettings | grep "http2=off" >/dev/null 2>&1; then
+	echo
+	read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		# Enable http2 isp manager
+		printf "Running"
+		if $MGR_CTL websettings http2=on sok=ok >/dev/null 2>&1; then
+			printf " - ${GCV}OK${NCV}\n"
+		else
+			printf " - ${LRV}FAIL${NCV}\n"
+		fi
+	fi
+else
+	printf "\nhttp/2 ${GCV}already enabled${NCV}\n"
+fi
+
+}
 
 ispmanager_switch_cgi_mod_func() {
 
@@ -1271,7 +1292,7 @@ fi
 }
 
 # tweaker add nginx bad robot conf
-tweak_add_nginx_bad_robot_conf() {
+tweak_add_nginx_bad_robot_conf_func() {
 
 if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 
