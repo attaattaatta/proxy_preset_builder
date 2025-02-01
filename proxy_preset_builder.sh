@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.57"
+self_current_version="1.0.58"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -982,7 +982,7 @@ if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 |
 
 		# Enable php-mod for all users
 		echo
-		$MGR_CTL user | grep "limit_php_mode_mod=off" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
+		$MGR_CTL user | grep -v "limit_php_mode_mod" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
 			printf "Enabling PHP-MOD for ${GCV}$user${NCV} - "
 			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on sok=ok
 		done
