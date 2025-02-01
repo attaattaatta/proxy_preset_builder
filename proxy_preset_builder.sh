@@ -987,6 +987,8 @@ if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 |
 			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on sok=ok
 		done
 
+		echo
+
 		# Switching php-cgi sites to mod-php
 		$MGR_CTL webdomain | grep -i "PHP CGI" | while read -r cgi_enabled_site; do 
 			name=$(echo "$cgi_enabled_site" | awk -F'name=' '{print $2}' | awk '{print $1}')
