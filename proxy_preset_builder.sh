@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.56"
+self_current_version="1.0.57"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -174,6 +174,7 @@ MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
 MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
 SITES_TWEAKS_NEEDED=""
 SITES_TWEAKS_NEEDED_SITES=()
+NO_MOD_PHP=()
 
 # bitrix vars
 ADMIN_SH_BITRIX_FILE_LOCAL="/root/admin.sh"
@@ -443,9 +444,9 @@ else
 	bitrix_env_check_func
 	bitrix_fixes_func
 	bitrix_install_update_admin_sh_func
-	ispmanager_switch_cgi_mod_func
 	ispmanager_enable_sites_tweaks_func
 	ispmanager_enable_features_func
+	ispmanager_switch_cgi_mod_func
 	ispmanager_tweak_php_and_mysql_settings_func
 	tweak_add_nginx_bad_robot_conf_func
 
@@ -837,7 +838,7 @@ fi
 # tweak sites settings need or not function
 ispmanager_enable_sites_tweaks_need_func() {
 
-for site in $($MGR_CTL webdomain | grep -oP 'name=\K[^ ]+'); do
+for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}'); do
 	# check tweaks needed or not
 	{
 	if $MGR_CTL site.edit elid=${site} | grep -i "site_ddosshield=on"  || ! $MGR_CTL site.edit elid=${site} | grep -i "site_gzip_level=5" || ! $MGR_CTL site.edit elid=${site} | grep -i "site_expire_times=expire_times_max" || $MGR_CTL site.edit elid=${site} | grep -i "site_srv_cache=off"; then
@@ -851,7 +852,7 @@ for site in $($MGR_CTL webdomain | grep -oP 'name=\K[^ ]+'); do
 
 	# enable HSTS http header for the site if tls is on
 	{
-	for site in $($MGR_CTL webdomain | grep "secure=on" | grep -oP 'name=\K[^ ]+'); do
+	for site in $($MGR_CTL webdomain | grep "secure=on" | awk -F'name=' '{print $2}' | awk '{print $1}'); do
 		if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" >/dev/null 2>&1; then
 			# check for dupes in array
 			if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
@@ -919,6 +920,19 @@ echo
 
 }
 
+isp_no_mod_php_check() {
+
+# check no mod-php php versions
+NO_MOD_PHP=()
+for php_version in $($MGR_CTL feature | grep PHP | grep "active=on" | grep -E 'name=altphp' |  grep -v "Apache module" | awk -F'name=' '{print $2}' | awk '{print $1}' | grep -Eo [[:digit:]]+); do
+	# check for dupes in array
+	if [[ ! " ${NO_MOD_PHP[@]} " =~ " ${php_version} " ]]; then
+		NO_MOD_PHP+=("${php_version}")
+	fi
+done
+
+} >/dev/null 2>&1
+
 ispmanager_switch_cgi_mod_func() {
 
 # lic validation
@@ -931,9 +945,51 @@ if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 |
 		# check isp lic
 		isp_panel_check_license_version
 
+		# install all ISP Manager mod-php for installed PHP if not already installed
+		isp_no_mod_php_check
+
+		if [[ ! -z "${NO_MOD_PHP+x}" ]]; then
+
+			printf "Running mod-php installation"
+			for no_mod_php in ${NO_MOD_PHP[@]}; do
+				$MGR_CTL feature.edit elid=altphp${no_mod_php} package_ispphp${no_mod_php}_fpm=on package_ispphp${no_mod_php}_mod_apache=on packagegroup_altphp${no_mod_php}gr=ispphp${no_mod_php} sok=ok >/dev/null 2>&1
+			done
+	
+			# waiting for installation
+			timeout_duration=300
+			start_time=$(date +%s)
+	
+			while true; do
+				# timeout check
+				current_time=$(date +%s)
+				elapsed_time=$((current_time - start_time))
+				
+				if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
+					printf "\n${LRV}Timed out waiting for PHP version - ispphp${no_mod_php} while check "$MGR_CTL feature" ${NCV}\n"
+					break
+				fi
+				
+				# checking for all php-mod installed
+				isp_no_mod_php_check
+				if [[ -z "${NO_MOD_PHP+x}" ]]; then
+				printf " - ${GCV}DONE${NCV}\n"
+					break
+				else
+					sleep 5
+				fi
+			done
+		fi
+
+		# Enable php-mod for all users
+		echo
+		$MGR_CTL user | grep "limit_php_mode_mod=off" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
+			printf "Enabling PHP-MOD for ${GCV}$user${NCV} - "
+			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on sok=ok
+		done
+
 		# Switching php-cgi sites to mod-php
 		$MGR_CTL webdomain | grep -i "PHP CGI" | while read -r cgi_enabled_site; do 
-			name=$(echo "$cgi_enabled_site" | grep -oP 'name=\K[^ ]+')
+			name=$(echo "$cgi_enabled_site" | awk -F'name=' '{print $2}' | awk '{print $1}')
 			php_version=$(echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | grep -o native || echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | sed 's@\.@@gi' | sed -n 's/^\([0-9]\{2\}\).*/isp-php\1/p')
 
 			if [[ -n $name && -n $php_version ]]; then 
@@ -944,13 +1000,13 @@ if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 |
 
 		# Disable php-cgi for all users
 		echo
-		$MGR_CTL user | grep "limit_php_mode_cgi=on" | grep -oP 'name=\K[^ ]+' | while read -r user; do 
+		$MGR_CTL user | grep "limit_php_mode_cgi=on" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
 			printf "Disabling PHP-CGI for ${GCV}$user${NCV} - "
 			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on limit_php_mode_cgi=off limit_php_mode_fcgi_nginxfpm=on limit_ssl=on limit_cgi=on sok=ok
 		done
 	fi
 else
-	printf "\nSwitch or disable php-cgi not needed or was ${GCV}already done${NCV}\n"
+	printf "Switch or disable php-cgi not needed or was ${GCV}already done${NCV}\n"
 fi
 }
 
@@ -970,12 +1026,11 @@ if [[ -f $MGR_BIN ]]; then
 	then
 		echo
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
-		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			# check isp lic
 			isp_panel_check_license_version
+
 			printf "\nRunning"
-	
 			{
 			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85" "90" "91" "92")
 
