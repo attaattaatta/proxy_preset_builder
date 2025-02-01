@@ -14,12 +14,11 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.55"
+self_current_version="1.0.56"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
-if [[ $EUID -ne 0 ]]
-then
+if [[ $EUID -ne 0 ]]; then
 	printf "\n${LRV}ERROR - This script must be run as root.${NCV}" 
 	exit 1
 fi
@@ -29,8 +28,7 @@ WE_NEED=('nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'open
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem >/dev/null 2>&1
-	then 
+	if ! command -v $needitem >/dev/null 2>&1; then 
 		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
 	exit 1
 	fi
@@ -52,46 +50,37 @@ esac;
 shopt -u nocasematch
 
 # RHEL
-if [[ $distr == "rhel" ]]
-then
+if [[ $distr == "rhel" ]]; then
         printf "\nLooks like this is some ${GCV}RHEL (or derivative) OS${NCV}\n"
 # DEBIAN
-elif [[ $distr == "debian" ]]
-then
+elif [[ $distr == "debian" ]]; then
         printf "\nLooks like this is some ${GCV}Debian (or derivative) OS${NCV}\n"
 # UNKNOWN
-elif [[ $distr == "unknown" ]]
-then
+elif [[ $distr == "unknown" ]]; then
         printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
         EXIT_STATUS=1
         exit 1
 fi
 
 #check env
-if [[ -f /usr/bin/hostnamectl ]] || [[ -f /bin/hostnamectl ]]
-then
+if [[ -f /usr/bin/hostnamectl ]] || [[ -f /bin/hostnamectl ]]; then
 	PLATFROM_CHASSIS=$(hostnamectl status | grep Chassis | awk '{print $2}')
 	PLATFROM_VIRT=$(hostnamectl status | grep Virtualization | awk '{print $2}')
 	
-	if [[ $PLATFROM_CHASSIS == "server" || $PLATFROM_CHASSIS == "laptop" || $PLATFROM_CHASSIS == "desktop" ]]
-	then
+	if [[ $PLATFROM_CHASSIS == "server" || $PLATFROM_CHASSIS == "laptop" || $PLATFROM_CHASSIS == "desktop" ]]; then
 		DEDICATED="yes"
 		VIRTUAL="no"
 	else
 		DEDICATED="no"
 	fi
 	
-	if [[ $PLATFROM_CHASSIS == "vm" || $PLATFROM_CHASSIS == "container" ]]
-	then
+	if [[ $PLATFROM_CHASSIS == "vm" || $PLATFROM_CHASSIS == "container" ]]; then
 		VIRTUAL="yes"
-		if [[ $PLATFROM_VIRT == "kvm" ]]
-		then
+		if [[ $PLATFROM_VIRT == "kvm" ]]; then
 			PLATFROM_VIRT="kvm"
-		elif [[ $PLATFROM_VIRT == "openvz" ]]
-		then
+		elif [[ $PLATFROM_VIRT == "openvz" ]]; then
 			PLATFROM_VIRT="openvz"
-		elif [[ $PLATFROM_VIRT == "xen" ]]
-		then
+		elif [[ $PLATFROM_VIRT == "xen" ]]; then
 			PLATFROM_VIRT="xen"
 		else
 			PLATFROM_VIRT="unknown"
@@ -100,41 +89,33 @@ then
 		PLATFROM_VIRT="none"
 		VIRTUAL="no"
 	fi
-elif [[ -f /usr/sbin/dmidecode ]] || [[ -f /bin/dmidecode ]]
-then
+elif [[ -f /usr/sbin/dmidecode ]] || [[ -f /bin/dmidecode ]]; then
 	PLATFROM_CHASSIS=$(dmidecode -t memory | grep -iA 10 "Physical Memory Array" | grep Location | awk '{print $2}')
-	if [[ $PLATFROM_CHASSIS == "Other" ]]
-	then
+	if [[ $PLATFROM_CHASSIS == "Other" ]]; then
 		VIRTUAL="yes"
 		DEDICATED="no"
 		PLATFROM_VIRT="unknown"
-	elif [[ $PLATFROM_CHASSIS == "System" ]]
-	then
+	elif [[ $PLATFROM_CHASSIS == "System" ]]; then
 		VIRTUAL="no"
 		DEDICATED="yes"
 		PLATFROM_VIRT="none"
 	fi
 
-	if [[ -f /usr/bin/systemd-detect-virt ]]
-	then
+	if [[ -f /usr/bin/systemd-detect-virt ]]; then
 		PLATFROM_VIRT=$(systemd-detect-virt)
-		if [[ $PLATFROM_VIRT == "openvz" ]]
-		then
+		if [[ $PLATFROM_VIRT == "openvz" ]]; then
 			VIRTUAL="yes"
 			DEDICATED="no"
 			PLATFROM_VIRT="openvz"
-		elif [[ $PLATFROM_VIRT == "kvm" ]]
-		then
+		elif [[ $PLATFROM_VIRT == "kvm" ]]; then
 			VIRTUAL="yes"
 			DEDICATED="no"
 			PLATFROM_VIRT="kvm"
-		elif [[ $PLATFROM_VIRT == "xen" ]]
-		then
+		elif [[ $PLATFROM_VIRT == "xen" ]]; then
 			VIRTUAL="yes"
 			DEDICATED="no"
 			PLATFROM_VIRT="xen"
-		elif [[ $PLATFROM_VIRT == "none" ]]
-		then
+		elif [[ $PLATFROM_VIRT == "none" ]]; then
 			VIRTUAL="no"
 			DEDICATED="yes"
 			PLATFROM_VIRT="none"
@@ -144,26 +125,21 @@ then
 			PLATFROM_VIRT="unknown"
 		fi
 	fi	
-elif [[ -f /usr/bin/systemd-detect-virt ]]
-then
+elif [[ -f /usr/bin/systemd-detect-virt ]]; then
 	PLATFROM_VIRT=$(systemd-detect-virt)
-	if [[ $PLATFROM_VIRT == "openvz" ]]
-	then
+	if [[ $PLATFROM_VIRT == "openvz" ]]; then
 		VIRTUAL="yes"
 		DEDICATED="no"
 		PLATFROM_VIRT="openvz"
-	elif [[ $PLATFROM_VIRT == "kvm" ]]
-	then
+	elif [[ $PLATFROM_VIRT == "kvm" ]]; then
 		VIRTUAL="yes"
 		DEDICATED="no"
 		PLATFROM_VIRT="kvm"
-	elif [[ $PLATFROM_VIRT == "xen" ]]
-	then
+	elif [[ $PLATFROM_VIRT == "xen" ]]; then
 		VIRTUAL="yes"
 		DEDICATED="no"
 		PLATFROM_VIRT="xen"
-	elif [[ $PLATFROM_VIRT == "none" ]]
-	then
+	elif [[ $PLATFROM_VIRT == "none" ]]; then
 		VIRTUAL="no"
 		DEDICATED="yes"
 		PLATFROM_VIRT="none"
@@ -178,14 +154,11 @@ else
 	VIRTUAL="unknown"
 fi
 
-if [[ $DEDICATED == "yes" ]]
-then
+if [[ $DEDICATED == "yes" ]]; then
 	printf "\nSeems like a ${GCV}dedicated${NCV} server here\n"
-elif [[ $VIRTUAL == "yes" ]]
-then
+elif [[ $VIRTUAL == "yes" ]]; then
 	printf "\nSeems like a ${GCV}virtual${NCV} server here"
-	if [[ -n $PLATFROM_VIRT ]]
-	then
+	if [[ -n $PLATFROM_VIRT ]]; then
 		printf " with ${GCV}$PLATFROM_VIRT${NCV} virtualization\n"
 	else
 		printf " with ${LRV}unknown${NCV} virtualization\n"
@@ -199,6 +172,8 @@ MGR_PATH="/usr/local/mgr5"
 MGR_BIN="$MGR_PATH/sbin/mgrctl"
 MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
 MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
+SITES_TWEAKS_NEEDED=""
+SITES_TWEAKS_NEEDED_SITES=()
 
 # bitrix vars
 ADMIN_SH_BITRIX_FILE_LOCAL="/root/admin.sh"
@@ -244,14 +219,12 @@ script_git_name="proxy_preset_builder.sh"
 git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
 git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
 
-if [[ $git_version ]] && [[ $self_current_version < $git_version ]]
-then
+if [[ $git_version ]] && [[ $self_current_version < $git_version ]]; then
 	printf "\nVersion ${YCV}$git_version${NCV} at $SCRIPT_GIT_PATH/$script_git_name \n"
 	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
 fi
 
-if [[ $git_backup_version ]] && [[ $self_current_version < $git_backup_version ]]
-then
+if [[ $git_backup_version ]] && [[ $self_current_version < $git_backup_version ]]; then
 	printf "\nVersion ${YCV}$git_backup_version${NCV} at $SCRIPT_GIT_BACKUP_PATH/$script_git_name\n"
 	printf "You may use it like this:\n# bash <(printf \"GET /$GIT_BACKUP_REQ_URI/$script_git_name HTTP/1.1\\\nHost:$GIT_BACKUP_DOMAIN_NAME\\\nConnection:Close\\\n\\\n\" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | sed \'1,/^\s\$/d\')\n"
 fi
@@ -259,8 +232,7 @@ fi
 # check panel version and release name
 isp_panel_check_license_version() {
 
-if [[ ! -z "$ISP_MGR_LIC_GOOD" ]]
-then
+if [[ ! -z "$ISP_MGR_LIC_GOOD" ]]; then
 	return
 fi
 
@@ -269,8 +241,7 @@ WE_NEED=("$MGR_BIN")
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem >/dev/null 2>&1
-	then 
+	if ! command -v $needitem >/dev/null 2>&1; then 
 		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
 	exit 1
 	fi
@@ -282,22 +253,19 @@ panel_required_version="61102"
 panel_current_version="$($MGR_CTL license.info | grep -o -P '(?<=panel_info=)\d+\.?\d+\.?\d+' | sed 's@\.@@gi')"
 panel_release_name="$($MGR_CTL license.info |  grep -o -P '(?<=panel_name=)\w+\s\w+')"
 
-if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]
-then
+if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]; then
 	printf "\n${LRV}ERROR - Cannot get ISP Manager panel version or release name.\nPlease check \"$MGR_CTL license.info\" command${NCV}\n"
 	exit 1
 fi
 
 # set case insence for regexp
 shopt -s nocasematch
-if [[ $panel_release_name =~ .*busines.* ]]
-then 
+if [[ $panel_release_name =~ .*busines.* ]]; then 
 	printf "\n${LRV}ISP Manager Business detected. Not yet supported.${NCV}\n"
 	shopt -u nocasematch
 	exit 1
 else
-	if [[ $panel_current_version -lt $panel_required_version ]]
-	then 
+	if [[ $panel_current_version -lt $panel_required_version ]]; then 
 		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/master/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}\n"
 		exit 1
 	else
@@ -310,8 +278,7 @@ shopt -u nocasematch
 }
 
 # validate first argument 
-if ! [[ $1 =~ $ALLOWED_ACTIONS ]]  && ! [[ -z "$1" ]]
-then
+if ! [[ $1 =~ $ALLOWED_ACTIONS ]]  && ! [[ -z "$1" ]]; then
 	printf "\n\n${LRV}ERROR - Not valid argument - $1${NCV}\n"
 	exit 1
 fi
@@ -371,8 +338,7 @@ git_check() {
 	printf "\n\n${YCV}Here we need some network for download${NCV}"
 	
 	# resolve 
-	if [[ ! -z $GIT_DOMAIN_NAME ]] || [[ ! -z $GIT_BACKUP_DOMAIN_NAME ]]
-	then
+	if [[ ! -z $GIT_DOMAIN_NAME ]] || [[ ! -z $GIT_BACKUP_DOMAIN_NAME ]]; then
 		EXIT_STATUS=0
 		trap 'EXIT_STATUS=1' ERR
 		
@@ -390,8 +356,7 @@ git_check() {
 	else
 		printf "\n${LRV}ERROR - Variables \$GIT_DOMAIN_NAME or \$GIT_BACKUP_DOMAIN_NAME are empty\n${NCV}"
 		EXIT_STATUS=1
-		if [[ $1 == "no_check_exit" ]] 
-		then
+		if [[ $1 == "no_check_exit" ]]; then
 			exit 1
 		else
 			check_exit_and_restore_func
@@ -400,8 +365,7 @@ git_check() {
 	fi
 	
 	# choosing which git to use
-	if [[ $git_version ]]
-	then
+	if [[ $git_version ]]; then
 		GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_REPO"
 		GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_PATH"
 		GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
@@ -409,8 +373,7 @@ git_check() {
 		
 		printf "$GIT_THE_CHOSEN_ONE_REPO will be used\n"
 	else
-		if [[ $git_backup_version ]]
-		then
+		if [[ $git_backup_version ]]; then
 			GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_BACKUP_REPO"
 			GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_BACKUP_PATH"
 			GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
@@ -420,8 +383,7 @@ git_check() {
 		else
 			printf "\n${LRV}ERROR - $SCRIPT_GIT_PATH and $SCRIPT_GIT_BACKUP_PATH both not available\n${NCV}"
 			EXIT_STATUS=1
-			if [[ $1 == "no_check_exit" ]] 
-			then
+			if [[ $1 == "no_check_exit" ]]; then
 				exit 1
 			else
 				check_exit_and_restore_func
@@ -433,8 +395,7 @@ git_check() {
 
 # check last exit code =>1 and restore panel nginx configuration templates
 check_exit_and_restore_func() {
-	if test $EXIT_STATUS != 0
-	then
+	if test $EXIT_STATUS != 0; then
 		printf "\n${LRV}Last command(s) has failed.\nRemoving preset $PROXY_PREFIX$proxy_target${NCV}"
 		
 		{
@@ -443,16 +404,14 @@ check_exit_and_restore_func() {
 		\rm -f /etc/nginx/vhosts-includes/nginx_status_[0-9]*.conf
 		} >/dev/null 2>&1
 		
-		if $MGR_CTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  >/dev/null 2>&1
-		then
+		if $MGR_CTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  >/dev/null 2>&1; then
 			printf " - ${GCV}OK${NCV}\n"
 		else
 			printf " - ${LRV}FAIL${NCV}\n"
 		fi
 		
 		printf "\n${LRV}Restoring last templates backup${NCV}\n"
-		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]
-		then
+		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]; then
 			\cp -f -p --reflink=auto "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
 			\cp -f -p --reflink=auto "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
 			\cp -f -p --reflink=auto "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" >/dev/null 2>&1 && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
@@ -472,8 +431,7 @@ run_all_tweaks() {
 echo
 read -p "Skip all tweaks ? [Y/n]" -n 1 -r
 echo
-if ! [[ $REPLY =~ ^[Nn]$ ]]
-then
+if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 	# user chose skip all tweaks
 	EXIT_STATUS=0
 
@@ -486,7 +444,7 @@ else
 	bitrix_fixes_func
 	bitrix_install_update_admin_sh_func
 	ispmanager_switch_cgi_mod_func
-	ispmanager_enable_h2_func
+	ispmanager_enable_sites_tweaks_func
 	ispmanager_enable_features_func
 	ispmanager_tweak_php_and_mysql_settings_func
 	tweak_add_nginx_bad_robot_conf_func
@@ -501,13 +459,11 @@ tweak_swapfile_func() {
 if [[ $VIRTUAL == "yes" ]]; then
 
 	#Checking swap file exists and its settings
-	if ! grep -i "swap" /etc/fstab >/dev/null 2>&1
-	then
+	if ! grep -i "swap" /etc/fstab >/dev/null 2>&1; then
 		echo
 		read -p "No swap detected. Fix ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]
-		then
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 			# check free space
 			CURRENT_FREE_SPACE_GIGABYTES=$(df -BG --sync / | awk '{print $4}' | tail -n 1 | grep -Eo [[:digit:]]+)
@@ -527,15 +483,13 @@ if [[ $VIRTUAL == "yes" ]]; then
 			PS3='Choose swap size to set:'
 			select swapsize_choosen_version in "${swapsizes[@]}"
 			do
-				if [[ $swapsize_choosen_version == Skip || -z $swapsize_choosen_version ]] 
-				then
+				if [[ $swapsize_choosen_version == Skip || -z $swapsize_choosen_version ]]; then
 					break
 				else
 					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES=$(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)
 					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED=$(($(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)*2))
 
-					if [[ $CURRENT_FREE_SPACE_GIGABYTES -ge $SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED ]]
-					then
+					if [[ $CURRENT_FREE_SPACE_GIGABYTES -ge $SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED ]]; then
 						printf "\nRunning"
 						{
 						DD_COUNT=$(($(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)*1024*1024))
@@ -548,8 +502,7 @@ if [[ $VIRTUAL == "yes" ]]; then
 						} >/dev/null 2>&1
 	
 	
-						if swapon --show | grep -i "/swapfile" >/dev/null 2>&1
-						then
+						if swapon --show | grep -i "/swapfile" >/dev/null 2>&1; then
 							echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
 							printf " - ${GCV}DONE${NCV}\n"
 							break
@@ -568,7 +521,7 @@ if [[ $VIRTUAL == "yes" ]]; then
 			printf "Fix swap was canceled by user choice\n"
 		fi
 	else
-		printf "\nTweak swap file not needed or ${GCV}already done${NCV}\n"
+		printf "\nTweak swap file not needed or was ${GCV}already done${NCV}\n"
 	fi
 fi
 }
@@ -576,22 +529,22 @@ fi
 # tweaking open files limits
 tweak_openfiles_func() {
 
-NOFILE_TWEAK_SERVICE=('nginx' 'mariadb' 'mysql' 'mysqld' 'mariadbd' 'apache2' 'httpd' 'httpd-scale')
+# getting all systemd units we want to tweak file descriptors count to array
+NOFILE_TWEAK_SERVICE=($(systemctl show '*' --property=Id --value --no-pager | grep -E '^httpd\.|^httpd-isp.*|^httpd-scale\.|^apache2\.|^apache2-isp.*|^nginx\.|^maria.*|^mysql.*'))
 NOFILE_LIMIT="150000"
 TWEAKNEED=();
 
 {
 for service in "${NOFILE_TWEAK_SERVICE[@]}"
 do
-if systemctl list-units --full -all | grep -Fq "${NOFILE_TWEAK_SERVICE}.service" && [[ $(systemctl show "${service}.service" | grep -o -P '(?<=LimitNOFILE=)\d+') -lt 150000 ]]
+if systemctl list-units --full -all | grep -Fq "${NOFILE_TWEAK_SERVICE}" && [[ $(systemctl show "${service}" | grep -o -P '(?<=LimitNOFILE=)\d+') -lt ${NOFILE_LIMIT} ]]
 then
 	TWEAK_VALUE="${service}"
 	TWEAKNEED+=("${TWEAK_VALUE}")
 fi
 done
 
-if [[ ${#TWEAKNEED[@]} -ne 0 ]]
-then
+if [[ ${#TWEAKNEED[@]} -gt 0 ]]; then
 	TWEAK_NEED="yes"
 fi
 } >/dev/null 2>&1
@@ -607,7 +560,7 @@ then
 		$sep0
 		for service in "${TWEAKNEED[@]}"
 		do
-		        DIR="/etc/systemd/system/${service}.service.d"
+		        DIR="/etc/systemd/system/${service}.d"
 			{
 		        \mkdir -p $DIR
 		        {
@@ -616,10 +569,10 @@ then
 		        } > $DIR/nofile.conf
 		
 		        systemctl daemon-reload
-		        systemctl restart ${service}.service
+		        systemctl restart ${service}
 			} >/dev/null 2>&1
 	
-			if systemctl show ${service}.service | grep "LimitNOFILE=${NOFILE_LIMIT}" >/dev/null 2>&1
+			if systemctl show ${service} | grep "LimitNOFILE=${NOFILE_LIMIT}" >/dev/null 2>&1
 			then
 				printf "${GCV}${service} set file limit success${NCV}\n"
 			else
@@ -638,7 +591,7 @@ then
 	unset TWEAK_NEED
 
 else
-	printf "\nTweak files descriptors not needed or ${GCV}already done${NCV}\n"
+	printf "\nTweak files descriptors not needed or was ${GCV}already done${NCV}\n"
 fi
 }
 
@@ -699,7 +652,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 	fi
 
 else
-	printf "\nTweak tuned not needed or ${GCV}already done${NCV}\n"
+	printf "\nTweak tuned not needed or was ${GCV}already done${NCV}\n"
 	tuned-adm active
 fi
 
@@ -848,7 +801,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			nginx_conf_sanity_check_fast
 		fi
 	else
-		printf "\nFixing nginx port exposure in http_host variable and adding X-Forwarded-Proto not needed or ${GCV}already done${NCV}\n"
+		printf "\nFixing nginx port exposure in http_host variable and adding X-Forwarded-Proto not needed or was ${GCV}already done${NCV}\n"
 	fi
 
 	# check if cURL PHP not enabled
@@ -871,7 +824,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			fi
 		fi
 	else
-		printf "\nEnable PHP cURL extension not needed or ${GCV}already done${NCV}\n"
+		printf "\nEnable PHP cURL extension not needed or was ${GCV}already done${NCV}\n"
 	fi
 	
 else
@@ -881,14 +834,48 @@ fi
 
 }
 
+# tweak sites settings need or not function
+ispmanager_enable_sites_tweaks_need_func() {
 
-ispmanager_enable_h2_func() {
+for site in $($MGR_CTL webdomain | grep -oP 'name=\K[^ ]+'); do
+	# check tweaks needed or not
+	{
+	if $MGR_CTL site.edit elid=${site} | grep -i "site_ddosshield=on"  || ! $MGR_CTL site.edit elid=${site} | grep -i "site_gzip_level=5" || ! $MGR_CTL site.edit elid=${site} | grep -i "site_expire_times=expire_times_max" || $MGR_CTL site.edit elid=${site} | grep -i "site_srv_cache=off"; then
+		# check for dupes in array
+		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
+			SITES_TWEAKS_NEEDED="YES"
+			SITES_TWEAKS_NEEDED_SITES+=("${site}")
+		fi
+	fi
+	} >/dev/null 2>&1
 
+	# enable HSTS http header for the site if tls is on
+	{
+	for site in $($MGR_CTL webdomain | grep "secure=on" | grep -oP 'name=\K[^ ]+'); do
+		if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" >/dev/null 2>&1; then
+			# check for dupes in array
+			if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
+				SITES_TWEAKS_NEEDED="YES"
+				SITES_TWEAKS_NEEDED_SITES+=("${site}")
+			fi
+		fi
+	done
+	} >/dev/null 2>&1
+done
+
+}
+
+ispmanager_enable_sites_tweaks_func() {
+
+# lic validation
+isp_panel_check_license_version
+
+# enable http/2
 if [[ -f $MGR_BIN ]] && $MGR_CTL websettings | grep "http2=off" >/dev/null 2>&1; then
 	echo
 	read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
 	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-		# Enable http2 isp manager
+		# Enable http/2 isp manager
 		printf "Running"
 		if $MGR_CTL websettings http2=on sok=ok >/dev/null 2>&1; then
 			printf " - ${GCV}OK${NCV}\n"
@@ -900,9 +887,42 @@ else
 	printf "\nhttp/2 ${GCV}already enabled${NCV}\n"
 fi
 
+# tweak sites settings need or not function
+ispmanager_enable_sites_tweaks_need_func
+
+if [[ $SITES_TWEAKS_NEEDED == "YES" ]]; then
+	printf "\n${GCV}Tweaking ISP Manager sites include:${NCV}\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
+	echo
+	printf "${GCV}"
+	read -p "Apply above tweaks ? [Y/n]" -n 1 -r
+	printf "${NCV}"	
+
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		echo
+		for site in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
+			printf "Processing ${GCV}${site}${NCV} - "
+			$MGR_CTL site.edit elid=${site} site_ddosshield=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max sok=ok
+		done
+	else
+		printf "\n${YCV}Tweaking ISP Manager sites was skipped.${NCV} \n"
+		SITES_TWEAKS_NEEDED=""
+		SITES_TWEAKS_NEEDED_SITES=()
+	fi
+else
+	# sites tweaks not needed
+	printf "\nISP Manager sites tweaks not needed or was ${GCV}already done${NCV}\n"
+fi
+
+SITES_TWEAKS_NEEDED=""
+SITES_TWEAKS_NEEDED_SITES=()
+echo
+
 }
 
 ispmanager_switch_cgi_mod_func() {
+
+# lic validation
+isp_panel_check_license_version
 
 if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" >/dev/null 2>&1; then
 	echo
@@ -930,15 +950,17 @@ if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 |
 		done
 	fi
 else
-	printf "\nSwitch or disable php-cgi not needed or ${GCV}already done${NCV}\n"
+	printf "\nSwitch or disable php-cgi not needed or was ${GCV}already done${NCV}\n"
 fi
 }
 
 # Install opendkim and php features in ISP panel
 ispmanager_enable_features_func() {
 
-if [[ -f $MGR_BIN ]]
-then
+# lic validation
+isp_panel_check_license_version
+
+if [[ -f $MGR_BIN ]]; then
 	if 
 
 	{
@@ -999,6 +1021,9 @@ fi
 
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
+
+# lic validation
+isp_panel_check_license_version
 
 if [[ -f $MGR_BIN ]]; then
 	# check ISP lic
@@ -1308,6 +1333,8 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 		# placing file depending the environment
 		# if ISP Manager
 		if [[ -f $MGR_BIN ]]; then
+			# lic validation
+			isp_panel_check_license_version
 			nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
 		# if Bitrix
 		elif [[ $BITRIXALIKE == "yes" ]]; then
@@ -1363,7 +1390,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 		printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
 	fi
 else
-	printf "\nAdding nginx blocking of annoying bots not needed or ${GCV}already done${NCV}\n" 
+	printf "\nAdding nginx blocking of annoying bots not needed or was ${GCV}already done${NCV}\n" 
 fi
 }
 
