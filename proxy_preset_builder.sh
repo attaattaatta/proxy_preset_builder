@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.59"
+self_current_version="1.0.60"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -880,56 +880,58 @@ done
 
 ispmanager_enable_sites_tweaks_func() {
 
-# lic validation
-isp_panel_check_license_version
+if [[ -f $MGR_BIN ]]; then
 
-# enable http/2
-if [[ -f $MGR_BIN ]] && $MGR_CTL websettings | grep "http2=off" >/dev/null 2>&1; then
-	echo
-	read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-		# Enable http/2 isp manager
-		printf "Running"
-		if $MGR_CTL websettings http2=on sok=ok >/dev/null 2>&1; then
-			printf " - ${GCV}OK${NCV}\n"
-		else
-			printf " - ${LRV}FAIL${NCV}\n"
-		fi
-	fi
-else
-	printf "\nhttp/2 ${GCV}already enabled${NCV}\n"
-fi
-
-# tweak sites settings need or not function
-ispmanager_enable_sites_tweaks_need_func
-
-if [[ $SITES_TWEAKS_NEEDED == "YES" ]]; then
-	printf "\n${GCV}Tweaking ISP Manager sites include:${NCV}\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
-	echo
-	printf "${GCV}"
-	read -p "Apply above tweaks ? [Y/n]" -n 1 -r
-	printf "${NCV}"	
-
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+	# lic validation
+	isp_panel_check_license_version
+	
+	# enable http/2
+	if $MGR_CTL websettings | grep "http2=off" >/dev/null 2>&1; then
 		echo
-		for site in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
-			printf "Processing ${GCV}${site}${NCV} - "
-			$MGR_CTL site.edit elid=${site} site_ddosshield=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max sok=ok
-		done
+		read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			# Enable http/2 isp manager
+			printf "Running"
+			if $MGR_CTL websettings http2=on sok=ok >/dev/null 2>&1; then
+				printf " - ${GCV}OK${NCV}\n"
+			else
+				printf " - ${LRV}FAIL${NCV}\n"
+			fi
+		fi
 	else
-		printf "\n${YCV}Tweaking ISP Manager sites was skipped.${NCV} \n"
-		SITES_TWEAKS_NEEDED=""
-		SITES_TWEAKS_NEEDED_SITES=()
+		printf "\nhttp/2 ${GCV}already enabled${NCV}\n"
 	fi
-else
-	# sites tweaks not needed
-	printf "\nISP Manager sites tweaks not needed or was ${GCV}already done${NCV}\n"
+	
+	# tweak sites settings need or not function
+	ispmanager_enable_sites_tweaks_need_func
+	
+	if [[ $SITES_TWEAKS_NEEDED == "YES" ]]; then
+		printf "\n${GCV}Tweaking ISP Manager sites include:${NCV}\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
+		echo
+		printf "${GCV}"
+		read -p "Apply above tweaks ? [Y/n]" -n 1 -r
+		printf "${NCV}"	
+	
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			echo
+			for site in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
+				printf "Processing ${GCV}${site}${NCV} - "
+				$MGR_CTL site.edit elid=${site} site_ddosshield=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max sok=ok
+			done
+		else
+			printf "\n${YCV}Tweaking ISP Manager sites was skipped.${NCV} \n"
+			SITES_TWEAKS_NEEDED=""
+			SITES_TWEAKS_NEEDED_SITES=()
+		fi
+	else
+		# sites tweaks not needed
+		printf "\nISP Manager sites tweaks not needed or was ${GCV}already done${NCV}\n"
+	fi
+	
+	SITES_TWEAKS_NEEDED=""
+	SITES_TWEAKS_NEEDED_SITES=()
+	echo
 fi
-
-SITES_TWEAKS_NEEDED=""
-SITES_TWEAKS_NEEDED_SITES=()
-echo
-
 }
 
 isp_no_mod_php_check() {
@@ -947,90 +949,94 @@ done
 
 ispmanager_switch_cgi_mod_func() {
 
-# lic validation
-isp_panel_check_license_version
+if [[ -f $MGR_BIN ]]; then
 
-if [[ -f $MGR_BIN ]] && $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" >/dev/null 2>&1; then
-	echo
-	read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-		# check isp lic
-		isp_panel_check_license_version
-
-		# install all ISP Manager mod-php for installed PHP if not already installed
-		isp_no_mod_php_check
-
-		if [[ ! -z "${NO_MOD_PHP+x}" ]]; then
-
-			printf "Running mod-php installation"
-			for no_mod_php in ${NO_MOD_PHP[@]}; do
-				$MGR_CTL feature.edit elid=altphp${no_mod_php} package_ispphp${no_mod_php}_fpm=on package_ispphp${no_mod_php}_mod_apache=on packagegroup_altphp${no_mod_php}gr=ispphp${no_mod_php} sok=ok >/dev/null 2>&1
+	# lic validation
+	isp_panel_check_license_version
+	
+	if $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" >/dev/null 2>&1; then
+		echo
+		read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			# check isp lic
+			isp_panel_check_license_version
+	
+			# install all ISP Manager mod-php for installed PHP if not already installed
+			isp_no_mod_php_check
+	
+			if [[ ! -z "${NO_MOD_PHP+x}" ]]; then
+	
+				printf "Running mod-php installation"
+				for no_mod_php in ${NO_MOD_PHP[@]}; do
+					$MGR_CTL feature.edit elid=altphp${no_mod_php} package_ispphp${no_mod_php}_fpm=on package_ispphp${no_mod_php}_mod_apache=on packagegroup_altphp${no_mod_php}gr=ispphp${no_mod_php} sok=ok >/dev/null 2>&1
+				done
+		
+				# waiting for installation
+				timeout_duration=300
+				start_time=$(date +%s)
+		
+				while true; do
+					# timeout check
+					current_time=$(date +%s)
+					elapsed_time=$((current_time - start_time))
+					
+					if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
+						printf "\n${LRV}Timed out waiting for PHP version - ispphp${no_mod_php} while check "$MGR_CTL feature" ${NCV}\n"
+						break
+					fi
+					
+					# checking for all php-mod installed
+					isp_no_mod_php_check
+					if [[ -z "${NO_MOD_PHP+x}" ]]; then
+					printf " - ${GCV}DONE${NCV}\n"
+						break
+					else
+						sleep 5
+					fi
+				done
+			fi
+	
+			# Enable php-mod for all users
+			echo
+			$MGR_CTL user | grep -v "limit_php_mode_mod" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
+				printf "Enabling PHP-MOD for ${GCV}$user${NCV} - "
+				$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on sok=ok
 			done
 	
-			# waiting for installation
-			timeout_duration=300
-			start_time=$(date +%s)
+			echo
 	
-			while true; do
-				# timeout check
-				current_time=$(date +%s)
-				elapsed_time=$((current_time - start_time))
-				
-				if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
-					printf "\n${LRV}Timed out waiting for PHP version - ispphp${no_mod_php} while check "$MGR_CTL feature" ${NCV}\n"
-					break
+			# Switching php-cgi sites to mod-php
+			$MGR_CTL webdomain | grep -i "PHP CGI" | while read -r cgi_enabled_site; do 
+				name=$(echo "$cgi_enabled_site" | awk -F'name=' '{print $2}' | awk '{print $1}')
+				php_version=$(echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | grep -o native || echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | sed 's@\.@@gi' | sed -n 's/^\([0-9]\{2\}\).*/isp-php\1/p')
+	
+				if [[ -n $name && -n $php_version ]]; then 
+					printf "Switching ${GCV}$name $php_version${NCV} from PHP-CGI to PHP Module - "
+					$MGR_CTL site.edit elid=${name} site_php_mode=php_mode_mod site_php_fpm_version=${php_version} site_php_cgi_version=${php_version} site_php_apache_version=${php_version} sok=ok
 				fi
-				
-				# checking for all php-mod installed
-				isp_no_mod_php_check
-				if [[ -z "${NO_MOD_PHP+x}" ]]; then
-				printf " - ${GCV}DONE${NCV}\n"
-					break
-				else
-					sleep 5
-				fi
+			done
+	
+			# Disable php-cgi for all users
+			echo
+			$MGR_CTL user | grep "limit_php_mode_cgi=on" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
+				printf "Disabling PHP-CGI for ${GCV}$user${NCV} - "
+				$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on limit_php_mode_cgi=off limit_php_mode_fcgi_nginxfpm=on limit_ssl=on limit_cgi=on sok=ok
 			done
 		fi
-
-		# Enable php-mod for all users
-		echo
-		$MGR_CTL user | grep -v "limit_php_mode_mod" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
-			printf "Enabling PHP-MOD for ${GCV}$user${NCV} - "
-			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on sok=ok
-		done
-
-		echo
-
-		# Switching php-cgi sites to mod-php
-		$MGR_CTL webdomain | grep -i "PHP CGI" | while read -r cgi_enabled_site; do 
-			name=$(echo "$cgi_enabled_site" | awk -F'name=' '{print $2}' | awk '{print $1}')
-			php_version=$(echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | grep -o native || echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | sed 's@\.@@gi' | sed -n 's/^\([0-9]\{2\}\).*/isp-php\1/p')
-
-			if [[ -n $name && -n $php_version ]]; then 
-				printf "Switching ${GCV}$name $php_version${NCV} from PHP-CGI to PHP Module - "
-				$MGR_CTL site.edit elid=${name} site_php_mode=php_mode_mod site_php_fpm_version=${php_version} site_php_cgi_version=${php_version} site_php_apache_version=${php_version} sok=ok
-			fi
-		done
-
-		# Disable php-cgi for all users
-		echo
-		$MGR_CTL user | grep "limit_php_mode_cgi=on" | awk -F'name=' '{print $2}' | awk '{print $1}' | while read -r user; do 
-			printf "Disabling PHP-CGI for ${GCV}$user${NCV} - "
-			$MGR_CTL user.edit elid=${user} limit_php_mode_mod=on limit_php_mode_cgi=off limit_php_mode_fcgi_nginxfpm=on limit_ssl=on limit_cgi=on sok=ok
-		done
+	else
+		printf "Switch or disable php-cgi not needed or was ${GCV}already done${NCV}\n"
 	fi
-else
-	printf "Switch or disable php-cgi not needed or was ${GCV}already done${NCV}\n"
 fi
 }
 
 # Install opendkim and php features in ISP panel
 ispmanager_enable_features_func() {
 
-# lic validation
-isp_panel_check_license_version
-
 if [[ -f $MGR_BIN ]]; then
+
+	# lic validation
+	isp_panel_check_license_version
+
 	if 
 
 	{
@@ -1091,11 +1097,9 @@ fi
 # tweaking all installed php versions and mysql through ISP Manager panel API
 ispmanager_tweak_php_and_mysql_settings_func() {
 
-# lic validation
-isp_panel_check_license_version
-
 if [[ -f $MGR_BIN ]]; then
-	# check ISP lic
+
+	# lic validation
 	isp_panel_check_license_version
 
 	# ISP mysql 8 include bugfix
