@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.58"
+self_current_version="1.0.59"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -835,12 +835,24 @@ fi
 
 }
 
+# punycode convert
+puny_converter() {
+
+# install idn2
+if ! which idn2; then apt update; apt -y install idn2 || yum -y install idn2; fi > /dev/null 2>&1
+
+idn2 "$1"
+
+}
+
 # tweak sites settings need or not function
 ispmanager_enable_sites_tweaks_need_func() {
 
 for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}'); do
+	# converting to idn
+	site=$(puny_converter ${site})
+
 	# check tweaks needed or not
-	{
 	if $MGR_CTL site.edit elid=${site} | grep -i "site_ddosshield=on"  || ! $MGR_CTL site.edit elid=${site} | grep -i "site_gzip_level=5" || ! $MGR_CTL site.edit elid=${site} | grep -i "site_expire_times=expire_times_max" || $MGR_CTL site.edit elid=${site} | grep -i "site_srv_cache=off"; then
 		# check for dupes in array
 		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
@@ -848,23 +860,23 @@ for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}'
 			SITES_TWEAKS_NEEDED_SITES+=("${site}")
 		fi
 	fi
-	} >/dev/null 2>&1
-
-	# enable HSTS http header for the site if tls is on
-	{
-	for site in $($MGR_CTL webdomain | grep "secure=on" | awk -F'name=' '{print $2}' | awk '{print $1}'); do
-		if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" >/dev/null 2>&1; then
-			# check for dupes in array
-			if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
-				SITES_TWEAKS_NEEDED="YES"
-				SITES_TWEAKS_NEEDED_SITES+=("${site}")
-			fi
-		fi
-	done
-	} >/dev/null 2>&1
 done
 
-}
+# enable HSTS http header for the site if tls is on
+for site in $($MGR_CTL webdomain | grep "secure=on" | awk -F'name=' '{print $2}' | awk '{print $1}'); do
+	# converting to idn
+	site=$(puny_converter ${site})
+
+	if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" >/dev/null 2>&1; then
+		# check for dupes in array
+		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
+			SITES_TWEAKS_NEEDED="YES"
+			SITES_TWEAKS_NEEDED_SITES+=("${site}")
+		fi
+	fi
+done
+
+} >/dev/null 2>&1
 
 ispmanager_enable_sites_tweaks_func() {
 
