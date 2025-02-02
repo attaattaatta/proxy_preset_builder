@@ -12,7 +12,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # Show script version
-self_current_version="1.0.4"
+self_current_version="1.0.5"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n\n${NCV}"
 
 # check privileges
@@ -398,6 +398,9 @@ wget -nc --no-check-certificate "http://ftp.gnu.org/gnu/glibc/${latest_glibc}"
 tar -xaf "${latest_nginx}"
 tar -xaf "${latest_glibc}"
 tar -xaf "${latest_libressl}"
+
+git config --global http.postBuffer 157286400
+git config --global http.version HTTP/1.1
 
 git clone --recursive https://github.com/google/boringssl.git
 git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && cd openssl3 && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) && cd ..
