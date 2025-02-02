@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.60"
+self_current_version="1.0.61"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -916,7 +916,12 @@ if [[ -f $MGR_BIN ]]; then
 			echo
 			for site in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
 				printf "Processing ${GCV}${site}${NCV} - "
-				$MGR_CTL site.edit elid=${site} site_ddosshield=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max sok=ok
+
+				# if site ip addrs more than one, ISP Manager will raise error w/o site_ipaddrs param
+				# so getting it
+				site_ipaddrs=$($MGR_CTL site.edit elid=${site} | awk -F'site_ipaddrs=' '{print $2}' | awk '{print $1}' | grep . | tr '\n' ',' | sed 's/,$//')
+
+				$MGR_CTL site.edit elid=${site} site_ddosshield=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max site_ipaddrs=${site_ipaddrs} sok=ok
 			done
 		else
 			printf "\n${YCV}Tweaking ISP Manager sites was skipped.${NCV} \n"
@@ -1088,7 +1093,7 @@ if [[ -f $MGR_BIN ]]; then
 			done
 		else
 			# user chose not to enable ISP manager features 
-			printf "${YCV}All PHP versions was not installed so as OpenDKIM${NCV} \n"
+			printf "\n${YCV}All PHP versions was not installed so as OpenDKIM${NCV} \n"
 		fi
 	fi
 fi
