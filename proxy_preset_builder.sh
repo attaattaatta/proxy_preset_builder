@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.61"
+self_current_version="1.0.63"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -448,6 +448,7 @@ else
 	ispmanager_enable_features_func
 	ispmanager_switch_cgi_mod_func
 	ispmanager_tweak_php_and_mysql_settings_func
+	ispmanager_tweak_php_fpm_func
 	tweak_add_nginx_bad_robot_conf_func
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
@@ -531,7 +532,7 @@ fi
 tweak_openfiles_func() {
 
 # getting all systemd units we want to tweak file descriptors count to array
-NOFILE_TWEAK_SERVICE=($(systemctl show '*' --property=Id --value --no-pager | grep -E '^httpd\.|^httpd-isp.*|^httpd-scale\.|^apache2\.|^apache2-isp.*|^nginx\.|^maria.*|^mysql.*'))
+NOFILE_TWEAK_SERVICE=($(systemctl show '*' --property=Id --no-pager | sed 's@^Id=@@gi' | grep -E '^httpd\.|^httpd-isp.*|^httpd-scale\.|^apache2\.|^apache2-isp.*|^nginx\.|^maria.*|^mysql.*'))
 NOFILE_LIMIT="150000"
 TWEAKNEED=();
 
@@ -665,7 +666,7 @@ bitrix_env_check_func() {
 if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ; then
 
 	# bitrix GT (nginx+apache+fpm)
-	if apachectl -D DUMP_MODULES | grep proxy_fcgi >/dev/null 2>&1; then
+	if apachectl -D DUMP_MODULES 2>/dev/null | grep proxy_fcgi >/dev/null 2>&1; then
 		printf "\n${GCV}Bitrix GT${NCV} environment detected\n"
 		BITRIX="GT"
 	# bitrix ENV (nginx+apache)
@@ -1052,10 +1053,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-			# check isp lic
-			isp_panel_check_license_version
-
-			printf "\nRunning"
+			printf "Running"
 			{
 			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85" "90" "91" "92")
 
@@ -1393,6 +1391,110 @@ if [[ -f $MGR_BIN ]]; then
 	done
 fi
 }
+
+# tweak isp manager fpm
+ispmanager_tweak_php_fpm_func() {
+
+if [[ -f $MGR_BIN ]]; then
+
+	# lic validation
+	isp_panel_check_license_version
+
+	isp_fpm_template_file_path="/usr/local/mgr5/etc/templates/fpm_site_pool.conf"
+	
+	# backup to /root/support
+	backup_dest_dir_path="/root/support/$(date '+%d-%b-%Y-%H-%M-%Z')/"
+	\mkdir -p "$backup_dest_dir_path" > /dev/null
+
+	if ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path"); then
+
+		# changing default php-fpm isp template from ondemand 5 to static 15
+		if \cp -Rfp --parents --reflink=auto "$isp_fpm_template_file_path" "$backup_dest_dir_path" > /dev/null; then
+			printf "\nFile "$isp_fpm_template_file_path" was ${GCV}processed${NCV} and origin was backed up to "$backup_dest_dir_path"\n"
+		        sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm = ondemand${NCV}\n"; return 1; }
+		        sed -i 's@^pm.max_children =.*@pm.max_children = 15@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_children = 5${NCV}\n"; return 1; }
+		        sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_requests = 500${NCV}\n"; return 1; }
+		else
+			printf "\n${LRV}Error. Cannot backup file ${isp_fpm_template_file_path} to ${backup_dest_dir_path}${NCV}\n"
+			return 1
+		fi
+	fi
+	
+	# same for sites that already exist
+	isp_php_fpm_enabled_sites=$(grep -RiIlE '^pm = ondemand|^pm.max_children = 5' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube')
+	
+	if [[ ! -z "$isp_php_fpm_enabled_sites" ]]; then
+		echo
+		read -p "Tweak ISP PHP-FPM sites ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			# process
+			while IFS= read -r isp_fpm_config_file; do
+				printf "\nProcessing ${isp_fpm_config_file}"
+				if \cp -Rfp --parents --reflink=auto "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null; then
+					sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; return 1; }
+					sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; return 1; }
+					sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm mode${NCV}\n"; return 1; }
+					sed -i 's@^pm.max_children = 5@pm.max_children = 15@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_children${NCV}\n"; return 1; }
+					sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_requests${NCV}\n"; return 1; }
+
+					# Check and restart php-fpm
+					php_fpm_version=$(echo "$isp_fpm_config_file" | grep -oP '(?<=/php/)\d+\.\d+|(?<=/php)\d{2,3}(?=/)')
+					
+					if [[ -n "$php_fpm_version" ]]; then
+						# native debian like php-fpm native service like php7.3-fpm.service
+						if [[ "$isp_fpm_config_file" =~ ^/etc/ ]]; then
+							php_fpm_service="php${php_fpm_version}-fpm.service"
+						else
+							# isp manager's php-fpm opt versions like php-fpm73.service
+							php_fpm_service="php-fpm${php_fpm_version}.service"
+						fi
+					else
+						# native rhel php-fpm services
+						php_fpm_service="php-fpm.service"
+					fi
+					
+					# Check
+					if [[ "$isp_fpm_config_file" =~ ^/etc/ ]]; then
+						# PHP-FPM (Debian)
+						if ! php-fpm${php_fpm_version} -t > /dev/null 2>&1; then
+							printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
+							return 1
+						fi
+					else
+						# ISPmanager /opt/phpXX
+						if ! /opt/php${php_fpm_version}/sbin/php-fpm -t > /dev/null 2>&1; then
+							printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
+							return 1
+						fi
+					fi
+					
+					# restart
+					systemctl restart "$php_fpm_service" >/dev/null 2>&1
+					
+					# Check restart
+					if systemctl is-active --quiet "$php_fpm_service" >/dev/null 2>&1; then
+						printf " - ${GCV}OK${NCV}\n"
+					else
+						printf " - ${LRV}ERROR${NCV} Failed to restart ${php_fpm_service}. Check logs.\n"
+						return 1
+					fi
+					printf "Original file ${isp_fpm_config_file} backup'd to ${backup_dest_dir_path}${NCV}\n"
+				else
+					printf " - ${LRV}FAIL${NCV}\nCannot backup file ${isp_fpm_config_file} to ${backup_dest_dir_path}\n"
+					return 1
+				fi
+			done <<< "$isp_php_fpm_enabled_sites"
+		else
+			# user chose not to tweak isp fpm 
+			printf "\n${YCV}Tweaking ISP PHP-FPM sites was skipped.${NCV} \n"
+		fi
+		
+	else
+		printf "\nTweaking ISP PHP-FPM sites not needed or was ${GCV}already done${NCV}\n" 
+	fi
+fi
+
+} 
 
 # tweaker add nginx bad robot conf
 tweak_add_nginx_bad_robot_conf_func() {
