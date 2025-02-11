@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.63"
+self_current_version="1.0.64"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -448,7 +448,7 @@ else
 	ispmanager_enable_features_func
 	ispmanager_switch_cgi_mod_func
 	ispmanager_tweak_php_and_mysql_settings_func
-	ispmanager_tweak_php_fpm_func
+	ispmanager_tweak_apache_and_php_fpm_func
 	tweak_add_nginx_bad_robot_conf_func
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
@@ -987,7 +987,7 @@ if [[ -f $MGR_BIN ]]; then
 					elapsed_time=$((current_time - start_time))
 					
 					if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
-						printf "\n${LRV}Timed out waiting for PHP version - ispphp${no_mod_php} while check "$MGR_CTL feature" ${NCV}\n"
+						printf "\n${LRV}Timed out waiting for PHP version - ispphp${no_mod_php} while check $MGR_CTL feature ${NCV}\n"
 						break
 					fi
 					
@@ -1016,9 +1016,17 @@ if [[ -f $MGR_BIN ]]; then
 				name=$(echo "$cgi_enabled_site" | awk -F'name=' '{print $2}' | awk '{print $1}')
 				php_version=$(echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | grep -o native || echo "$cgi_enabled_site" | grep -oP 'php_version=\K[0-9. ()a-zA-Z]+(?=\s|$)' | sed 's@\.@@gi' | sed -n 's/^\([0-9]\{2\}\).*/isp-php\1/p')
 	
-				if [[ -n $name && -n $php_version ]]; then 
+				if [[ -n $name && -n $php_version ]]; then
+
+					# converting to idn
+					name=$(puny_converter ${name})
+
+					# if site ip addrs more than one, ISP Manager will raise error w/o site_ipaddrs param
+					# so getting it
+					site_ipaddrs=$($MGR_CTL site.edit elid=${name} | awk -F'site_ipaddrs=' '{print $2}' | awk '{print $1}' | grep . | tr '\n' ',' | sed 's/,$//')
+
 					printf "Switching ${GCV}$name $php_version${NCV} from PHP-CGI to PHP Module - "
-					$MGR_CTL site.edit elid=${name} site_php_mode=php_mode_mod site_php_fpm_version=${php_version} site_php_cgi_version=${php_version} site_php_apache_version=${php_version} sok=ok
+					$MGR_CTL site.edit elid=${name} site_php_mode=php_mode_mod site_php_fpm_version=${php_version} site_php_cgi_version=${php_version} site_php_apache_version=${php_version} site_ipaddrs=${site_ipaddrs} sok=ok
 				fi
 			done
 	
@@ -1043,6 +1051,45 @@ if [[ -f $MGR_BIN ]]; then
 	# lic validation
 	isp_panel_check_license_version
 
+	# nginx install
+	if $MGR_CTL feature | grep "nginx" | grep "active=off" >/dev/null 2>&1
+	then
+		echo
+		read -p "Install Nginx in ISP panel ? [Y/n]" -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			printf "Running"
+			$MGR_CTL feature.edit elid=web package_logrotate=on package_nginx=on package_php=on package_php-fpm=on sok=ok
+
+			# waiting for installation
+			timeout_duration=300
+			start_time=$(date +%s)
+		
+			while true; do
+				# timeout check
+				current_time=$(date +%s)
+				elapsed_time=$((current_time - start_time))
+					
+				if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
+					printf " - ${LRV}FAIL${NCV} Timed out waiting for nginx while checking $MGR_CTL feature\n"
+					break
+				fi
+
+				# checking for nginx installed
+				if $MGR_CTL feature | grep "nginx" | grep "active=on" >/dev/null 2>&1; then
+				printf " - ${GCV}DONE${NCV}\n"
+					break
+				else
+					sleep 5
+				fi
+			done
+		else
+			# user chose not to enable ISP manager nginx feature
+			printf "\n${YCV}Nginx was not installed${NCV} \n"
+		fi
+	fi
+
+	# PHP and opendkim features install
 	if 
 
 	{
@@ -1077,7 +1124,7 @@ if [[ -f $MGR_BIN ]]; then
 			    elapsed_time=$((current_time - start_time))
 			
 			    if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
-			         printf "\n${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check "$MGR_CTL feature" ${NCV}\n"
+			         printf "\n${LRV}Timed out waiting for PHP version - ${latest_php_avail_in_panel} while check $MGR_CTL feature ${NCV}\n"
 			         break
 			    fi
 			
@@ -1393,7 +1440,7 @@ fi
 }
 
 # tweak isp manager fpm
-ispmanager_tweak_php_fpm_func() {
+ispmanager_tweak_apache_and_php_fpm_func() {
 
 if [[ -f $MGR_BIN ]]; then
 
@@ -1401,6 +1448,7 @@ if [[ -f $MGR_BIN ]]; then
 	isp_panel_check_license_version
 
 	isp_fpm_template_file_path="/usr/local/mgr5/etc/templates/fpm_site_pool.conf"
+	isp_apache_vhost_template_file_path="/usr/local/mgr5/etc/templates/default/apache2-directory.template"
 	
 	# backup to /root/support
 	backup_dest_dir_path="/root/support/$(date '+%d-%b-%Y-%H-%M-%Z')/"
@@ -1409,13 +1457,13 @@ if [[ -f $MGR_BIN ]]; then
 	if ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path"); then
 
 		# changing default php-fpm isp template from ondemand 5 to static 15
-		if \cp -Rfp --parents --reflink=auto "$isp_fpm_template_file_path" "$backup_dest_dir_path" > /dev/null; then
-			printf "\nFile "$isp_fpm_template_file_path" was ${GCV}processed${NCV} and origin was backed up to "$backup_dest_dir_path"\n"
+		if \cp -Rfp --parents --reflink=auto "$isp_fpm_template_file_path" "$backup_dest_dir_path" > /dev/null && \cp "$isp_fpm_template_file_path" "${isp_fpm_template_file_path}.original" > /dev/null; then
+			printf "\nFile ${isp_fpm_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path}\n"
 		        sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm = ondemand${NCV}\n"; return 1; }
 		        sed -i 's@^pm.max_children =.*@pm.max_children = 15@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_children = 5${NCV}\n"; return 1; }
 		        sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_requests = 500${NCV}\n"; return 1; }
 		else
-			printf "\n${LRV}Error. Cannot backup file ${isp_fpm_template_file_path} to ${backup_dest_dir_path}${NCV}\n"
+			printf "\n${LRV}Error. Cannot backup file ${isp_fpm_template_file_path} to ${backup_dest_dir_path} or ${isp_fpm_template_file_path}.original${NCV}\n"
 			return 1
 		fi
 	fi
