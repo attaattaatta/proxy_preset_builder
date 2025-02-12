@@ -663,7 +663,7 @@ fi
 bitrix_env_check_func() {
 
 # detecting bitrix and bitrix alike environments
-if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ; then
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ); then
 
 	# bitrix GT (nginx+apache+fpm)
 	if apachectl -D DUMP_MODULES 2>/dev/null | grep proxy_fcgi >/dev/null 2>&1; then
@@ -707,6 +707,9 @@ ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOC
 # if both file sizes differs then something failed
 if [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -eq $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
 	printf " - ${GCV}DONE${NCV}\n"
+
+	# if success making executable
+	\chmod +x admin.sh
 else
 	printf " - ${LRV}FAIL${NCV}\n"
 fi
@@ -782,29 +785,8 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 
 	bitrix_php_version=$(\php -v | head -n 1 | awk '{print $2}' | sed 's/\.[^.]*$//')
 
-	# check nginx ports exposure in http_host var, if success then fix it
-	if 2>&1 nginx -T | grep -i "\$host:80" >/dev/null 2>&1 || 2>&1 nginx -T | grep -i "\$host:443" >/dev/null 2>&1; then
-		echo
-		read -p "Hide nginx port exposure in http_host variable and add X-Forwarded-Proto ? [Y/n]" -n 1 -r
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-			nginx_conf_sanity_check_fast
-			printf "\nFixing nginx port exposure in http_host variable and adding X-Forwarded-Proto"
-			# fixing nginx port expose in http_host variable and adding X-Forwarded-Proto
-			{
-			grep -riIl "\$host:443;" /etc/nginx/bx/* | xargs sed -i 's@\$host:443;@\$host;\n    proxy_set_header X-Forwarded-Proto \$scheme;\n@gi' 
-			grep -riIl "\$host:80;" /etc/nginx/bx/* | xargs sed -i 's@\$host:80;@\$host;\n    proxy_set_header X-Forwarded-Proto \$scheme;\n@gi'
-			} >/dev/null 2>&1
-		
-			if 2>&1 nginx -T | grep -i "\$host:80" >/dev/null 2>&1 || 2>&1 nginx -T | grep -i "\$host:443" >/dev/null 2>&1; then
-				printf " - ${LRV}FAIL${NCV}\n"	
-			else
-				printf " - ${GCV}OK${NCV}\n"
-			fi
-			nginx_conf_sanity_check_fast
-		fi
-	else
-		printf "\nFixing nginx port exposure in http_host variable and adding X-Forwarded-Proto not needed or was ${GCV}already done${NCV}\n"
-	fi
+	# check nginx ports exposure in http_host var, if success then if remoteip apache module is installed changing it with RPAF
+	bash <(timeout 4 wget --timeout 4 --no-check-certificate -q -o /dev/null -O- https://bit.ly/3wL8B2u)
 
 	# check if cURL PHP not enabled
 	if ! \php -m | grep -i curl >/dev/null 2>&1; then
@@ -849,7 +831,7 @@ idn2 "$1"
 # tweak sites settings need or not function
 ispmanager_enable_sites_tweaks_need_func() {
 
-for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}'); do
+for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}' | sort); do
 	# converting to idn
 	site=$(puny_converter ${site})
 
@@ -1454,6 +1436,14 @@ if [[ -f $MGR_BIN ]]; then
 	backup_dest_dir_path="/root/support/$(date '+%d-%b-%Y-%H-%M-%Z')/"
 	\mkdir -p "$backup_dest_dir_path" > /dev/null
 
+	# apache vhost template patch
+	if \cp -Rfp --parents --reflink=auto "$isp_apache_vhost_template_file_path" "$backup_dest_dir_path" > /dev/null && \cp "$isp_apache_vhost_template_file_path" "${isp_apache_vhost_template_file_path}.original" > /dev/null; then
+		perl -i -p0e "s,\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\{% if \\\$SSI == on %},\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\tOptions -Indexes\n\{% if \\\$SSI == on %},gi" $isp_apache_vhost_template_file_path > /dev/null
+	else
+		printf "\n${LRV}Error. Cannot backup file ${isp_apache_vhost_template_file_path} to ${backup_dest_dir_path} or ${isp_apache_vhost_template_file_path}.original${NCV}\n"
+		return 1
+	fi
+
 	if ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path"); then
 
 		# changing default php-fpm isp template from ondemand 5 to static 15
@@ -1625,16 +1615,15 @@ fi
 # check nginx conf and reload configuration fast
 nginx_conf_sanity_check_fast() {
 	
-	printf "\n${YCV}Making nginx configuration check${NCV}"
-	if nginx_test_output=$({ nginx -t; } 2>&1); then
-		printf " - ${GCV}OK${NCV}\n"
-		nginx -s reload >/dev/null 2>&1
-		EXIT_STATUS=0
-	else
-		printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
-		EXIT_STATUS=1
-	fi
-
+printf "\n${YCV}Making nginx configuration check${NCV}"
+if nginx_test_output=$({ nginx -t; } 2>&1); then
+	printf " - ${GCV}OK${NCV}\n"
+	nginx -s reload >/dev/null 2>&1
+	EXIT_STATUS=0
+else
+	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
+	EXIT_STATUS=1
+fi
 }
 
 # check nginx conf and reload configuration
