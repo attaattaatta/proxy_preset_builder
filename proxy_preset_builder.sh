@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.64"
+self_current_version="1.0.65"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -666,7 +666,8 @@ bitrix_env_check_func() {
 if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ); then
 
 	# bitrix GT (nginx+apache+fpm)
-	if apachectl -D DUMP_MODULES 2>/dev/null | grep proxy_fcgi >/dev/null 2>&1; then
+	# bitrix GT (nginx+apache+fpm)
+	if (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* >/dev/null 2>&1 && systemctl | grep -i fpm >/dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* >/dev/null 2>&1 && systemctl | grep -i fpm >/dev/null 2>&1); then
 		printf "\n${GCV}Bitrix GT${NCV} environment detected\n"
 		BITRIX="GT"
 	# bitrix ENV (nginx+apache)
