@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.65"
+self_current_version="1.0.66"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -181,6 +181,12 @@ ADMIN_SH_BITRIX_FILE_LOCAL="/root/admin.sh"
 ADMIN_SH_BITRIX_FILE_URL=""
 ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=""
 ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=""
+
+# other var
+NGINX_CONF_DIR="/etc/nginx"
+NGINX_CONF_FILE="$NGINX_CONF_DIR/nginx.conf"
+NGINX_TWEAKS_INCLUDE_FILE="$NGINX_CONF_DIR/custom.conf"
+NGINX_TWEAKS_SUCCESS_ADDED=()
 
 # allowed script actions
 ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
@@ -426,6 +432,55 @@ check_exit_and_restore_func() {
 	fi
 }
 
+backup_etc_func() {
+
+BACKUP_ROOT_DIR="/root/support"
+BACKUP_DIR="${BACKUP_ROOT_DIR}/$(date '+%d-%b-%Y-%H-%M-%Z')"
+
+if \mkdir -p "$BACKUP_ROOT_DIR"; then
+
+	printf "\nCreating configs ${GCV}backup${NCV} to ${BACKUP_DIR}"
+
+	BACKUP_ROOT_DIR_SIZE_MB=$(\du -sm "$BACKUP_ROOT_DIR" 2> /dev/null | awk "{print \$1}" | head -n 1)
+	
+	BACKUP_DIR_DISK_USE=$(\df "$BACKUP_ROOT_DIR" | sed 1d | awk "{print \$5}" | sed 's@%@@gi')
+
+	if [[ "$BACKUP_DIR_DISK_USE" -le 95 ]]; then
+
+		if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
+			printf "${YCV}${BACKUP_ROOT_DIR} - ${BACKUP_ROOT_DIR_SIZE_MB}MB ( run: du -sch /root/support/* | sort -h ) ${NCV}\n"
+		fi
+
+		BACKUP_PATH_LIST=("/etc" "/usr/local/mgr5/etc" "/var/spool/cron" "/var/named/domains")
+
+		\mkdir -p "$BACKUP_DIR" > /dev/null 2>&1
+
+		for backup_item in "${BACKUP_PATH_LIST[@]}"; do
+
+			backup_item_size=$(\du -sm --exclude=/etc/ispmysql "${backup_item}" 2>/dev/null | awk "{print \$1}")
+
+			if [[ "${backup_item_size}" -lt 2000 ]]; then
+				\cp -Rfp --parents --reflink=auto "${backup_item}" "${BACKUP_DIR}" &> /dev/null
+			else
+				printf "${LRV}No backup of ${backup_item} - ${backup_item_size}${NCV}\n"
+			fi
+		done
+
+		\cp -Rfp --parents --reflink=auto "/opt/php"*"/etc/" "$BACKUP_DIR" &> /dev/null
+
+		printf " - ${GCV}OK${NCV}\n"
+	else
+		printf " - ${LRV}FAIL${NCV}"
+		printf "\n${LRV}Cannot create configs backup, disk used for 95% or more${NCV}\n"
+		exit 1
+	fi
+else
+	printf "\n${LRV}Cannot create backup dir${NCV}\n"
+	exit 1	
+fi
+}
+
+
 # run all tweaks
 run_all_tweaks() {
 
@@ -438,6 +493,7 @@ if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 	printf "Tweaks was ${LRV}canceled${NCV} by user choice\n"
 else
+	backup_etc_func
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
@@ -449,6 +505,7 @@ else
 	ispmanager_switch_cgi_mod_func
 	ispmanager_tweak_php_and_mysql_settings_func
 	ispmanager_tweak_apache_and_php_fpm_func
+	tweak_nginx_params_func
 	tweak_add_nginx_bad_robot_conf_func
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
@@ -1059,7 +1116,7 @@ if [[ -f $MGR_BIN ]]; then
 				fi
 
 				# checking for nginx installed
-				if $MGR_CTL feature | grep "nginx" | grep "active=on" >/dev/null 2>&1; then
+				if $MGR_CTL feature 2> /dev/null | grep "nginx" | grep "active=on" >/dev/null 2>&1; then
 				printf " - ${GCV}DONE${NCV}\n"
 					break
 				else
@@ -1112,7 +1169,7 @@ if [[ -f $MGR_BIN ]]; then
 			    fi
 			
 			    # checking for latest_php_avail_in_panel is installed
-			    if $MGR_CTL feature | grep -i ${latest_php_avail_in_panel} | grep -i "Apache module" | grep -i "active=on" > /dev/null 2>&1; then
+			    if $MGR_CTL feature 2> /dev/null | grep -i ${latest_php_avail_in_panel} | grep -i "Apache module" | grep -i "active=on" > /dev/null 2>&1; then
 			        printf " - ${GCV}DONE${NCV}\n"
 			        break
 			    else
@@ -1535,6 +1592,184 @@ fi
 
 } 
 
+# Function to add a parameter to a file
+add_param_to_file() {
+	local file="$1"
+	local param="$2"
+	local value="$3"
+	echo "$param $value;" >> "$file"
+}
+
+# Function to update a parameter in a file
+update_param_in_file() {
+	local file="$1"
+	local param="$2"
+	local value="$3"
+	if grep -qE "^\s*$param\s+.*;" "$file"; then
+		sed -i -E "s|^\s*$param\s+.*;|\t$param $value;|" "$file"
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Function to check if a parameter with the desired value exists in the specified files
+check_param_exists() {
+	local param="$1"
+	local value="$2"
+	# Search for the parameter with the desired value in custom.conf
+	if grep -E "^\s*$param\s+$value\s*;" "$NGINX_TWEAKS_INCLUDE_FILE" >/dev/null 2>&1; then
+		return 0
+	fi
+	# Search for the parameter with the desired value in nginx.conf (before the server block)
+	if awk '/server\s*{/{exit} /^\s*'"$param"'\s+'"$value"'\s*;/' "$NGINX_CONF_FILE" | grep -qE "^\s*$param\s+$value\s*;"; then
+		return 0
+	fi
+	return 1
+}
+
+tweak_nginx_params_func() {
+
+# Check if Nginx is installed
+if ! command -v nginx >/dev/null 2>&1; then
+	printf "\nNginx ${YCV}not detected${YCV}\n"
+	return 1
+fi
+
+# Checking include directive exists in main nginx conf
+if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
+	echo
+	read -p "Tweak nginx parameters ? [Y/n]" -n 1 -r
+	echo
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		declare -A NGINX_PARAMS
+		NGINX_PARAMS=(
+			["proxy_buffers"]="32 16k"
+			["proxy_buffer_size"]="16k"
+			["proxy_max_temp_file_size"]="0"
+			["fastcgi_buffers"]="16 16k"
+			["fastcgi_buffer_size"]="32k"
+			["client_body_buffer_size"]="32k"
+			["client_header_buffer_size"]="1k"
+			["client_max_body_size"]="512m"
+			["large_client_header_buffers"]="4 16k"
+			["etag"]="on"
+			["sendfile"]="on"
+			["sendfile_max_chunk"]="512k"
+			["tcp_nopush"]="on"
+			["tcp_nodelay"]="on"
+			["server_names_hash_bucket_size"]="512"
+			["server_names_hash_max_size"]="1024"
+		)
+
+		echo "# Custom settings" > "$NGINX_TWEAKS_INCLUDE_FILE"
+		
+		# Add the include directive to the main config if it's not already there
+		if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
+			# Add the include directive directly to the main configuration file
+			sed -i '/http\s*{/a \	include '"$NGINX_TWEAKS_INCLUDE_FILE"';' "$NGINX_CONF_FILE"
+		
+			# Test the configuration after adding the include directive
+			if ! nginx -t >/dev/null 2>&1; then
+				# If the test fails, remove the include directive from the main configuration file
+				sed -i '/include '"$(echo "$NGINX_TWEAKS_INCLUDE_FILE" | sed 's/\//\\\//g')"';/d' "$NGINX_CONF_FILE"
+				# Remove the include file
+				rm -f "$NGINX_TWEAKS_INCLUDE_FILE"
+				printf "\n${LRV}Error:${NCV}  Failed to add include directive to $NGINX_CONF_FILE. Changes reverted."
+				exit 1
+			else
+				printf "${NGINX_TWEAKS_INCLUDE_FILE} was ${GCV}successfully${NCV} added to ${NGINX_CONF_FILE}" 
+			fi
+		fi
+
+		printf "\nRunning nginx params tweaks"
+		
+		# Sort NGINX_PARAMS param
+		sorted_params=$(for param in "${!NGINX_PARAMS[@]}"; do echo "$param"; done | sort)
+	
+		config_test_fail_msg="The configuration test failed after the change"
+		
+		# Add or update parameters in the include file or nginx.conf
+		for param in $sorted_params; do
+			new_value="${NGINX_PARAMS[$param]}"
+		
+			# Check if the parameter with the desired value already exists in the specified files
+			if check_param_exists "$param" "$new_value"; then
+	
+				# If the parameter with the desired value already exists, skip it
+				continue
+			fi
+
+			# Try to update the parameter in nginx.conf (before the server block)
+			old_value=$(awk '/^\s*'"$param"'\s+.*;/' "$NGINX_CONF_FILE" | awk '{for (i=2; i<=NF; i++) if ($i ~ /;/) {print substr($i, 1, length($i)-1); exit} else printf "%s ", $i}')
+			if [[ -n "$old_value" ]]; then
+				if update_param_in_file "$NGINX_CONF_FILE" "$param" "$new_value"; then
+					NGINX_TWEAKS_SUCCESS_ADDED+=("$param (!updated in $NGINX_CONF_FILE, old: $old_value, new: $new_value)")
+				else
+					printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_CONF_FILE - ${config_test_fail_msg}\n"
+				continue
+				fi
+			else
+				# If the parameter is not found in nginx.conf, try to update or add it in custom.conf
+				if update_param_in_file "$NGINX_TWEAKS_INCLUDE_FILE" "$param" "$new_value"; then
+					NGINX_TWEAKS_SUCCESS_ADDED+=("$param (!updated in $NGINX_TWEAKS_INCLUDE_FILE)")
+				else
+					add_param_to_file "$NGINX_TWEAKS_INCLUDE_FILE" "$param" "$new_value"
+					NGINX_TWEAKS_SUCCESS_ADDED+=("$param (added to $NGINX_TWEAKS_INCLUDE_FILE)")
+				fi
+			fi
+		
+			# Test the configuration after adding or updating the parameter
+			if ! nginx -t >/dev/null 2>&1; then
+	
+				# If the test fails, revert the changes
+				if [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_CONF_FILE"* ]]; then
+	
+					sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_CONF_FILE"
+					printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_CONF_FILE - ${config_test_fail_msg}\n"
+	
+				elif [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_TWEAKS_INCLUDE_FILE"* ]]; then
+	
+					sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_TWEAKS_INCLUDE_FILE"
+					printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_TWEAKS_INCLUDE_FILE - ${config_test_fail_msg}\n"
+	
+				else
+	
+					sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_TWEAKS_INCLUDE_FILE"
+					printf "\n${LRV}Error:${NCV} Failed to add $param to $NGINX_TWEAKS_INCLUDE_FILE - ${config_test_fail_msg}\n"
+	
+				fi
+	
+				# Remove the parameter from the success list
+				NGINX_TWEAKS_SUCCESS_ADDED=("${NGINX_TWEAKS_SUCCESS_ADDED[@]/$param *}")
+			fi
+		done
+		
+		# Reload Nginx if changes were made
+		if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
+	
+			if systemctl reload nginx; then
+				printf " - ${GCV}OK${NCV}\n"
+				printf "Nginx added/updated:\n\n"
+				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
+			else
+				printf " - ${LRV}FAIL${NCV}\n"
+				printf "${LRV}Error:${NCV} Failed to reload Nginx ( run: nginx -t )\n"
+				printf "\nNginx added/updated:\n"
+				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
+			fi
+		else
+			printf "\nTweak nginx not needed or was ${GCV}already done${NCV}\n"
+		fi
+	else
+		# user chose not to tweak nginx
+		printf "Nginx params tweak was canceled by user choice\n"
+	fi
+else
+	printf "\nTweak nginx not needed or was ${GCV}already done${NCV}\n"
+fi
+}
+
 # tweaker add nginx bad robot conf
 tweak_add_nginx_bad_robot_conf_func() {
 
@@ -1547,7 +1782,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 		# checking nginx configuration sanity
 		nginx_conf_sanity_check_fast
 
-		nginx_bad_robot_file_url="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
+		nginx_bad_robot_file_url="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
 
 		# placing file depending the environment
 		# if ISP Manager
