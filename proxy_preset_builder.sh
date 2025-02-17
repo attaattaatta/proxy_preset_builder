@@ -14,8 +14,8 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.66"
-printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n${NCV}"
+self_current_version="1.0.67"
+printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
 if [[ $EUID -ne 0 ]]; then
@@ -187,6 +187,7 @@ NGINX_CONF_DIR="/etc/nginx"
 NGINX_CONF_FILE="$NGINX_CONF_DIR/nginx.conf"
 NGINX_TWEAKS_INCLUDE_FILE="$NGINX_CONF_DIR/custom.conf"
 NGINX_TWEAKS_SUCCESS_ADDED=()
+NGINX_BAD_ROBOT_FILE_URL=""
 
 # allowed script actions
 ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
@@ -747,29 +748,59 @@ fi
 
 }
 
-download_admin_sh() {
+download_file_func() {
 
-printf "\nDownloading admin.sh to ${ADMIN_SH_BITRIX_FILE_LOCAL}"
+# check args n
+if [[ $# -ne 4 ]]; then
+	printf "\n${LRV}Error:${NCV} Not enouth args.\n"
+	printf "\n${LRV}1:${NCV}$1\n"
+	printf "\n${LRV}2:${NCV}$2\n"
+	printf "\n${LRV}3:${NCV}$3\n"
+	printf "\n${LRV}4:${NCV}$4\n"
+	return 1
+fi
+
+# check args not empty
+for arg in "$@"; do
+	if [[ -z "$arg" ]]; then
+		printf "\n${LRV}Error:${NCV} Empty arg.\n"
+		printf "\n${LRV}1:${NCV}$1\n"
+		printf "\n${LRV}2:${NCV}$2\n"
+		printf "\n${LRV}3:${NCV}$3\n"
+		printf "\n${LRV}4:${NCV}$4\n"
+		return 1
+	fi
+done
+
+local full_url="$1"
+local file_name="$2"
+local file_path_local="$3"
+local remote_hostname="$4"
+
+printf "\nDownloading $full_url to $file_path_local"
 
 {
 if command -v wget &> /dev/null; then 
-	\wget --timeout 4 --no-check-certificate -q -O "$ADMIN_SH_BITRIX_FILE_LOCAL" "$ADMIN_SH_BITRIX_FILE_URL" 
+	if \wget --timeout 4 --no-check-certificate -q -O $file_path_local $full_url; then
+		full_url_size=$(wget --spider --server-response $full_url 2>&1 | grep "Content-Length" | awk '{print $2}')
+	fi
 else
-	printf "GET $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | sed '1,/^\s$/d' > "$ADMIN_SH_BITRIX_FILE_LOCAL"
+	if printf "GET $full_url HTTP/1.1\nHost:$remote_hostname\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect $remote_hostname:443 -quiet | sed '1,/^\s$/d' > "$file_path_local";then
+		full_url_size=$(printf "HEAD $full_url HTTP/1.1\nHost:$remote_hostname\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect $remote_hostname:443 -quiet | grep "Content-Length" | awk '{print $2}')
+	fi
 fi
 }  >/dev/null 2>&1
 
-# get filesize in bytes for downloaded ADMIN_SH_BITRIX_FILE_LOCAL file
-ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
+# get filesize in bytes for downloaded file_path_local file
+file_path_local_size=$(\stat --printf="%s" ${file_path_local} 2>/dev/null)
 
 # if both file sizes differs then something failed
-if [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -eq $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
-	printf " - ${GCV}DONE${NCV}\n"
-
-	# if success making executable
-	\chmod +x admin.sh
+if [[ $full_url_size -gt 30 ]] && [[ $full_url_size -eq $file_path_local_size ]]; then
+	printf " - ${GCV}OK${NCV}\n"
+	return 0
 else
 	printf " - ${LRV}FAIL${NCV}\n"
+	return 1
 fi
 
 }
@@ -813,12 +844,16 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 				if \cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') >/dev/null 2>&1; then
 					# backup previous
 					printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M')"
-					# dowload new
-					download_admin_sh
+					# download new
+					if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "admin.sh" "/root/admin.sh" "gitlab.hoztnode.net"; then
+						if ! chmod +x "$ADMIN_SH_BITRIX_FILE_LOCAL"; then
+							printf "\n${YCV}Chmod +x ${ADMIN_SH_BITRIX_FILE_LOCAL} failed"
+						fi
+					fi
 				else
 					# backup failed
 					printf "\n${LRV}Backup ${ADMIN_SH_BITRIX_FILE_LOCAL} to ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') FAILED${NCV}"
-					printf "\n${LRV}Skipped download.${NCV}\n"
+					printf "\nDownload ${LRV}skipped${NCV}\n"
 					return
 				fi
 			else
@@ -829,8 +864,12 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		fi
 	
 	else
-		# dowload new
-		download_admin_sh
+		# download new
+		if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "admin.sh" "/root/admin.sh" "gitlab.hoztnode.net"; then
+			if ! chmod +x "$ADMIN_SH_BITRIX_FILE_LOCAL"; then
+				printf "\n${YCV}Chmod +x ${ADMIN_SH_BITRIX_FILE_LOCAL} failed"
+			fi
+		fi
 	fi
 fi
 
@@ -1748,7 +1787,7 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 		# Reload Nginx if changes were made
 		if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
 	
-			if systemctl reload nginx; then
+			if systemctl reload nginx >/dev/null 2>&1; then
 				printf " - ${GCV}OK${NCV}\n"
 				printf "Nginx added/updated:\n\n"
 				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
@@ -1782,7 +1821,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 		# checking nginx configuration sanity
 		nginx_conf_sanity_check_fast
 
-		nginx_bad_robot_file_url="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
+		NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
 
 		# placing file depending the environment
 		# if ISP Manager
@@ -1805,34 +1844,30 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 				bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
 				nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
 			else
-				printf "\n${LRV}Error. Unknown bitrix environment.${NCV}\n"
+				printf "\n${LRV}Error.${NCV} Unknown bitrix environment.Link - ${nginx_bad_robot_file_url}\n"
 				return
 			fi
 
-			if [[ ! -z $bitrix_nginx_general_conf ]] && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf >/dev/null 2>&1; then
+			if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf >/dev/null 2>&1; then
 					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_nginx_general_conf
 			else
-				printf "\n${LRV}Error. bitrix_nginx_general_conf is not set. Include failed.${NCV}\n"
+				printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in "bad_robot.conf" $bitrix_nginx_general_conf ). Include failed.\n"
 				return
 			fi
 		else
-			printf "\n${LRV}Error. Unknown environment. Don't know where to place the include.${NCV}\n"
+			printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${nginx_bad_robot_file_url}\n"
 			return
 		fi
 
-		# adding nginx bad_robot.conf file
-		printf "Downloading bad_robot.conf to ${nginx_bad_robot_file_local}"	
-		{
-		if command -v wget &> /dev/null; then 
-			 \wget --timeout 4 --no-check-certificate -q -O "$nginx_bad_robot_file_local" "$nginx_bad_robot_file_url" 
-		else
-			printf "GET $nginx_bad_robot_file_url HTTP/1.1\nHost:raw.githubusercontent.com\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect raw.githubusercontent.com:443 -quiet | sed '1,/^\s$/d' > "$nginx_bad_robot_file_local"
+		# downloading nginx bad_robot.conf file
+		if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "bad_robot.conf" "$nginx_bad_robot_file_local" "gitlab.hoztnode.net"; then
+			return 1
 		fi
-		}  >/dev/null 2>&1
 
 		# checking bad_robot file exist in nginx config
+		printf "\nChecking bad_robot file exist in nginx config"
 		if 2>&1 nginx -T | grep -i BlackWidow >/dev/null 2>&1; then
-			printf " - ${GCV}DONE${NCV}"
+			printf " - ${GCV}OK${NCV}"
 		else
 			printf " - ${LRV}FAIL${NCV}"
 		fi
@@ -1851,7 +1886,7 @@ fi
 # check nginx conf and reload configuration fast
 nginx_conf_sanity_check_fast() {
 	
-printf "\n${YCV}Making nginx configuration check${NCV}"
+printf "\nMaking nginx configuration check"
 if nginx_test_output=$({ nginx -t; } 2>&1); then
 	printf " - ${GCV}OK${NCV}\n"
 	nginx -s reload >/dev/null 2>&1
@@ -1865,7 +1900,7 @@ fi
 # check nginx conf and reload configuration
 nginx_conf_sanity_check_and_reload_func() {
 
-printf "\n${YCV}Making nginx configuration check${NCV}"
+printf "\nMaking nginx configuration check"
 if nginx_test_output=$({ nginx -t; } 2>&1)
 then
 	printf " - ${GCV}OK${NCV}\n"
