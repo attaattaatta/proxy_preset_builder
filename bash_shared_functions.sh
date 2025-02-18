@@ -9,7 +9,38 @@
 #pipefail | verbose
 
 # show script version
-self_current_version="1.0.0"
+self_current_version="1.0.1"
+
+# check OS
+check_os_func() {
+shopt -s nocasematch
+REL=$(cat /etc/*release* | head -n 1)
+case "$REL" in
+        *cent*) DISTR="rhel";;
+	*alma*) DISTR="rhel";;
+	*rocky*) DISTR="rhel";;
+        *cloud*) DISTR="rhel";;
+        *rhel*) DISTR="rhel";;
+        *debian*) DISTR="debian";;
+        *ubuntu*) DISTR="debian";;
+        *) DISTR="unknown";;
+esac;
+shopt -u nocasematch
+
+# RHEL
+if [[ $DISTR == "rhel" ]]; then
+        printf "\nLooks like this is some ${GCV}RHEL (or derivative) OS${NCV}\n"
+# DEBIAN
+elif [[ $DISTR == "debian" ]]; then
+        printf "\nLooks like this is some ${GCV}Debian (or derivative) OS${NCV}\n"
+# UNKNOWN
+elif [[ $DISTR == "unknown" ]]; then
+        printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
+        EXIT_STATUS=1
+        exit 1
+fi
+
+}
 
 # RPAF or not RPAF
 # 0 - detected correct version
