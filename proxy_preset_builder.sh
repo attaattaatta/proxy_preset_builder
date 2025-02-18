@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.67"
+self_current_version="1.0.68"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -34,33 +34,112 @@ do
 	fi
 done
 
-# check OS
-shopt -s nocasematch
-REL=$(cat /etc/*release* | head -n 1)
-case "$REL" in
-        *cent*) distr="rhel";;
-	*alma*) distr="rhel";;
-	*rocky*) distr="rhel";;
-        *cloud*) distr="rhel";;
-        *rhel*) distr="rhel";;
-        *debian*) distr="debian";;
-        *ubuntu*) distr="debian";;
-        *) distr="unknown";;
-esac;
-shopt -u nocasematch
+# isp vars
+MGR_PATH="/usr/local/mgr5"
+MGR_BIN="$MGR_PATH/sbin/mgrctl"
+MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
+MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
+SITES_TWEAKS_NEEDED=""
+SITES_TWEAKS_NEEDED_SITES=()
+NO_MOD_PHP=()
 
-# RHEL
-if [[ $distr == "rhel" ]]; then
-        printf "\nLooks like this is some ${GCV}RHEL (or derivative) OS${NCV}\n"
-# DEBIAN
-elif [[ $distr == "debian" ]]; then
-        printf "\nLooks like this is some ${GCV}Debian (or derivative) OS${NCV}\n"
-# UNKNOWN
-elif [[ $distr == "unknown" ]]; then
-        printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
-        EXIT_STATUS=1
-        exit 1
+# bitrix vars
+ADMIN_SH_BITRIX_FILE_LOCAL="/root/admin.sh"
+ADMIN_SH_BITRIX_FILE_URL=""
+ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=""
+ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=""
+
+# other var
+NGINX_CONF_DIR="/etc/nginx"
+NGINX_CONF_FILE="$NGINX_CONF_DIR/nginx.conf"
+NGINX_TWEAKS_INCLUDE_FILE="$NGINX_CONF_DIR/custom.conf"
+NGINX_TWEAKS_SUCCESS_ADDED=()
+NGINX_BAD_ROBOT_FILE_URL=""
+SHARED_BASH_FUNCTIONS_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/bash_shared_functions.sh"
+
+# allowed script actions
+ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
+
+# paths to ISP manager nginx templates
+NGINX_DEFAULT_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts.template"
+NGINX_DEFAULT_SSL_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts-ssl.template"
+NGINX_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts.template"
+NGINX_SSL_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts-ssl.template"
+NGINX_MAIN_CONF_FILE="/etc/nginx/nginx.conf"
+NGX_RECOMPILE_SCRIPT_NAME="recompile_nginx.sh"
+
+# global randrom number
+RANDOM_N=$RANDOM
+
+# proxy prefix may be changed here
+PROXY_PREFIX="proxy_to_"
+
+# GIT repo
+SCRIPT_GIT_REPO="https://github.com/attaattaatta/proxy_preset_builder"
+SCRIPT_GIT_BACKUP_REPO="https://gitlab.hoztnode.net/admins/scripts"
+
+# GIT script raw path to proxy_preset_builder.sh folder
+SCRIPT_GIT_PATH="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/master"
+SCRIPT_GIT_BACKUP_PATH="https://gitlab.hoztnode.net/admins/scripts/-/raw/master"
+
+# extract domain names of GIT urls
+GIT_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
+GIT_BACKUP_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
+
+# extract request uri of GIT urls
+GIT_REQ_URI="${SCRIPT_GIT_PATH#https://*/}"
+GIT_BACKUP_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
+
+load_shared_functions_func() {
+
+# check args n
+if [[ $# -ne 1 ]]; then
+	printf "\n${LRV}Error:${NCV} Not enouth args.\n"
+	printf "\n${LRV}1:${NCV}$1\n"
+	return 1
 fi
+
+# check args not empty
+for arg in "$@"; do
+	if [[ -z "$arg" ]]; then
+		printf "\n${LRV}Error:${NCV} Empty arg.\n"
+		printf "\n${LRV}1:${NCV}$1\n"
+		return 1
+	fi
+done
+
+local shared_func_url="$1"
+
+local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
+
+if command -v wget > /dev/null 2>/dev/null; then 
+	if source <(\wget --timeout 4 --no-check-certificate -q -O- ${shared_func_url}); then 
+		return 0
+	else
+		printf "\nSource shared functions from ${shared_func_url} to RAM - ${LRV}FAIL${NCV}\n"
+		return 1
+	fi
+
+elif command -v openssl > /dev/null 2>/dev/null; then
+	if source <(printf "GET ${shared_func_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d');then
+		return 0
+	else
+		printf "\nSource shared functions from ${shared_func_url} to RAM - ${LRV}FAIL${NCV}\n"
+		return 1
+	fi
+else
+	printf "\nDownloading shared functions from ${shared_func_url} to RAM - ${LRV}FAIL${NCV}\n"
+	return 1
+fi
+
+}
+
+if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}"; then
+	exit 1
+fi
+
+# check OS
+check_os_func
 
 #check env
 if [[ -f /usr/bin/hostnamectl ]] || [[ -f /bin/hostnamectl ]]; then
@@ -167,65 +246,10 @@ else
 	printf "\nSeems like a ${LRV}unknown${NCV} server\n"
 fi
 
-# isp vars
-MGR_PATH="/usr/local/mgr5"
-MGR_BIN="$MGR_PATH/sbin/mgrctl"
-MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
-MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
-SITES_TWEAKS_NEEDED=""
-SITES_TWEAKS_NEEDED_SITES=()
-NO_MOD_PHP=()
-
-# bitrix vars
-ADMIN_SH_BITRIX_FILE_LOCAL="/root/admin.sh"
-ADMIN_SH_BITRIX_FILE_URL=""
-ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=""
-ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=""
-
-# other var
-NGINX_CONF_DIR="/etc/nginx"
-NGINX_CONF_FILE="$NGINX_CONF_DIR/nginx.conf"
-NGINX_TWEAKS_INCLUDE_FILE="$NGINX_CONF_DIR/custom.conf"
-NGINX_TWEAKS_SUCCESS_ADDED=()
-NGINX_BAD_ROBOT_FILE_URL=""
-
-# allowed script actions
-ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
-
-# paths to ISP manager nginx templates
-NGINX_DEFAULT_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts.template"
-NGINX_DEFAULT_SSL_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts-ssl.template"
-NGINX_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts.template"
-NGINX_SSL_TEMPLATE="$MGR_PATH/etc/templates/nginx-vhosts-ssl.template"
-NGINX_MAIN_CONF_FILE="/etc/nginx/nginx.conf"
-NGX_RECOMPILE_SCRIPT_NAME="recompile_nginx.sh"
-
-# global randrom number
-RANDOM_N=$RANDOM
-
-# proxy prefix may be changed here
-PROXY_PREFIX="proxy_to_"
-
-# GIT repo
-SCRIPT_GIT_REPO="https://github.com/attaattaatta/proxy_preset_builder"
-SCRIPT_GIT_BACKUP_REPO="https://gitlab.hoztnode.net/admins/scripts"
-
-# GIT script raw path to proxy_preset_builder.sh folder
-SCRIPT_GIT_PATH="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/master"
-SCRIPT_GIT_BACKUP_PATH="https://gitlab.hoztnode.net/admins/scripts/-/raw/master"
-
-# extract domain names of GIT urls
-GIT_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
-GIT_BACKUP_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
-
-# extract request uri of GIT urls
-GIT_REQ_URI="${SCRIPT_GIT_PATH#https://*/}"
-GIT_BACKUP_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
-
 # show script version and check gits
 script_git_name="proxy_preset_builder.sh"
-git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
-git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+?')"
+git_version="$(printf "GET $SCRIPT_GIT_PATH/$script_git_name HTTP/1.1\nHost:$GIT_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+')"
+git_backup_version="$(printf "GET $SCRIPT_GIT_BACKUP_PATH/$script_git_name HTTP/1.1\nHost:$GIT_BACKUP_DOMAIN_NAME\nConnection:Close\n\n" | timeout 5 openssl 2>/dev/null s_client -crlf -connect $GIT_BACKUP_DOMAIN_NAME:443 -quiet | grep -o -P '(?<=self_current_version=")\d+\.?\d+?\.?\d+')"
 
 if [[ $git_version ]] && [[ $self_current_version < $git_version ]]; then
 	printf "\nVersion ${YCV}$git_version${NCV} at $SCRIPT_GIT_PATH/$script_git_name \n"
@@ -448,10 +472,6 @@ if \mkdir -p "$BACKUP_ROOT_DIR"; then
 
 	if [[ "$BACKUP_DIR_DISK_USE" -le 95 ]]; then
 
-		if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
-			printf "${YCV}${BACKUP_ROOT_DIR} - ${BACKUP_ROOT_DIR_SIZE_MB}MB ( run: du -sch /root/support/* | sort -h ) ${NCV}\n"
-		fi
-
 		BACKUP_PATH_LIST=("/etc" "/usr/local/mgr5/etc" "/var/spool/cron" "/var/named/domains")
 
 		\mkdir -p "$BACKUP_DIR" > /dev/null 2>&1
@@ -470,6 +490,9 @@ if \mkdir -p "$BACKUP_ROOT_DIR"; then
 		\cp -Rfp --parents --reflink=auto "/opt/php"*"/etc/" "$BACKUP_DIR" &> /dev/null
 
 		printf " - ${GCV}OK${NCV}\n"
+		if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
+			printf "${YCV}${BACKUP_ROOT_DIR} - ${BACKUP_ROOT_DIR_SIZE_MB}MB ( run: du -sch /root/support/* | sort -h ) ${NCV}\n"
+		fi
 	else
 		printf " - ${LRV}FAIL${NCV}"
 		printf "\n${LRV}Cannot create configs backup, disk used for 95% or more${NCV}\n"
@@ -662,7 +685,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 
 	printf "\n${GCV}Installing and configuring tuned service${NCV}\n"
 
-	if [[ $distr == "rhel" ]]; then
+	if [[ $DISTR == "rhel" ]]; then
 	
 		{
 		if ! which tuned; then
@@ -671,7 +694,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 		} >/dev/null 2>&1
 	
 	
-	elif [[ $distr == "debian" ]]; then
+	elif [[ $DISTR == "debian" ]]; then
 	
 		{
 		if ! which tuned; then
@@ -724,14 +747,13 @@ bitrix_env_check_func() {
 if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ); then
 
 	# bitrix GT (nginx+apache+fpm)
-	# bitrix GT (nginx+apache+fpm)
 	if (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* >/dev/null 2>&1 && systemctl | grep -i fpm >/dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* >/dev/null 2>&1 && systemctl | grep -i fpm >/dev/null 2>&1); then
 		printf "\n${GCV}Bitrix GT${NCV} environment detected\n"
 		BITRIX="GT"
 	# bitrix ENV (nginx+apache)
 	elif [[ -d /opt/webdir ]]; then
 		bitrix_env_version=$(egrep -o 'BITRIX_VA_VER=[0-9\.]+' /root/.bash_profile | awk -F'=' '{print $2}' )
-		printf "\n${GCV}Bitrix ${bitrix_env_version}${NCV} environment detected\n"
+		printf "\n${GCV}Bitrix ${bitrix_env_version} env${NCV}ironment detected\n"
 		BITRIX="ENV"
 	# bitrix VANILLA (nginx+apache)
 	elif 2>&1 nginx -T | grep -i "server httpd:8090" >/dev/null 2>&1; then
@@ -751,12 +773,10 @@ fi
 download_file_func() {
 
 # check args n
-if [[ $# -ne 4 ]]; then
+if [[ $# -ne 2 ]]; then
 	printf "\n${LRV}Error:${NCV} Not enouth args.\n"
 	printf "\n${LRV}1:${NCV}$1\n"
 	printf "\n${LRV}2:${NCV}$2\n"
-	printf "\n${LRV}3:${NCV}$3\n"
-	printf "\n${LRV}4:${NCV}$4\n"
 	return 1
 fi
 
@@ -766,27 +786,24 @@ for arg in "$@"; do
 		printf "\n${LRV}Error:${NCV} Empty arg.\n"
 		printf "\n${LRV}1:${NCV}$1\n"
 		printf "\n${LRV}2:${NCV}$2\n"
-		printf "\n${LRV}3:${NCV}$3\n"
-		printf "\n${LRV}4:${NCV}$4\n"
 		return 1
 	fi
 done
 
 local full_url="$1"
-local file_name="$2"
-local file_path_local="$3"
-local remote_hostname="$4"
+local file_path_local="$2"
+local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
-printf "\nDownloading $full_url to $file_path_local"
+printf "\nDownloading ${full_url} to ${file_path_local}"
 
 {
 if command -v wget &> /dev/null; then 
-	if \wget --timeout 4 --no-check-certificate -q -O $file_path_local $full_url; then
-		full_url_size=$(wget --spider --server-response $full_url 2>&1 | grep "Content-Length" | awk '{print $2}')
+	if \wget --timeout 4 --no-check-certificate -q -O ${file_path_local} ${full_url}; then
+		full_url_size=$(wget --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}')
 	fi
 else
-	if printf "GET $full_url HTTP/1.1\nHost:$remote_hostname\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect $remote_hostname:443 -quiet | sed '1,/^\s$/d' > "$file_path_local";then
-		full_url_size=$(printf "HEAD $full_url HTTP/1.1\nHost:$remote_hostname\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect $remote_hostname:443 -quiet | grep "Content-Length" | awk '{print $2}')
+	if printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > "${file_path_local}";then
+		full_url_size=$(printf "HEAD ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | grep "Content-Length" | awk '{print $2}')
 	fi
 fi
 }  >/dev/null 2>&1
@@ -795,7 +812,7 @@ fi
 file_path_local_size=$(\stat --printf="%s" ${file_path_local} 2>/dev/null)
 
 # if both file sizes differs then something failed
-if [[ $full_url_size -gt 30 ]] && [[ $full_url_size -eq $file_path_local_size ]]; then
+if [[ ${full_url_size} -gt 30 ]] && [[ ${full_url_size} -eq ${file_path_local_size} ]]; then
 	printf " - ${GCV}OK${NCV}\n"
 	return 0
 else
@@ -835,7 +852,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		
 		# get filesize in bytes for existing ADMIN_SH_BITRIX_FILE_LOCAL file
 		ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
-	
+
 		# if ADMIN_SH_BITRIX_FILE_REMOTE_SIZE defined, remote file size not null and both file sizes differs ask user for update
 		if [[ ! -z $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -ne $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
 			echo
@@ -845,7 +862,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 					# backup previous
 					printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M')"
 					# download new
-					if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "admin.sh" "/root/admin.sh" "gitlab.hoztnode.net"; then
+					if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "/root/admin.sh"; then
 						if ! chmod +x "$ADMIN_SH_BITRIX_FILE_LOCAL"; then
 							printf "\n${YCV}Chmod +x ${ADMIN_SH_BITRIX_FILE_LOCAL} failed"
 						fi
@@ -865,7 +882,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	
 	else
 		# download new
-		if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "admin.sh" "/root/admin.sh" "gitlab.hoztnode.net"; then
+		if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "/root/admin.sh"; then
 			if ! chmod +x "$ADMIN_SH_BITRIX_FILE_LOCAL"; then
 				printf "\n${YCV}Chmod +x ${ADMIN_SH_BITRIX_FILE_LOCAL} failed"
 			fi
@@ -882,8 +899,27 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 
 	bitrix_php_version=$(\php -v | head -n 1 | awk '{print $2}' | sed 's/\.[^.]*$//')
 
-	# check nginx ports exposure in http_host var, if success then if remoteip apache module is installed changing it with RPAF
-	bash <(timeout 4 wget --timeout 4 --no-check-certificate -q -o /dev/null -O- https://bit.ly/3wL8B2u)
+	# if checking_mod_rpaf_func and nginx_port_expose_detect_func loaded ok
+	if declare -F checking_mod_rpaf_func > /dev/null && declare -F nginx_port_expose_detect_func > /dev/null; then
+
+		# RPAF apache module install
+		if ! checking_mod_rpaf_func || nginx_port_expose_detect_func ; then
+			echo
+			read -p "Install apache mod_rpaf and disable nginx port expose ? [Y/n]" -n 1 -r
+			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+				bash <(timeout 4 wget --timeout 4 --no-check-certificate -q -o /dev/null -O- https://bit.ly/3wL8B2u)
+			else
+				# user chose not to install RPAF and fix nginx port exposion
+				printf "\nRPAF and nginx port exposion fix ${YCV}skipped${NCV}\n"
+			fi
+		else
+			# RPAF installed and fix nginx port exposion done
+			printf "\nRPAF and nginx port exposion fix ${GCV}already done${NCV}\n"
+		fi
+	else
+		# error loading checking_mod_rpaf_func or nginx_port_expose_detect_func
+		printf "\n${LRV}Error${NCV} Cannot exec checking_mod_rpaf_func or nginx_port_expose_detect_func\n"
+	fi
 
 	# check if cURL PHP not enabled
 	if ! \php -m | grep -i curl >/dev/null 2>&1; then
@@ -892,8 +928,11 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 			printf "Enabling cURL extension for PHP ${bitrix_php_version}"
-			{
-			\apt install -y php${bitrix_php_version}-curl || \mv -f /etc/php.d/20-curl.ini.disabled /etc/php.d/20-curl.ini 
+			{ 
+			\apt install -y php${bitrix_php_version}-curl || \mv -f /etc/php.d/20-curl.ini.disabled /etc/php.d/20-curl.ini
+			if \apt list --installed php${bitrix_php_version}-curl; then 
+				echo "extension=curl.so" > /etc/php/${bitrix_php_version}/mods-available/curl.ini && ln -s /etc/php/${bitrix_php_version}/mods-available/curl.ini /etc/php/${bitrix_php_version}/apache2/conf.d/20-curl.ini && ln -s /etc/php/${bitrix_php_version}/mods-available/curl.ini /etc/php/${bitrix_php_version}/cli/conf.d/20-curl.ini
+			fi
 			sleep 1
 			} >/dev/null 2>&1
 		 		
@@ -1309,7 +1348,7 @@ if [[ -f $MGR_BIN ]]; then
 			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" >/dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* >/dev/null 2>&1
 			then
 				# RHEL
-				if [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
+				if [[ $DISTR == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
 				then
 					{
 				        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
@@ -1317,7 +1356,7 @@ if [[ -f $MGR_BIN ]]; then
 						\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
 					} >/dev/null 2>&1
 				
-				elif [[ $distr == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
+				elif [[ $DISTR == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
 				then
 					{
 						printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
@@ -1326,14 +1365,14 @@ if [[ -f $MGR_BIN ]]; then
 					} >/dev/null 2>&1
 				
 				# DEBIAN
-				elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
+				elif [[ $DISTR == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
 				then
 					{
 				        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
 						systemctl restart mysql mysqld mariadb
 						\rm -f /var/lib/mysql/binlog.* 
 					} >/dev/null 2>&1
-				elif [[ $distr == "debian" ]] && [[ -f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
+				elif [[ $DISTR == "debian" ]] && [[ -f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
 				then
 					{
 						printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
@@ -1342,7 +1381,7 @@ if [[ -f $MGR_BIN ]]; then
 					} >/dev/null 2>&1
 				
 				# UNKNOWN
-				elif [[ $distr == "unknown" ]]
+				elif [[ $DISTR == "unknown" ]]
 				then
 				        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
 				fi
@@ -1690,7 +1729,7 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 			["fastcgi_buffer_size"]="32k"
 			["client_body_buffer_size"]="32k"
 			["client_header_buffer_size"]="1k"
-			["client_max_body_size"]="512m"
+			["client_max_body_size"]="1024m"
 			["large_client_header_buffers"]="4 16k"
 			["etag"]="on"
 			["sendfile"]="on"
@@ -1860,7 +1899,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 		fi
 
 		# downloading nginx bad_robot.conf file
-		if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "bad_robot.conf" "$nginx_bad_robot_file_local" "gitlab.hoztnode.net"; then
+		if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
 			return 1
 		fi
 
