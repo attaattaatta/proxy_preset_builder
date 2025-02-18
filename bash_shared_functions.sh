@@ -9,7 +9,7 @@
 #pipefail | verbose
 
 # show script version
-self_current_version="1.0.1"
+bash_shared_func_version="1.0.1"
 
 # check OS
 check_os_func() {
