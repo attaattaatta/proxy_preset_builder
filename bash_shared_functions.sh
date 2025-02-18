@@ -11,8 +11,10 @@
 # show script version
 self_current_version="1.0.0"
 
+# RPAF or not RPAF
+# 0 - detected correct version
+# 1 - not detected, need to fix
 checking_mod_rpaf_func() {
-
 if [[ $DISTR == "rhel" ]]; then
 	apache_httpd_mod_folder="/usr/lib64/httpd"
 elif [[ $DISTR == "debian" ]]; then
@@ -35,5 +37,15 @@ if { strings ${apache_httpd_mod_folder}/modules/mod_rpaf.so | grep -q "/tmp/mod_
 else
 	return 1
 fi
+}
 
+# nginx expose port detect func
+# 0 - detected, need to fix
+# 1 - not detected
+nginx_port_expose_detect_func() {
+if 2>&1 nginx -T | grep -i "\$host:80;" >/dev/null 2>&1 || 2>&1 nginx -T | grep -i "\$host:443;" >/dev/null 2>&1; then
+	return 0
+else
+	return 1
+fi
 }
