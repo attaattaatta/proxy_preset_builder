@@ -16,14 +16,14 @@ check_os_func() {
 shopt -s nocasematch
 REL=$(cat /etc/*release* | head -n 1)
 case "$REL" in
-        *cent*) DISTR="rhel";;
+	*cent*) DISTR="rhel";;
 	*alma*) DISTR="rhel";;
 	*rocky*) DISTR="rhel";;
-        *cloud*) DISTR="rhel";;
-        *rhel*) DISTR="rhel";;
-        *debian*) DISTR="debian";;
-        *ubuntu*) DISTR="debian";;
-        *) DISTR="unknown";;
+	*cloud*) DISTR="rhel";;
+	*rhel*) DISTR="rhel";;
+	*debian*) DISTR="debian";;
+	*ubuntu*) DISTR="debian";;
+	*) DISTR="unknown";;
 esac;
 shopt -u nocasematch
 
