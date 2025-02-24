@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.68"
+self_current_version="1.0.69"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -22,17 +22,6 @@ if [[ $EUID -ne 0 ]]; then
 	printf "\n${LRV}ERROR - This script must be run as root.${NCV}" 
 	exit 1
 fi
-
-#check tools
-WE_NEED=('nginx' 'sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout')
-
-for needitem in "${WE_NEED[@]}"
-do
-	if ! command -v $needitem >/dev/null 2>&1; then 
-		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
-	exit 1
-	fi
-done
 
 # isp vars
 MGR_PATH="/usr/local/mgr5"
@@ -58,7 +47,7 @@ NGINX_BAD_ROBOT_FILE_URL=""
 SHARED_BASH_FUNCTIONS_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/bash_shared_functions.sh"
 
 # allowed script actions
-ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$)"
+ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$|^-?-?help$)"
 
 # paths to ISP manager nginx templates
 NGINX_DEFAULT_TEMPLATE="$MGR_PATH/etc/templates/default/nginx-vhosts.template"
@@ -112,8 +101,8 @@ local shared_func_url="$1"
 
 local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
-if command -v wget > /dev/null 2>/dev/null; then 
-	if source <(\wget --timeout 4 --no-check-certificate -q -O- ${shared_func_url}); then 
+if command -v wget >/dev/null 2>/dev/null; then 
+	if source <(timeout 4 \wget --timeout 4 --no-check-certificate -q -O- ${shared_func_url}); then 
 		return 0
 	else
 		printf "\nSource shared functions from ${shared_func_url} to RAM - ${LRV}FAIL${NCV}\n"
@@ -134,12 +123,44 @@ fi
 
 }
 
-if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}"; then
+if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}" >/dev/null 2>/dev/null; then
+	printf "\n${LRV}Error${NCV} from load_shared_functions_func. Check internet access and name resolv.\n"
 	exit 1
 fi
 
+show_help_func() {
+
+printf "\n\n${YCV}Usage help:${NCV}\n"
+printf "\n${GCV}Tweak${NCV} this box: $BASH_SOURCE tweak\n"
+printf "\nExample for ${GCV}1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
+printf "Example for ${GCV}4 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
+printf "\n${GCV}Delete all${NCV} existing %%$PROXY_PREFIX*%% presets and injects: $BASH_SOURCE del all $PROXY_PREFIX"
+printf "\n${GCV}Delete one${NCV} existing preset and inject: $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
+printf "\n${GCV}Restore${NCV} default templates and ${GCV}delete all presets${NCV}:${NCV} $BASH_SOURCE reset\n"
+printf "\n${GCV}Recompile nginx${NCV} (add/remove modules | update/change SSL): $BASH_SOURCE recompile\n"
+printf "\nCurrent special ${YCV}templates list${NCV}: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm\n"
+
+}
+
+#check tools
+WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout')
+
+for needitem in "${WE_NEED[@]}"
+do
+	if ! command -v $needitem >/dev/null 2>&1; then 
+		if ! apt-get update >/dev/null 2>&1 && apt-get install -y "$needitem" >/dev/null 2>&1 || ! yum install -y "$needitem" >/dev/null 2>&1; then
+			printf "\n${LRV}Error:${NCV} cannot install ${needitem}. Please install it first or export correct \$PATH.\n"
+			show_help_func
+			exit 1
+		fi
+	fi
+done
+
 # check OS
-check_os_func
+if ! check_os_func >/dev/null 2>/dev/null; then
+	printf "\n${LRV}Error${NCV} from check_os_func. Check internet access and name resolv.\n"
+	exit 1
+fi
 
 #check env
 if [[ -f /usr/bin/hostnamectl ]] || [[ -f /bin/hostnamectl ]]; then
@@ -275,7 +296,8 @@ for needitem in "${WE_NEED[@]}"
 do
 	if ! command -v $needitem >/dev/null 2>&1; then 
 		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
-	exit 1
+		show_help_func
+		exit 1
 	fi
 done
 
@@ -312,6 +334,7 @@ shopt -u nocasematch
 # validate first argument 
 if ! [[ $1 =~ $ALLOWED_ACTIONS ]]  && ! [[ -z "$1" ]]; then
 	printf "\n\n${LRV}ERROR - Not valid argument - $1${NCV}\n"
+	show_help_func
 	exit 1
 fi
 
@@ -481,13 +504,13 @@ if \mkdir -p "$BACKUP_ROOT_DIR"; then
 			backup_item_size=$(\du -sm --exclude=/etc/ispmysql "${backup_item}" 2>/dev/null | awk "{print \$1}")
 
 			if [[ "${backup_item_size}" -lt 2000 ]]; then
-				\cp -Rfp --parents --reflink=auto "${backup_item}" "${BACKUP_DIR}" &> /dev/null
+				\cp -Rfp --parents --reflink=auto "${backup_item}" "${BACKUP_DIR}" >/dev/null 2>&1
 			else
 				printf "${LRV}No backup of ${backup_item} - ${backup_item_size}${NCV}\n"
 			fi
 		done
 
-		\cp -Rfp --parents --reflink=auto "/opt/php"*"/etc/" "$BACKUP_DIR" &> /dev/null
+		\cp -Rfp --parents --reflink=auto "/opt/php"*"/etc/" "$BACKUP_DIR" >/dev/null 2>&1
 
 		printf " - ${GCV}OK${NCV}\n"
 		if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
@@ -521,6 +544,7 @@ else
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
+	tweak_dedic_func
 	bitrix_env_check_func
 	bitrix_fixes_func
 	bitrix_install_update_admin_sh_func
@@ -683,7 +707,7 @@ tweak_tuned_func() {
 
 if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 
-	printf "\n${GCV}Installing and configuring tuned service${NCV}\n"
+	printf "\nInstalling and configuring ${GCV}tuned service${NCV}\n"
 
 	if [[ $DISTR == "rhel" ]]; then
 	
@@ -713,12 +737,13 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 		grep -i mhz /proc/cpuinfo
 
 		if which tuned-adm >/dev/null 2>&1; then
+			printf "\n${GCV}Applying throughput-performance profile${NCV}\n"
 			tuned-adm profile throughput-performance
 			systemctl enable --now tuned
-			tuned-adm active
-
-			printf "\n${GCV}Current CPU frequencies:${NCV}\n"
+			printf "${GCV}Current CPU frequencies:${NCV}\n"
 			grep -i mhz /proc/cpuinfo
+			echo
+			tuned-adm active
 
 		else
 			printf "\n${LRV}Sorry, tuned-adm utility was not found${NCV}\n"
@@ -740,6 +765,188 @@ else
 fi
 
 }
+
+# update GRUB loader function
+update_grub() {
+
+printf "GRUB update running"
+
+if update-grub >/dev/null 2>&1; then
+	printf " - ${GCV}OK${NCV}\n"
+	return 0
+elif grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1; then
+	printf " - ${GCV}OK${NCV}\n"
+	return 0
+else
+	printf " - ${LRV}FAIL${NCV}\n"
+	printf "${LRV}GRUB update utility was not found${NCV}\n"
+	return 1
+fi
+
+}
+
+# tweaks only for dedicated servers
+tweak_dedic_func() {
+
+# detecting dedicated server
+if [[ $DEDICATED == "yes" ]]; then
+
+	GRUB_FILE="/etc/default/grub"
+	KERNEL_CMD_FILE="/etc/kernel/cmdline"
+
+	GRUB_FILE_OPTION=""
+
+	if grep -q "^GRUB_CMDLINE_LINUX_DEFAULT=" "${GRUB_FILE}" >/dev/null 2>&1; then
+		GRUB_FILE_OPTION="GRUB_CMDLINE_LINUX_DEFAULT"
+	elif grep -q "^GRUB_CMDLINE_LINUX=" "${GRUB_FILE}" >/dev/null 2>&1; then
+		GRUB_FILE_OPTION="GRUB_CMDLINE_LINUX"
+	else
+		printf "\n${LRV}Error:${NCV} ${GRUB_FILE} have no GRUB_CMDLINE_LINUX_DEFAULT or GRUB_CMDLINE_LINUX\n"
+		return 1
+	fi
+
+	# for Intel CPUs
+	if grep -q "GenuineIntel" /proc/cpuinfo >/dev/null 2>&1; then
+
+		# disabling intel_pstate if it exists
+		if [[ -f /sys/devices/system/cpu/intel_pstate/status ]] && ! grep -q "intel_pstate=disable" /proc/cmdline >/dev/null 2>&1; then
+		
+			if [[ ! -f "${GRUB_FILE}" ]]; then
+				printf "\n${LRV}Error:${NCV} ${GRUB_FILE} not found!\n"
+				return 1
+			fi
+
+			echo
+			read -p "Disable intel_pstate kernel driver? [Y/n] " -n 1 -r
+			echo
+			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+
+				if grubby --update-kernel=DEFAULT --args="intel_pstate=disable" >/dev/null 2>&1; then
+					printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for deactivate intel_pstate\n"
+					printf "After reboot ${YCV}run me again${NCV} to check mhz (showing first 5 cores mhz).\n"
+					echo
+					grep -i mhz /proc/cpuinfo | head -n 5
+					echo
+					return 0
+				else
+					if ! grep -q "intel_pstate=disable" ${GRUB_FILE} >/dev/null 2>&1; then
+	
+						# adding intel_pstate=disable to GRUB config
+						sed -i "/${GRUB_FILE_OPTION}/ {s/intel_pstate=[^\" ]*/intel_pstate=disable/; t; s/\"$/ intel_pstate=disable\"/}" ${GRUB_FILE} >/dev/null 2>&1 || { printf "\n${LRV}Error${NCV} modifying intel_pstate=disable ${GRUB_FILE}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/\"$/ cpufreq.default_governor=performance\"/}" ${GRUB_FILE} >/dev/null 2>&1 || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${GRUB_FILE}\n"; return 1; }
+	
+					fi
+	
+					if ! grep -q "intel_pstate=disable" ${KERNEL_CMD_FILE} >/dev/null 2>&1; then
+	
+						# adding intel_pstate=disable to KERNEL_CMD_FILE config if exists
+						if [[ -f ${KERNEL_CMD_FILE} ]]; then
+							sed -i "/^/ {s/intel_pstate=[^\" ]*/intel_pstate=disable/; t; s/$/ intel_pstate=disable/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying intel_pstate=disable ${KERNEL_CMD_FILE}\n"; return 1; }
+							sed -i "/^/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/$/ cpufreq.default_governor=performance/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying ${KERNEL_CMD_FILE}\n"; return 1; }
+						fi
+					fi
+	
+					# updating GRUB
+					if update_grub; then
+						printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for deactivate intel_pstate\n"
+						return 0
+					else
+						printf "\n${LRV}Error${NCV} in updating GRUB. Check manually ( run bash -xv ).\n"
+						return 1
+					fi
+				fi
+
+			else
+				printf "\nKernel intel_pstate disabling was ${YCV}skipped${NCV}\n"
+			fi
+		else
+			printf "\nKernel intel_pstate disable not needed or was ${GCV}already done (showing first 5 cores mhz)${NCV}\n"
+			echo
+			grep -i mhz /proc/cpuinfo | head -n 5
+			echo
+			return 0
+		fi
+
+	# for AMD CPUs
+	elif grep -q "AuthenticAMD" /proc/cpuinfo >/dev/null 2>&1; then
+		# enable amd_pstate passive if kernel > 5.17 and amd_pstate not already passive
+		kernel_version=$(uname -r | awk -F. '{print $1 * 100 + $2}')
+		if (( kernel_version < 517 )) && grep -iq "^CONFIG_X86_AMD_PSTATE=y" /boot/config-$(uname -r); then
+		    printf "\nTo enable kernel amd_pstate driver first ${LRV}update the kernel${NCV} to version 5.17 or higher, then run me again.\n"
+		    return 1
+		fi
+
+		if grep -q "amd_pstate=passive" /proc/cmdline >/dev/null 2>&1 && [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/amd_pstate_max_freq ]]; then
+			printf "\n${LRV}amd_pstate error:${NCV} Just update latest BMC and then the latest BIOS/UEFI firmware. This should be enough.\n"
+			printf "If you are still see this message, try to enable CPPC in BIOS ( Advanced > AMD CBS > CPPC / Advanced > AMD Overclocking > CPPC ). \n"
+			return 1
+		fi
+
+		if [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/amd_pstate_max_freq ]] >/dev/null 2>&1; then
+
+			if [[ ! -f "${GRUB_FILE}" ]]; then
+				printf "\n${LRV}Error:${NCV} ${GRUB_FILE} not found!\n"
+				return 1
+			fi
+
+			echo
+			read -p "Enable amd_pstate kernel driver and set it to passive (Update the BIOS/UEFI firmware may be required) ? [Y/n] " -n 1 -r
+			echo
+			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+
+				if grubby --update-kernel=DEFAULT --args="initcall_blacklist=acpi_cpufreq_init cpufreq.default_governor=performance amd_pstate.shared_mem=1 amd_pstate=passive" >/dev/null 2>&1; then
+					printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for activate amd_pstate passive\n"
+					printf "After reboot ${YCV}run me again${NCV} to check mhz (showing first 5 cores mhz).\n"
+					echo
+					grep -i mhz /proc/cpuinfo | head -n 5
+					echo
+					return 0
+				else
+
+					if ! grep -q "amd_pstate=passive" ${GRUB_FILE} >/dev/null 2>&1 && ! grep -q "amd_pstate=passive" /proc/cmdline; then
+						# adding amd_pstate=passive to GRUB config
+						sed -i "/${GRUB_FILE_OPTION}/ {s/amd_pstate=[^\" ]*/amd_pstate=passive/; t; s/\"$/ amd_pstate=passive\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate=passive ${GRUB_FILE}${NCV}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/\"$/ cpufreq.default_governor=performance\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${GRUB_FILE}${NCV}\n"; return 1; }
+	
+						sed -i "/${GRUB_FILE_OPTION}/ {s/initcall_blacklist=[^\" ]*/initcall_blacklist=acpi_cpufreq_init/; t; s/\"$/ initcall_blacklist=acpi_cpufreq_init\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying initcall_blacklist=acpi_cpufreq_init ${GRUB_FILE}${NCV}\n"; return 1; }
+	
+						sed -i "/${GRUB_FILE_OPTION}/ {s/amd_pstate.shared_mem=[^\" ]*/amd_pstate.shared_mem=1/; t; s/\"$/ amd_pstate.shared_mem=1\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate.shared_mem=1 ${GRUB_FILE}${NCV}\n"; return 1; }
+					fi
+	
+					# adding amd_pstate=passive to KERNEL_CMD_FILE config if exists
+					if [[ -f ${KERNEL_CMD_FILE} ]] >/dev/null 2>&1; then
+						sed -i "/^/ {s/amd_pstate=[^\" ]*/amd_pstate=passive/; t; s/$/ amd_pstate=passive/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate=passive ${KERNEL_CMD_FILE}\n"; return 1; }
+						sed -i "/^/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/$/ cpufreq.default_governor=performance/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${KERNEL_CMD_FILE}\n"; return 1; }
+						sed -i "/^/ {s/initcall_blacklist=[^\" ]*/initcall_blacklist=acpi_cpufreq_init/; t; s/$/ initcall_blacklist=acpi_cpufreq_init/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying initcall_blacklist=acpi_cpufreq_init ${KERNEL_CMD_FILE}\n"; return 1; }
+						sed -i "/^/ {s/amd_pstate.shared_mem=[^\" ]*/amd_pstate.shared_mem=1/; t; s/$/ amd_pstate.shared_mem=1/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate.shared_mem=1 ${KERNEL_CMD_FILE}\n"; return 1; }
+					fi
+	
+					# updating GRUB
+					if update_grub; then
+						printf "\n${GCV}Sucess.${NCV} Reboot the server for enable amd_pstate passive\n"
+						return 0
+					else
+						printf "\n${LRV}Error${NCV} in updating GRUB. Check manually ( run bash -xv ).\n"
+						return 1
+					fi
+				fi
+
+			else
+				printf "\nKernel amd_pstate passive set up was ${YCV}skipped${NCV}\n"
+			fi
+		else
+			printf "\nKernel amd_pstate passive ${GCV}already${NCV} enabled (showing first 5 cores mhz)\n"
+			echo
+			grep -i mhz /proc/cpuinfo | head -n 5
+			echo
+		fi
+	else
+		printf "\n${YCV}Warning:${NCV} not intel nor AMD CPU. Skipped.\n"
+	fi
+fi
+}
+
+
 
 bitrix_env_check_func() {
 
@@ -797,12 +1004,10 @@ local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 printf "\nDownloading ${full_url} to ${file_path_local}"
 
 {
-if command -v wget &> /dev/null; then 
-	if \wget --timeout 4 --no-check-certificate -q -O ${file_path_local} ${full_url}; then
-		full_url_size=$(wget --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}')
-	fi
+if \wget --timeout 4 --no-check-certificate -q -O ${file_path_local} ${full_url}; then
+	full_url_size=$(wget --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}')
 else
-	if printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > "${file_path_local}";then
+	if printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > "${file_path_local}"; then
 		full_url_size=$(printf "HEAD ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | grep "Content-Length" | awk '{print $2}')
 	fi
 fi
@@ -840,7 +1045,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
 	{
-	if command -v wget &> /dev/null; then 
+	if command -v wget >/dev/null 2>&1; then 
 		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
 	else
 		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
@@ -1710,7 +1915,7 @@ tweak_nginx_params_func() {
 
 # Check if Nginx is installed
 if ! command -v nginx >/dev/null 2>&1; then
-	printf "\nNginx ${YCV}not detected${YCV}\n"
+	printf "\nNginx ${GCV}not detected${NCV}\n"
 	return 1
 fi
 
@@ -1827,11 +2032,11 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 		if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
 	
 			if systemctl reload nginx >/dev/null 2>&1; then
-				printf " - ${GCV}OK${NCV}\n"
+				printf "${GCV}OK${NCV}\n"
 				printf "Nginx added/updated:\n\n"
 				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
 			else
-				printf " - ${LRV}FAIL${NCV}\n"
+				printf "${LRV}FAIL${NCV}\n"
 				printf "${LRV}Error:${NCV} Failed to reload Nginx ( run: nginx -t )\n"
 				printf "\nNginx added/updated:\n"
 				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
@@ -1851,7 +2056,7 @@ fi
 # tweaker add nginx bad robot conf
 tweak_add_nginx_bad_robot_conf_func() {
 
-if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
+if command -v nginx >/dev/null 2>/dev/null && ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 
 	echo
 	read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
@@ -1883,7 +2088,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 				bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
 				nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
 			else
-				printf "\n${LRV}Error.${NCV} Unknown bitrix environment.Link - ${nginx_bad_robot_file_url}\n"
+				printf "\n${LRV}Error.${NCV} Unknown bitrix environment.Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
 				return
 			fi
 
@@ -1894,7 +2099,7 @@ if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
 				return
 			fi
 		else
-			printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${nginx_bad_robot_file_url}\n"
+			printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
 			return
 		fi
 
@@ -1924,7 +2129,9 @@ fi
 
 # check nginx conf and reload configuration fast
 nginx_conf_sanity_check_fast() {
-	
+
+
+
 printf "\nMaking nginx configuration check"
 if nginx_test_output=$({ nginx -t; } 2>&1); then
 	printf " - ${GCV}OK${NCV}\n"
@@ -2327,6 +2534,13 @@ then
 	exit 0
 fi
 
+# run help function
+if [[ $1 = "help" ]] || [[ $1 = "--help" ]] || [[ $1 = "-help" ]]
+then
+	show_help_func
+	exit 0
+fi
+
 
 # run tweak function
 if [[ $1 = "tweak" ]]
@@ -2376,14 +2590,7 @@ then
 	else
 		printf "\n${GCV}There is no existing templates in the ISP panel${NCV}\n"
 	fi
-	printf "\n${GCV}Example for 1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
-	printf "${GCV}Example for 4 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
-	printf "\n${GCV}Delete all existing %%$PROXY_PREFIX*%% presets and injects:${NCV} $BASH_SOURCE del all $PROXY_PREFIX"
-	printf "\n${GCV}Delete one existing preset and inject:${NCV} $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
-	printf "\n${GCV}Restore default templates and delete all presets:${NCV} $BASH_SOURCE reset\n"
-	printf "\n${GCV}Tweak some general PHP and MySQL options:${NCV} $BASH_SOURCE tweak"
-	printf "\n${GCV}Recompile nginx (add/remove modules | update/change SSL):${NCV} $BASH_SOURCE recompile\n"
-	printf "\n${YCV}Current special templates list:${NCV} wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm\n"
+	show_help_func
 	printf "\n\n${LRV}ERROR - Not enough arguments, please specify proxy target/targets${NCV}\n"
 	exit 1
 fi
