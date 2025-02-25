@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.69"
+self_current_version="1.0.70"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -482,49 +482,51 @@ check_exit_and_restore_func() {
 
 backup_etc_func() {
 
-BACKUP_ROOT_DIR="/root/support"
-BACKUP_DIR="${BACKUP_ROOT_DIR}/$(date '+%d-%b-%Y-%H-%M-%Z')"
+    BACKUP_ROOT_DIR="/root/support"
+    BACKUP_DIR="${BACKUP_ROOT_DIR}/$(date '+%d-%b-%Y-%H-%M-%Z')"
 
-if \mkdir -p "$BACKUP_ROOT_DIR"; then
+    if \mkdir -p "$BACKUP_ROOT_DIR"; then
 
-	printf "\nCreating configs ${GCV}backup${NCV} to ${BACKUP_DIR}"
+        printf "\nCreating configs ${GCV}backup${NCV} to ${BACKUP_DIR}"
 
-	BACKUP_ROOT_DIR_SIZE_MB=$(\du -sm "$BACKUP_ROOT_DIR" 2> /dev/null | awk "{print \$1}" | head -n 1)
-	
-	BACKUP_DIR_DISK_USE=$(\df "$BACKUP_ROOT_DIR" | sed 1d | awk "{print \$5}" | sed 's@%@@gi')
+        BACKUP_ROOT_DIR_SIZE_MB=$(\du -sm "$BACKUP_ROOT_DIR" 2> /dev/null | awk '{print $1}' | head -n 1)
+        BACKUP_DIR_DISK_USE=$(\df "$BACKUP_ROOT_DIR" | sed 1d | awk '{print $5}' | sed 's@%@@gi')
 
-	if [[ "$BACKUP_DIR_DISK_USE" -le 95 ]]; then
+        if [[ "$BACKUP_DIR_DISK_USE" -le 95 ]]; then
 
-		BACKUP_PATH_LIST=("/etc" "/usr/local/mgr5/etc" "/var/spool/cron" "/var/named/domains")
+            BACKUP_PATH_LIST=("/etc" "/usr/local/mgr5/etc" "/var/spool/cron" "/var/named/domains")
 
-		\mkdir -p "$BACKUP_DIR" > /dev/null 2>&1
+            \mkdir -p "$BACKUP_DIR" > /dev/null 2>&1
 
-		for backup_item in "${BACKUP_PATH_LIST[@]}"; do
+            for backup_item in "${BACKUP_PATH_LIST[@]}"; do
+                backup_item_size=$(\du -sm --exclude=/etc/ispmysql "${backup_item}" 2>/dev/null | awk '{print $1}')
+                if [[ "${backup_item_size}" -lt 2000 ]]; then
+                    \cp -Rfp --parents "${backup_item}" "${BACKUP_DIR}" >/dev/null 2>&1
+                    \chmod --reference="${backup_item}" "${BACKUP_DIR}${backup_item}" 2>/dev/null
+                else
+                    printf "${LRV}No backup of ${backup_item} - ${backup_item_size}${NCV}\n"
+                fi
+            done
 
-			backup_item_size=$(\du -sm --exclude=/etc/ispmysql "${backup_item}" 2>/dev/null | awk "{print \$1}")
+            \cp -Rfp --parents "/opt/php"*"/etc/" "$BACKUP_DIR" >/dev/null 2>&1
 
-			if [[ "${backup_item_size}" -lt 2000 ]]; then
-				\cp -Rfp --parents "${backup_item}" "${BACKUP_DIR}" >/dev/null 2>&1
-			else
-				printf "${LRV}No backup of ${backup_item} - ${backup_item_size}${NCV}\n"
-			fi
-		done
+            for dir in /opt /usr /var; do
+                [[ -d "$dir" && -d "${BACKUP_DIR}${dir}" ]] && \chmod --reference="$dir" "${BACKUP_DIR}${dir}" 2>/dev/null
+            done
 
-		\cp -Rfp --parents "/opt/php"*"/etc/" "$BACKUP_DIR" >/dev/null 2>&1
-
-		printf " - ${GCV}OK${NCV}\n"
-		if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
-			printf "${YCV}${BACKUP_ROOT_DIR} - ${BACKUP_ROOT_DIR_SIZE_MB}MB ( run: du -sch /root/support/* | sort -h ) ${NCV}\n"
-		fi
-	else
-		printf " - ${LRV}FAIL${NCV}"
-		printf "\n${LRV}Cannot create configs backup, disk used for 95% or more${NCV}\n"
-		exit 1
-	fi
-else
-	printf "\n${LRV}Cannot create backup dir${NCV}\n"
-	exit 1	
-fi
+            printf " - ${GCV}OK${NCV}\n"
+            if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
+                printf "${YCV}${BACKUP_ROOT_DIR} - ${BACKUP_ROOT_DIR_SIZE_MB}MB ( run: du -sch /root/support/* | sort -h ) ${NCV}\n"
+            fi
+        else
+            printf " - ${LRV}FAIL${NCV}"
+            printf "\n${LRV}Cannot create configs backup, disk used for 95% or more${NCV}\n"
+            exit 1
+        fi
+    else
+        printf "\n${LRV}Cannot create backup dir${NCV}\n"
+        exit 1    
+    fi
 }
 
 
@@ -1063,9 +1065,11 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			echo
 			read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-				if \cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M') >/dev/null 2>&1; then
+				cp_date=$(date '+%d-%b-%Y-%H-%M')
+				\cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} >/dev/null 2>&1
+				if [[ -f ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} ]]; then
 					# backup previous
-					printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.$(date '+%d-%b-%Y-%H-%M')"
+					printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date}"
 					# download new
 					if download_file_func "$ADMIN_SH_BITRIX_FILE_URL" "/root/admin.sh"; then
 						if ! chmod +x "$ADMIN_SH_BITRIX_FILE_LOCAL"; then
@@ -1408,7 +1412,7 @@ if [[ -f $MGR_BIN ]]; then
 			done
 		else
 			# user chose not to enable ISP manager nginx feature
-			printf "\n${YCV}Nginx was not installed${NCV} \n"
+			printf "\n${YCV}Nginx was not installed${NCV}\n"
 		fi
 	fi
 
@@ -1420,7 +1424,6 @@ if [[ -f $MGR_BIN ]]; then
 	} >/dev/null 2>&1
 
 	then
-		echo
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			printf "Running"
@@ -1775,101 +1778,121 @@ if [[ -f $MGR_BIN ]]; then
 	
 	# backup to /root/support
 	backup_dest_dir_path="/root/support/$(date '+%d-%b-%Y-%H-%M-%Z')/"
-	\mkdir -p "$backup_dest_dir_path" > /dev/null
 
-	# apache vhost template patch
-	if \cp -Rfp --parents "${isp_apache_vhost_template_file_path}" "${backup_dest_dir_path}" > /dev/null && \cp -fp "${isp_apache_vhost_template_file_path}" "${isp_apache_vhost_template_file_path}.original" > /dev/null; then
-		perl -i -p0e "s,\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\{% if \\\$SSI == on %},\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\tOptions -Indexes\n\{% if \\\$SSI == on %},gi" $isp_apache_vhost_template_file_path > /dev/null
-	else
-		printf "\n${LRV}Error:${NCV} Cannot backup file ${isp_apache_vhost_template_file_path} to ${backup_dest_dir_path} or ${isp_apache_vhost_template_file_path}.original\n"
-		return 1
-	fi
-
-	if ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path"); then
-
-		# changing default php-fpm isp template from ondemand 5 to static 15
-		if \cp -Rfp --parents "${isp_fpm_template_file_path}" "${backup_dest_dir_path}" > /dev/null && \cp "$isp_fpm_template_file_path" "${isp_fpm_template_file_path}.original" > /dev/null; then
-			printf "\nFile ${isp_fpm_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path}\n"
-		        sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm = ondemand${NCV}\n"; return 1; }
-		        sed -i 's@^pm.max_children =.*@pm.max_children = 15@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_children = 5${NCV}\n"; return 1; }
-		        sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_requests = 500${NCV}\n"; return 1; }
-		else
-			printf "\n${LRV}Error. Cannot backup file ${isp_fpm_template_file_path} to ${backup_dest_dir_path} or ${isp_fpm_template_file_path}.original${NCV}\n"
-			return 1
-		fi
-	fi
-	
 	# same for sites that already exist
 	isp_php_fpm_enabled_sites=$(grep -RiIlE '^pm = ondemand|^pm.max_children = 5' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube')
 	
-	if [[ ! -z "$isp_php_fpm_enabled_sites" ]]; then
+	if [[ ! -z "$isp_php_fpm_enabled_sites" ]] || (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") >/dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} >/dev/null 2>&1; then
 		echo
-		read -p "Tweak ISP PHP-FPM sites ? [Y/n]" -n 1 -r
+		read -p "Tweak ISP PHP-FPM and APACHE sites and templates ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-			# process
-			while IFS= read -r isp_fpm_config_file; do
-				printf "\nProcessing ${isp_fpm_config_file}"
-				if \cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null; then
-					sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; return 1; }
-					sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; return 1; }
-					sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm mode${NCV}\n"; return 1; }
-					sed -i 's@^pm.max_children = 5@pm.max_children = 15@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_children${NCV}\n"; return 1; }
-					sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_requests${NCV}\n"; return 1; }
 
-					# Check and restart php-fpm
-					php_fpm_version=$(echo "$isp_fpm_config_file" | grep -oP '(?<=/php/)\d+\.\d+|(?<=/php)\d{2,3}(?=/)')
-					
-					if [[ -n "$php_fpm_version" ]]; then
-						# native debian like php-fpm native service like php7.3-fpm.service
-						if [[ "$isp_fpm_config_file" =~ ^/etc/ ]]; then
-							php_fpm_service="php${php_fpm_version}-fpm.service"
+			# creating backup dir
+			\mkdir -p "$backup_dest_dir_path" > /dev/null || { printf "\n${LRV}Error${NCV} creating backup dir - ${backup_dest_dir_path}\n"; return 1; }
+	
+			# isp apache vhost template patch
+			{
+
+			\cp -Rfp --parents "${isp_apache_vhost_template_file_path}" "${backup_dest_dir_path}" && \
+			\cp -fp "$isp_apache_vhost_template_file_path" "${isp_apache_vhost_template_file_path}.original" > /dev/null && \
+			\chmod --reference="${isp_apache_vhost_template_file_path}" "${backup_dest_dir_path}${isp_apache_vhost_template_file_path}"
+
+			} >/dev/null 2>&1
+
+			if [[ -f ${isp_apache_vhost_template_file_path}.original ]]; then
+				printf "\nTemplate ${isp_apache_vhost_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path} and ${isp_apache_vhost_template_file_path}.original \n"
+				perl -i -p0e "s,\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\{% if \\\$SSI == on %},\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\tOptions -Indexes\n\{% if \\\$SSI == on %},gi" $isp_apache_vhost_template_file_path > /dev/null
+			else
+				printf "\n${LRV}Error:${NCV} Cannot backup file ${isp_apache_vhost_template_file_path} to ${backup_dest_dir_path} or ${isp_apache_vhost_template_file_path}.original\n"
+				return 1
+			fi
+		
+			# changing default php-fpm isp template from ondemand 5 to static 15
+			{
+
+			\cp -Rfp --parents "${isp_fpm_template_file_path}" "${backup_dest_dir_path}" && \
+			\cp -fp "$isp_fpm_template_file_path" "${isp_fpm_template_file_path}.original" && \
+			\chmod --reference="${isp_fpm_template_file_path}" "${backup_dest_dir_path}${isp_fpm_template_file_path}" 
+
+			} >/dev/null 2>&1
+
+			if [[ -f ${isp_fpm_template_file_path}.original ]]; then
+				printf "\nTemplate ${isp_fpm_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path} and ${isp_apache_vhost_template_file_path}.original\n"
+				sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm = ondemand${NCV}\n"; return 1; }
+				sed -i 's@^pm.max_children =.*@pm.max_children = 15@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_children = 5${NCV}\n"; return 1; }
+				sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_requests = 500${NCV}\n"; return 1; }
+			else
+				printf "\n${LRV}Error:${NCV} Cannot backup file ${isp_fpm_template_file_path} to ${backup_dest_dir_path} or ${isp_fpm_template_file_path}.original\n"
+				return 1
+			fi
+			
+			# processing existing php-fpm sites in isp manager
+			if [[ -n $isp_php_fpm_enabled_sites ]]; then
+				while IFS= read -r isp_fpm_config_file; do
+					printf "\nProcessing ${isp_fpm_config_file}"
+					\cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null && chmod --reference="$isp_fpm_config_file" "${backup_dest_dir_path}${isp_fpm_config_file}" >/dev/null 2>&1
+					if [[ -f "${backup_dest_dir_path}${isp_fpm_config_file}" ]]; then 
+						sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; return 1; }
+						sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; return 1; }
+						sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm mode${NCV}\n"; return 1; }
+						sed -i 's@^pm.max_children = 5@pm.max_children = 15@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_children${NCV}\n"; return 1; }
+						sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_requests${NCV}\n"; return 1; }
+		
+						# Check and restart php-fpm
+						php_fpm_version=$(echo "$isp_fpm_config_file" | grep -oP '(?<=/php/)\d+\.\d+|(?<=/php)\d{2,3}(?=/)')
+							
+						if [[ -n "$php_fpm_version" ]]; then
+							# native debian like php-fpm native service like php7.3-fpm.service
+							if [[ "$isp_fpm_config_file" =~ ^/etc/ ]]; then
+								php_fpm_service="php${php_fpm_version}-fpm.service"
+							else
+								# isp manager's php-fpm opt versions like php-fpm73.service
+								php_fpm_service="php-fpm${php_fpm_version}.service"
+							fi
 						else
-							# isp manager's php-fpm opt versions like php-fpm73.service
-							php_fpm_service="php-fpm${php_fpm_version}.service"
+							# native rhel php-fpm services
+							php_fpm_service="php-fpm.service"
 						fi
-					else
-						# native rhel php-fpm services
-						php_fpm_service="php-fpm.service"
-					fi
-					
-					# Check
-					if [[ "$isp_fpm_config_file" =~ ^/etc/ ]]; then
-						# PHP-FPM (Debian)
-						if ! php-fpm${php_fpm_version} -t > /dev/null 2>&1; then
-							printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
+							
+						# Check
+						if [[ "$isp_fpm_config_file" =~ ^/etc/ ]]; then
+							# PHP-FPM (Debian)
+							if ! php-fpm${php_fpm_version} -t > /dev/null 2>&1; then
+								printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
+								return 1
+							fi
+						else
+							# ISPmanager /opt/phpXX
+							if ! /opt/php${php_fpm_version}/sbin/php-fpm -t > /dev/null 2>&1; then
+								printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
+								return 1
+							fi
+						fi
+							
+						# restart
+						systemctl restart "$php_fpm_service" >/dev/null 2>&1
+							
+						# Check restart
+						if systemctl is-active --quiet "$php_fpm_service" >/dev/null 2>&1; then
+							printf " - ${GCV}OK${NCV}\n"
+						else
+							printf " - ${LRV}ERROR${NCV} Failed to restart ${php_fpm_service}. Check logs.\n"
 							return 1
 						fi
+						printf "Original file ${isp_fpm_config_file} backup'd to ${backup_dest_dir_path}${NCV}\n"
 					else
-						# ISPmanager /opt/phpXX
-						if ! /opt/php${php_fpm_version}/sbin/php-fpm -t > /dev/null 2>&1; then
-							printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
-							return 1
-						fi
-					fi
-					
-					# restart
-					systemctl restart "$php_fpm_service" >/dev/null 2>&1
-					
-					# Check restart
-					if systemctl is-active --quiet "$php_fpm_service" >/dev/null 2>&1; then
-						printf " - ${GCV}OK${NCV}\n"
-					else
-						printf " - ${LRV}ERROR${NCV} Failed to restart ${php_fpm_service}. Check logs.\n"
+						printf " - ${LRV}FAIL${NCV}\nCannot backup file ${isp_fpm_config_file} to ${backup_dest_dir_path}\n"
 						return 1
 					fi
-					printf "Original file ${isp_fpm_config_file} backup'd to ${backup_dest_dir_path}${NCV}\n"
-				else
-					printf " - ${LRV}FAIL${NCV}\nCannot backup file ${isp_fpm_config_file} to ${backup_dest_dir_path}\n"
-					return 1
-				fi
-			done <<< "$isp_php_fpm_enabled_sites"
+				done <<< "$isp_php_fpm_enabled_sites"
+			fi
 		else
 			# user chose not to tweak isp fpm 
-			printf "\n${YCV}Tweaking ISP PHP-FPM sites was skipped.${NCV} \n"
+			printf "\n${YCV}Tweaking ISP PHP-FPM and APACHE sites and templates was skipped.${NCV} \n"
 		fi
 		
 	else
-		printf "\nTweaking ISP PHP-FPM sites not needed or was ${GCV}already done${NCV}\n" 
+		printf "\nTweaking ISP PHP-FPM and APACHE sites and templates not needed or was ${GCV}already done${NCV}\n" 
 	fi
 fi
 
