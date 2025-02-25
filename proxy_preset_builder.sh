@@ -365,8 +365,8 @@ backup_func() {
 	
 	printf "\n${GCV}Backing up etc and templates${NCV}\n"
 	\mkdir -p "$BACKUP_ROOT_DIR"
-	\cp -rp --reflink=auto "$MGR_PATH/etc/templates" "$current_ispmgr_backup_directory"
-	\cp -rp --reflink=auto "/etc" "$current_etc_backup_directory"
+	\cp -rp "$MGR_PATH/etc/templates" "$current_ispmgr_backup_directory"
+	\cp -rp "/etc" "$current_etc_backup_directory"
 	printf "/etc and templates are backed up to $current_ispmgr_backup_directory and $current_etc_backup_directory\n"
 }
   
@@ -467,9 +467,9 @@ check_exit_and_restore_func() {
 		
 		printf "\n${LRV}Restoring last templates backup${NCV}\n"
 		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]; then
-			\cp -f -p --reflink=auto "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p --reflink=auto "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p --reflink=auto "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" >/dev/null 2>&1 && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" >/dev/null 2>&1 && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
 			# panel graceful restart
 			isp_panel_graceful_restart_func
 			exit 1
@@ -504,13 +504,13 @@ if \mkdir -p "$BACKUP_ROOT_DIR"; then
 			backup_item_size=$(\du -sm --exclude=/etc/ispmysql "${backup_item}" 2>/dev/null | awk "{print \$1}")
 
 			if [[ "${backup_item_size}" -lt 2000 ]]; then
-				\cp -Rfp --parents --reflink=auto "${backup_item}" "${BACKUP_DIR}" >/dev/null 2>&1
+				\cp -Rfp --parents "${backup_item}" "${BACKUP_DIR}" >/dev/null 2>&1
 			else
 				printf "${LRV}No backup of ${backup_item} - ${backup_item_size}${NCV}\n"
 			fi
 		done
 
-		\cp -Rfp --parents --reflink=auto "/opt/php"*"/etc/" "$BACKUP_DIR" >/dev/null 2>&1
+		\cp -Rfp --parents "/opt/php"*"/etc/" "$BACKUP_DIR" >/dev/null 2>&1
 
 		printf " - ${GCV}OK${NCV}\n"
 		if [[ $BACKUP_ROOT_DIR_SIZE_MB -ge 1000 ]]; then
@@ -1778,17 +1778,17 @@ if [[ -f $MGR_BIN ]]; then
 	\mkdir -p "$backup_dest_dir_path" > /dev/null
 
 	# apache vhost template patch
-	if \cp -Rfp --parents --reflink=auto "$isp_apache_vhost_template_file_path" "$backup_dest_dir_path" > /dev/null && \cp "$isp_apache_vhost_template_file_path" "${isp_apache_vhost_template_file_path}.original" > /dev/null; then
+	if \cp -Rfp --parents "${isp_apache_vhost_template_file_path}" "${backup_dest_dir_path}" > /dev/null && \cp -fp "${isp_apache_vhost_template_file_path}" "${isp_apache_vhost_template_file_path}.original" > /dev/null; then
 		perl -i -p0e "s,\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\{% if \\\$SSI == on %},\{% if \\\$CREATE_DIRECTORY %}\n<Directory \{% \\\$LOCATION_PATH %\}>\n\tOptions -Indexes\n\{% if \\\$SSI == on %},gi" $isp_apache_vhost_template_file_path > /dev/null
 	else
-		printf "\n${LRV}Error. Cannot backup file ${isp_apache_vhost_template_file_path} to ${backup_dest_dir_path} or ${isp_apache_vhost_template_file_path}.original${NCV}\n"
+		printf "\n${LRV}Error:${NCV} Cannot backup file ${isp_apache_vhost_template_file_path} to ${backup_dest_dir_path} or ${isp_apache_vhost_template_file_path}.original\n"
 		return 1
 	fi
 
 	if ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path"); then
 
 		# changing default php-fpm isp template from ondemand 5 to static 15
-		if \cp -Rfp --parents --reflink=auto "$isp_fpm_template_file_path" "$backup_dest_dir_path" > /dev/null && \cp "$isp_fpm_template_file_path" "${isp_fpm_template_file_path}.original" > /dev/null; then
+		if \cp -Rfp --parents "${isp_fpm_template_file_path}" "${backup_dest_dir_path}" > /dev/null && \cp "$isp_fpm_template_file_path" "${isp_fpm_template_file_path}.original" > /dev/null; then
 			printf "\nFile ${isp_fpm_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path}\n"
 		        sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm = ondemand${NCV}\n"; return 1; }
 		        sed -i 's@^pm.max_children =.*@pm.max_children = 15@gi' "$isp_fpm_template_file_path" || { printf "\n${LRV}Error modifying pm.max_children = 5${NCV}\n"; return 1; }
@@ -1809,7 +1809,7 @@ if [[ -f $MGR_BIN ]]; then
 			# process
 			while IFS= read -r isp_fpm_config_file; do
 				printf "\nProcessing ${isp_fpm_config_file}"
-				if \cp -Rfp --parents --reflink=auto "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null; then
+				if \cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null; then
 					sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; return 1; }
 					sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; return 1; }
 					sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm mode${NCV}\n"; return 1; }
@@ -2604,7 +2604,7 @@ then
 		exit 1
 	else
 		printf "\nNGINX default template exists. Copying it to $NGINX_TEMPLATE\n"
-		\cp -p --reflink=auto "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" >/dev/null 2>&1
+		\cp -p "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" >/dev/null 2>&1
 		# fix importing default ssl template
 		sed -i 's@import etc/templates/default/@import etc/templates/@gi' "$NGINX_TEMPLATE" >/dev/null 2>&1
 	fi
@@ -2618,7 +2618,7 @@ then
 		exit 1
 	else
 		printf "NGINX default ssl template exists. Copying it to $NGINX_SSL_TEMPLATE\n"
-		\cp -p --reflink=auto "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1
+		\cp -p "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1
 	fi
 fi
 
