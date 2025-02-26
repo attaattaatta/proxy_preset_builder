@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.70"
+self_current_version="1.0.71"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1782,9 +1782,9 @@ if [[ -f $MGR_BIN ]]; then
 	# same for sites that already exist
 	isp_php_fpm_enabled_sites=$(grep -RiIlE '^pm = ondemand|^pm.max_children = 5' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube')
 	
-	if [[ ! -z "$isp_php_fpm_enabled_sites" ]] || (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") >/dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} >/dev/null 2>&1; then
+	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") >/dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} >/dev/null 2>&1; then
 		echo
-		read -p "Tweak ISP PHP-FPM and APACHE sites and templates ? [Y/n]" -n 1 -r
+		read -p "Tweak ISP Manager php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 			# creating backup dir
@@ -1892,7 +1892,7 @@ if [[ -f $MGR_BIN ]]; then
 		fi
 		
 	else
-		printf "\nTweaking ISP PHP-FPM and APACHE sites and templates not needed or was ${GCV}already done${NCV}\n" 
+		printf "\nTweaking ISP Manager php-fpm and apache2 sites and templates not needed or was ${GCV}already done${NCV}\n" 
 	fi
 fi
 
@@ -2055,11 +2055,11 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 		if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
 	
 			if systemctl reload nginx >/dev/null 2>&1; then
-				printf "${GCV}OK${NCV}\n"
+				printf "\n${GCV}OK${NCV}\n"
 				printf "Nginx added/updated:\n\n"
 				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
 			else
-				printf "${LRV}FAIL${NCV}\n"
+				printf "\n${LRV}FAIL${NCV}\n"
 				printf "${LRV}Error:${NCV} Failed to reload Nginx ( run: nginx -t )\n"
 				printf "\nNginx added/updated:\n"
 				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
