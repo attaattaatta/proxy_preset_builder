@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.72"
+self_current_version="1.0.73"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2680,7 +2680,7 @@ do
 	
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass $proxy_target;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
 	
-	BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN="s,(\texpires \[% \$EXPIRES_VALUE.*%\];\n\{% endif %\}\n)(\tlocation / \{\n.*\{% if \$PHP.*%}\n),\$1\n\\{#\\} php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE\n{% if \$PRESET == #custom %}\n\$2,gi"
+	BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN="s,(\texpires \[% \\\$EXPIRES_VALUE.*%\];\n\{% endif %\}\n)(\tlocation / \{\n.*\{% if \\\$PHP.*%}\n),\$1\n\\{#\\} php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE\n{% if \\\$PRESET == #custom %}\n\$2,gi"
 	
 	BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END="s,(\t\t\ttry_files /does_not_exists \@fallback;\n\t\t}\n\{% endif %\}\n\t\}\n\{% endif %\}\n)(\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\tlocation \@fallback \{),\$1\n\{% endif %\}\n\\{#\\} php_off_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE\n\n\$2,gi"
 	
