@@ -2668,9 +2668,9 @@ do
 	
 	# regular nginx templates injections (using comma sign as separator) variables
 	# backward compatibility for panel's variables and #custom template and also it's the hook for replacements
-	BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR="\n\\{#\\} apache_backward_compatibility_condition_start_DO_NOT_\(RE\)MOVE\n\{% if \\\$PRESET == #custom %\}\n\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %}\ /;\n\{% endif %\}\n\\{#\\} apache_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE\n"
+	BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR="\n\\{#\\} apache_backward_compatibility_condition_start_DO_NOT_\(RE\)MOVE\n\{% if \\\$PRESET == #custom %\}\n\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\}\ /;\n\{% endif %\}\n\\{#\\} apache_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE\n"
 	
-	BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE="s,(\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\tlocation \@fallback \{\n)\t\tinclude \{% \\\$INCLUDE_DYNAMIC_RESOURCE_PATH %\};\n\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n,\$1$BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR,gi"
+	BACKWARD_COMPATIBILITY_CONDITION_IF_REDIRECT_TO_APACHE="s,(\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\tlocation \@fallback \{\n\t\tinclude \{% \\\$INCLUDE_DYNAMIC_RESOURCE_PATH %\};\n)\t\tproxy_pass \{% \\\$BACKEND_BIND_URI %\};\n\t\tproxy_redirect \{% \\\$BACKEND_BIND_URI %\} /;\n,\$1$BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR,gi"
 	
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_APACHE="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_APACHE_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_APACHE == on %\}\n\t\tproxy_pass http://$proxy_target;\n\t\tproxy_redirect http://$proxy_target /;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_APACHE_STOP_DO_NOT_REMOVE\n,gi"
 	
@@ -2680,7 +2680,7 @@ do
 	
 	REGULAR_PROXY_NGINX_PERL_INJECTION_IF_REDIRECT_TO_PHPFPM="s,($BACKWARD_COMPATIBILITY_IF_REDIRECT_TO_PHPFPM_VAR),\$1\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_START_DO_NOT_REMOVE\n\\{#\\} date added - $current_date_time\n\{% if \\\$PRESET == $PROXY_PREFIX$proxy_target and \\\$REDIRECT_TO_PHPFPM == on %\}\n\t\tfastcgi_pass $proxy_target;\n\{% endif %\}\n\\{#\\} $PROXY_PREFIX$proxy_target\_REDIRECT_TO_PHPFPM_STOP_DO_NOT_REMOVE\n,gi"
 	
-	BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN="s,(\texpires \[% \\\$EXPIRES_VALUE.*%\];\n\{% endif %\}\n)(\tlocation / \{\n.*\{% if \\\$PHP.*%}\n),\$1\n\\{#\\} php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE\n{% if \\\$PRESET == #custom %}\n\$2,gi"
+	BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_BEGIN="s,(\texpires \[% \$EXPIRES_VALUE.*%\];\n\{% endif %\}\n)(\tlocation / \{\n.*\{% if \$PHP.*%\}\n),\$1\n\\{#\\} php_off_backward_compatibility_condition_start_DO_NOT_(RE)MOVE\n\{% if \\\$PRESET == #custom %\}\n\$2,gi"
 	
 	BACKWARD_COMPATIBILITY_NGINX_PERL_INJECTION_IF_PHP_OFF_END="s,(\t\t\ttry_files /does_not_exists \@fallback;\n\t\t}\n\{% endif %\}\n\t\}\n\{% endif %\}\n)(\{% if \\\$REDIRECT_TO_APACHE == on %\}\n\tlocation \@fallback \{),\$1\n\{% endif %\}\n\\{#\\} php_off_backward_compatibility_condition_stop_DO_NOT_\(RE\)MOVE\n\n\$2,gi"
 	
