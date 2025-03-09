@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.74"
+self_current_version="1.0.75"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -101,7 +101,7 @@ local shared_func_url="$1"
 
 local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
-if command -v wget >/dev/null 2>/dev/null; then 
+if command -v wget > /dev/null 2>/dev/null; then 
 	if source <(timeout 4 \wget --timeout 4 --no-check-certificate -q -O- ${shared_func_url}); then 
 		return 0
 	else
@@ -123,7 +123,7 @@ fi
 
 }
 
-if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}" >/dev/null 2>/dev/null; then
+if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}" > /dev/null 2>/dev/null; then
 	printf "\n${LRV}Error${NCV} from load_shared_functions_func. Check internet access and name resolv.\n"
 	exit 1
 fi
@@ -143,12 +143,12 @@ printf "\nCurrent special ${YCV}templates list${NCV}: wordpress_fpm, bitrix_fpm,
 }
 
 #check tools
-WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout')
+WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout' 'stat' 'diff')
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem >/dev/null 2>&1; then 
-		if ! apt-get update >/dev/null 2>&1 && apt-get install -y "$needitem" >/dev/null 2>&1 || ! yum install -y "$needitem" >/dev/null 2>&1; then
+	if ! command -v $needitem > /dev/null 2>&1; then 
+		if ! apt-get update > /dev/null 2>&1 && apt-get install -y "$needitem" > /dev/null 2>&1 || ! yum install -y "$needitem" > /dev/null 2>&1; then
 			printf "\n${LRV}Error:${NCV} cannot install ${needitem}. Please install it first or export correct \$PATH.\n"
 			show_help_func
 			exit 1
@@ -157,7 +157,7 @@ do
 done
 
 # check OS
-if ! check_os_func >/dev/null 2>/dev/null; then
+if ! check_os_func > /dev/null 2>/dev/null; then
 	printf "\n${LRV}Error${NCV} from check_os_func. Check internet access and name resolv.\n"
 	exit 1
 fi
@@ -294,7 +294,7 @@ WE_NEED=("$MGR_BIN")
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem >/dev/null 2>&1; then 
+	if ! command -v $needitem > /dev/null 2>&1; then 
 		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
 		show_help_func
 		exit 1
@@ -397,7 +397,7 @@ git_check() {
 		EXIT_STATUS=0
 		trap 'EXIT_STATUS=1' ERR
 		
-		getent hosts $GIT_DOMAIN_NAME >/dev/null 2>&1 || getent hosts $GIT_BACKUP_DOMAIN_NAME >/dev/null 2>&1
+		getent hosts $GIT_DOMAIN_NAME > /dev/null 2>&1 || getent hosts $GIT_BACKUP_DOMAIN_NAME > /dev/null 2>&1
 		
 		# check result and restore if error
 		printf "\nResolving $GIT_DOMAIN_NAME and $GIT_BACKUP_DOMAIN_NAME"
@@ -457,9 +457,9 @@ check_exit_and_restore_func() {
 		\rm -f "$NGINX_TEMPLATE" "$NGINX_SSL_TEMPLATE"
 		\rm -f /etc/nginx/vhosts-includes/apache_status_[0-9]*.conf
 		\rm -f /etc/nginx/vhosts-includes/nginx_status_[0-9]*.conf
-		} >/dev/null 2>&1
+		} > /dev/null 2>&1
 		
-		if $MGR_CTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  >/dev/null 2>&1; then
+		if $MGR_CTL preset.delete elid=$PROXY_PREFIX$proxy_target elname=$PROXY_PREFIX$proxy_target  > /dev/null 2>&1; then
 			printf " - ${GCV}OK${NCV}\n"
 		else
 			printf " - ${LRV}FAIL${NCV}\n"
@@ -467,9 +467,9 @@ check_exit_and_restore_func() {
 		
 		printf "\n${LRV}Restoring last templates backup${NCV}\n"
 		if [[ -d "$current_ispmgr_backup_directory" ]] || [[ -d "$current_etc_backup_directory" ]]; then
-			\cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1 && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
-			\cp -f -p "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" >/dev/null 2>&1 && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_TEMPLATE_BACKUP" "$NGINX_TEMPLATE" > /dev/null 2>&1 && printf "${GCV}$NGINX_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_SSL_TEMPLATE_BACKUP" "$NGINX_SSL_TEMPLATE" > /dev/null 2>&1 && printf "${GCV}$NGINX_SSL_TEMPLATE_BACKUP restore was successful.\n${NCV}"
+			\cp -f -p "$NGINX_MAIN_CONF_BACKUP_FILE" "$NGINX_MAIN_CONF_FILE" > /dev/null 2>&1 && printf "${GCV}$NGINX_MAIN_CONF_BACKUP_FILE restore was successful.\n${NCV}"
 			# panel graceful restart
 			isp_panel_graceful_restart_func
 			exit 1
@@ -501,14 +501,14 @@ backup_etc_func() {
             for backup_item in "${BACKUP_PATH_LIST[@]}"; do
                 backup_item_size=$(\du -sm --exclude=/etc/ispmysql "${backup_item}" 2>/dev/null | awk '{print $1}')
                 if [[ "${backup_item_size}" -lt 2000 ]]; then
-                    \cp -Rfp --parents "${backup_item}" "${BACKUP_DIR}" >/dev/null 2>&1
+                    \cp -Rfp --parents "${backup_item}" "${BACKUP_DIR}" > /dev/null 2>&1
                     \chmod --reference="${backup_item}" "${BACKUP_DIR}${backup_item}" 2>/dev/null
                 else
                     printf "${LRV}No backup of ${backup_item} - ${backup_item_size}${NCV}\n"
                 fi
             done
 
-            \cp -Rfp --parents "/opt/php"*"/etc/" "$BACKUP_DIR" >/dev/null 2>&1
+            \cp -Rfp --parents "/opt/php"*"/etc/" "$BACKUP_DIR" > /dev/null 2>&1
 
             for dir in /opt /usr /var; do
                 [[ -d "$dir" && -d "${BACKUP_DIR}${dir}" ]] && \chmod --reference="$dir" "${BACKUP_DIR}${dir}" 2>/dev/null
@@ -568,7 +568,7 @@ tweak_swapfile_func() {
 if [[ $VIRTUAL == "yes" ]]; then
 
 	#Checking swap file exists and its settings
-	if ! grep -i "swap" /etc/fstab >/dev/null 2>&1; then
+	if ! grep -i "swap" /etc/fstab > /dev/null 2>&1; then
 		echo
 		read -p "No swap detected. Fix ? [Y/n]" -n 1 -r
 		echo
@@ -608,10 +608,10 @@ if [[ $VIRTUAL == "yes" ]]; then
 						\mkswap /swapfile
 						\chmod 600 /swapfile
 						\swapon /swapfile
-						} >/dev/null 2>&1
+						} > /dev/null 2>&1
 	
 	
-						if swapon --show | grep -i "/swapfile" >/dev/null 2>&1; then
+						if swapon --show | grep -i "/swapfile" > /dev/null 2>&1; then
 							echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
 							printf " - ${GCV}DONE${NCV}\n"
 							break
@@ -656,7 +656,7 @@ done
 if [[ ${#TWEAKNEED[@]} -gt 0 ]]; then
 	TWEAK_NEED="yes"
 fi
-} >/dev/null 2>&1
+} > /dev/null 2>&1
 
 if [[ $TWEAK_NEED == "yes" ]]
 then
@@ -679,9 +679,9 @@ then
 		
 		        systemctl daemon-reload
 		        systemctl restart ${service}
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 	
-			if systemctl show ${service} | grep "LimitNOFILE=${NOFILE_LIMIT}" >/dev/null 2>&1
+			if systemctl show ${service} | grep "LimitNOFILE=${NOFILE_LIMIT}" > /dev/null 2>&1
 			then
 				printf "${GCV}${service} set file limit success${NCV}\n"
 			else
@@ -707,7 +707,7 @@ fi
 # install and config tuned tweaker function
 tweak_tuned_func() {
 
-if ! systemctl | grep -i tuned >/dev/null 2>&1; then
+if ! systemctl | grep -i tuned > /dev/null 2>&1; then
 
 	printf "\nInstalling and configuring ${GCV}tuned service${NCV}\n"
 
@@ -717,7 +717,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 		if ! which tuned; then
 	\yum -y install tuned;
 		fi
-		} >/dev/null 2>&1
+		} > /dev/null 2>&1
 	
 	
 	elif [[ $DISTR == "debian" ]]; then
@@ -726,7 +726,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 		if ! which tuned; then
 	\apt-get -y install tuned;
 		fi
-		} >/dev/null 2>&1
+		} > /dev/null 2>&1
 	
 	else
 	        printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
@@ -738,7 +738,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 		printf "\n${GCV}Current CPU frequencies:${NCV}\n"
 		grep -i mhz /proc/cpuinfo
 
-		if which tuned-adm >/dev/null 2>&1; then
+		if which tuned-adm > /dev/null 2>&1; then
 			printf "\n${GCV}Applying throughput-performance profile${NCV}\n"
 			tuned-adm profile throughput-performance
 			systemctl enable --now tuned
@@ -752,7 +752,7 @@ if ! systemctl | grep -i tuned >/dev/null 2>&1; then
 		fi
 
 	else
-		if which tuned-adm >/dev/null 2>&1; then
+		if which tuned-adm > /dev/null 2>&1; then
 			tuned-adm profile virtual-guest
 			systemctl enable --now tuned
 			tuned-adm active
@@ -773,10 +773,10 @@ update_grub() {
 
 printf "GRUB update running"
 
-if update-grub >/dev/null 2>&1; then
+if update-grub > /dev/null 2>&1; then
 	printf " - ${GCV}OK${NCV}\n"
 	return 0
-elif grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1; then
+elif grub2-mkconfig -o /boot/grub2/grub.cfg > /dev/null 2>&1; then
 	printf " - ${GCV}OK${NCV}\n"
 	return 0
 else
@@ -798,9 +798,9 @@ if [[ $DEDICATED == "yes" ]]; then
 
 	GRUB_FILE_OPTION=""
 
-	if grep -q "^GRUB_CMDLINE_LINUX_DEFAULT=" "${GRUB_FILE}" >/dev/null 2>&1; then
+	if grep -q "^GRUB_CMDLINE_LINUX_DEFAULT=" "${GRUB_FILE}" > /dev/null 2>&1; then
 		GRUB_FILE_OPTION="GRUB_CMDLINE_LINUX_DEFAULT"
-	elif grep -q "^GRUB_CMDLINE_LINUX=" "${GRUB_FILE}" >/dev/null 2>&1; then
+	elif grep -q "^GRUB_CMDLINE_LINUX=" "${GRUB_FILE}" > /dev/null 2>&1; then
 		GRUB_FILE_OPTION="GRUB_CMDLINE_LINUX"
 	else
 		printf "\n${LRV}Error:${NCV} ${GRUB_FILE} have no GRUB_CMDLINE_LINUX_DEFAULT or GRUB_CMDLINE_LINUX\n"
@@ -808,10 +808,10 @@ if [[ $DEDICATED == "yes" ]]; then
 	fi
 
 	# for Intel CPUs
-	if grep -q "GenuineIntel" /proc/cpuinfo >/dev/null 2>&1; then
+	if grep -q "GenuineIntel" /proc/cpuinfo > /dev/null 2>&1; then
 
 		# disabling intel_pstate if it exists
-		if [[ -f /sys/devices/system/cpu/intel_pstate/status ]] && ! grep -q "intel_pstate=disable" /proc/cmdline >/dev/null 2>&1; then
+		if [[ -f /sys/devices/system/cpu/intel_pstate/status ]] && ! grep -q "intel_pstate=disable" /proc/cmdline > /dev/null 2>&1; then
 		
 			if [[ ! -f "${GRUB_FILE}" ]]; then
 				printf "\n${LRV}Error:${NCV} ${GRUB_FILE} not found!\n"
@@ -823,7 +823,7 @@ if [[ $DEDICATED == "yes" ]]; then
 			echo
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
-				if grubby --update-kernel=DEFAULT --args="intel_pstate=disable" >/dev/null 2>&1; then
+				if grubby --update-kernel=DEFAULT --args="intel_pstate=disable" > /dev/null 2>&1; then
 					printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for deactivate intel_pstate\n"
 					printf "After reboot ${YCV}run me again${NCV} to check mhz (showing first 5 cores mhz).\n"
 					echo
@@ -831,20 +831,20 @@ if [[ $DEDICATED == "yes" ]]; then
 					echo
 					return 0
 				else
-					if ! grep -q "intel_pstate=disable" ${GRUB_FILE} >/dev/null 2>&1; then
+					if ! grep -q "intel_pstate=disable" ${GRUB_FILE} > /dev/null 2>&1; then
 	
 						# adding intel_pstate=disable to GRUB config
-						sed -i "/${GRUB_FILE_OPTION}/ {s/intel_pstate=[^\" ]*/intel_pstate=disable/; t; s/\"$/ intel_pstate=disable\"/}" ${GRUB_FILE} >/dev/null 2>&1 || { printf "\n${LRV}Error${NCV} modifying intel_pstate=disable ${GRUB_FILE}\n"; return 1; }
-						sed -i "/${GRUB_FILE_OPTION}/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/\"$/ cpufreq.default_governor=performance\"/}" ${GRUB_FILE} >/dev/null 2>&1 || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${GRUB_FILE}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/intel_pstate=[^\" ]*/intel_pstate=disable/; t; s/\"$/ intel_pstate=disable\"/}" ${GRUB_FILE} > /dev/null 2>&1 || { printf "\n${LRV}Error${NCV} modifying intel_pstate=disable ${GRUB_FILE}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/\"$/ cpufreq.default_governor=performance\"/}" ${GRUB_FILE} > /dev/null 2>&1 || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${GRUB_FILE}\n"; return 1; }
 	
 					fi
 	
-					if ! grep -q "intel_pstate=disable" ${KERNEL_CMD_FILE} >/dev/null 2>&1; then
+					if ! grep -q "intel_pstate=disable" ${KERNEL_CMD_FILE} > /dev/null 2>&1; then
 	
 						# adding intel_pstate=disable to KERNEL_CMD_FILE config if exists
 						if [[ -f ${KERNEL_CMD_FILE} ]]; then
-							sed -i "/^/ {s/intel_pstate=[^\" ]*/intel_pstate=disable/; t; s/$/ intel_pstate=disable/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying intel_pstate=disable ${KERNEL_CMD_FILE}\n"; return 1; }
-							sed -i "/^/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/$/ cpufreq.default_governor=performance/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying ${KERNEL_CMD_FILE}\n"; return 1; }
+							sed -i "/^/ {s/intel_pstate=[^\" ]*/intel_pstate=disable/; t; s/$/ intel_pstate=disable/}" ${KERNEL_CMD_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying intel_pstate=disable ${KERNEL_CMD_FILE}\n"; return 1; }
+							sed -i "/^/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/$/ cpufreq.default_governor=performance/}" ${KERNEL_CMD_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying ${KERNEL_CMD_FILE}\n"; return 1; }
 						fi
 					fi
 	
@@ -870,7 +870,7 @@ if [[ $DEDICATED == "yes" ]]; then
 		fi
 
 	# for AMD CPUs
-	elif grep -q "AuthenticAMD" /proc/cpuinfo >/dev/null 2>&1; then
+	elif grep -q "AuthenticAMD" /proc/cpuinfo > /dev/null 2>&1; then
 		# enable amd_pstate passive if kernel > 5.17 and amd_pstate not already passive
 		kernel_version=$(uname -r | awk -F. '{print $1 * 100 + $2}')
 		if (( kernel_version < 517 )) && grep -iq "^CONFIG_X86_AMD_PSTATE=y" /boot/config-$(uname -r); then
@@ -878,13 +878,13 @@ if [[ $DEDICATED == "yes" ]]; then
 		    return 1
 		fi
 
-		if grep -q "amd_pstate=passive" /proc/cmdline >/dev/null 2>&1 && [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/amd_pstate_max_freq ]]; then
+		if grep -q "amd_pstate=passive" /proc/cmdline > /dev/null 2>&1 && [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/amd_pstate_max_freq ]]; then
 			printf "\n${LRV}amd_pstate error:${NCV} Just update latest BMC and then the latest BIOS/UEFI firmware. This should be enough.\n"
 			printf "If you are still see this message, try to enable CPPC in BIOS ( Advanced > AMD CBS > CPPC / Advanced > AMD Overclocking > CPPC ). \n"
 			return 1
 		fi
 
-		if [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/amd_pstate_max_freq ]] >/dev/null 2>&1; then
+		if [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/amd_pstate_max_freq ]] > /dev/null 2>&1; then
 
 			if [[ ! -f "${GRUB_FILE}" ]]; then
 				printf "\n${LRV}Error:${NCV} ${GRUB_FILE} not found!\n"
@@ -896,7 +896,7 @@ if [[ $DEDICATED == "yes" ]]; then
 			echo
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
-				if grubby --update-kernel=DEFAULT --args="initcall_blacklist=acpi_cpufreq_init cpufreq.default_governor=performance amd_pstate.shared_mem=1 amd_pstate=passive" >/dev/null 2>&1; then
+				if grubby --update-kernel=DEFAULT --args="initcall_blacklist=acpi_cpufreq_init cpufreq.default_governor=performance amd_pstate.shared_mem=1 amd_pstate=passive" > /dev/null 2>&1; then
 					printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for activate amd_pstate passive\n"
 					printf "After reboot ${YCV}run me again${NCV} to check mhz (showing first 5 cores mhz).\n"
 					echo
@@ -905,22 +905,22 @@ if [[ $DEDICATED == "yes" ]]; then
 					return 0
 				else
 
-					if ! grep -q "amd_pstate=passive" ${GRUB_FILE} >/dev/null 2>&1 && ! grep -q "amd_pstate=passive" /proc/cmdline; then
+					if ! grep -q "amd_pstate=passive" ${GRUB_FILE} > /dev/null 2>&1 && ! grep -q "amd_pstate=passive" /proc/cmdline; then
 						# adding amd_pstate=passive to GRUB config
-						sed -i "/${GRUB_FILE_OPTION}/ {s/amd_pstate=[^\" ]*/amd_pstate=passive/; t; s/\"$/ amd_pstate=passive\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate=passive ${GRUB_FILE}${NCV}\n"; return 1; }
-						sed -i "/${GRUB_FILE_OPTION}/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/\"$/ cpufreq.default_governor=performance\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${GRUB_FILE}${NCV}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/amd_pstate=[^\" ]*/amd_pstate=passive/; t; s/\"$/ amd_pstate=passive\"/}" ${GRUB_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate=passive ${GRUB_FILE}${NCV}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/\"$/ cpufreq.default_governor=performance\"/}" ${GRUB_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${GRUB_FILE}${NCV}\n"; return 1; }
 	
-						sed -i "/${GRUB_FILE_OPTION}/ {s/initcall_blacklist=[^\" ]*/initcall_blacklist=acpi_cpufreq_init/; t; s/\"$/ initcall_blacklist=acpi_cpufreq_init\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying initcall_blacklist=acpi_cpufreq_init ${GRUB_FILE}${NCV}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/initcall_blacklist=[^\" ]*/initcall_blacklist=acpi_cpufreq_init/; t; s/\"$/ initcall_blacklist=acpi_cpufreq_init\"/}" ${GRUB_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying initcall_blacklist=acpi_cpufreq_init ${GRUB_FILE}${NCV}\n"; return 1; }
 	
-						sed -i "/${GRUB_FILE_OPTION}/ {s/amd_pstate.shared_mem=[^\" ]*/amd_pstate.shared_mem=1/; t; s/\"$/ amd_pstate.shared_mem=1\"/}" ${GRUB_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate.shared_mem=1 ${GRUB_FILE}${NCV}\n"; return 1; }
+						sed -i "/${GRUB_FILE_OPTION}/ {s/amd_pstate.shared_mem=[^\" ]*/amd_pstate.shared_mem=1/; t; s/\"$/ amd_pstate.shared_mem=1\"/}" ${GRUB_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate.shared_mem=1 ${GRUB_FILE}${NCV}\n"; return 1; }
 					fi
 	
 					# adding amd_pstate=passive to KERNEL_CMD_FILE config if exists
-					if [[ -f ${KERNEL_CMD_FILE} ]] >/dev/null 2>&1; then
-						sed -i "/^/ {s/amd_pstate=[^\" ]*/amd_pstate=passive/; t; s/$/ amd_pstate=passive/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate=passive ${KERNEL_CMD_FILE}\n"; return 1; }
-						sed -i "/^/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/$/ cpufreq.default_governor=performance/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${KERNEL_CMD_FILE}\n"; return 1; }
-						sed -i "/^/ {s/initcall_blacklist=[^\" ]*/initcall_blacklist=acpi_cpufreq_init/; t; s/$/ initcall_blacklist=acpi_cpufreq_init/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying initcall_blacklist=acpi_cpufreq_init ${KERNEL_CMD_FILE}\n"; return 1; }
-						sed -i "/^/ {s/amd_pstate.shared_mem=[^\" ]*/amd_pstate.shared_mem=1/; t; s/$/ amd_pstate.shared_mem=1/}" ${KERNEL_CMD_FILE} >/dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate.shared_mem=1 ${KERNEL_CMD_FILE}\n"; return 1; }
+					if [[ -f ${KERNEL_CMD_FILE} ]] > /dev/null 2>&1; then
+						sed -i "/^/ {s/amd_pstate=[^\" ]*/amd_pstate=passive/; t; s/$/ amd_pstate=passive/}" ${KERNEL_CMD_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate=passive ${KERNEL_CMD_FILE}\n"; return 1; }
+						sed -i "/^/ {s/cpufreq.default_governor=[^\" ]*/cpufreq.default_governor=performance/; t; s/$/ cpufreq.default_governor=performance/}" ${KERNEL_CMD_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying cpufreq.default_governor=performance ${KERNEL_CMD_FILE}\n"; return 1; }
+						sed -i "/^/ {s/initcall_blacklist=[^\" ]*/initcall_blacklist=acpi_cpufreq_init/; t; s/$/ initcall_blacklist=acpi_cpufreq_init/}" ${KERNEL_CMD_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying initcall_blacklist=acpi_cpufreq_init ${KERNEL_CMD_FILE}\n"; return 1; }
+						sed -i "/^/ {s/amd_pstate.shared_mem=[^\" ]*/amd_pstate.shared_mem=1/; t; s/$/ amd_pstate.shared_mem=1/}" ${KERNEL_CMD_FILE} > /dev/null 2>&1  || { printf "\n${LRV}Error${NCV} modifying amd_pstate.shared_mem=1 ${KERNEL_CMD_FILE}\n"; return 1; }
 					fi
 	
 					# updating GRUB
@@ -953,10 +953,10 @@ fi
 bitrix_env_check_func() {
 
 # detecting bitrix and bitrix alike environments
-if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" >/dev/null 2>&1 && [[ ! -f $MGR_BIN ]] >/dev/null 2>&1 ); then
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" > /dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" > /dev/null 2>&1 && [[ ! -f $MGR_BIN ]] > /dev/null 2>&1 ); then
 
 	# bitrix GT (nginx+apache+fpm)
-	if (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* >/dev/null 2>&1 && systemctl | grep -i fpm >/dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* >/dev/null 2>&1 && systemctl | grep -i fpm >/dev/null 2>&1); then
+	if (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1); then
 		printf "\n${GCV}Bitrix GT${NCV} environment detected\n"
 		BITRIX="GT"
 	# bitrix ENV (nginx+apache)
@@ -965,7 +965,7 @@ if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" >/dev/null 2>&1 || ( 
 		printf "\n${GCV}Bitrix ${bitrix_env_version} env${NCV}ironment detected\n"
 		BITRIX="ENV"
 	# bitrix VANILLA (nginx+apache)
-	elif 2>&1 nginx -T | grep -i "server httpd:8090" >/dev/null 2>&1; then
+	elif 2>&1 nginx -T | grep -i "server httpd:8090" > /dev/null 2>&1; then
 		printf "\n${GCV}Bitrix Vanilla${NCV} environment detected\n"
 		BITRIX="VANILLA"
 	# bitrix OTHER
@@ -979,54 +979,112 @@ fi
 
 }
 
-download_file_func() {
+wget_openssl_exists_check() {
 
-# check args n
-if [[ $# -ne 2 ]]; then
-	printf "\n${LRV}Error:${NCV} Not enouth args.\n"
-	printf "\n${LRV}1:${NCV}$1\n"
-	printf "\n${LRV}2:${NCV}$2\n"
+if ! command -v wget &> /dev/null && ! command -v openssl &> /dev/null; then
+	printf "\n${LRV}Error.${NCV} Neither wget nor openssl are installed.\n"
 	return 1
 fi
 
-# check args not empty
-for arg in "$@"; do
-	if [[ -z "$arg" ]]; then
-		printf "\n${LRV}Error:${NCV} Empty arg.\n"
+return 0
+
+}
+
+# get remote file size in bytes
+get_remote_file_size_bytes() {
+
+local full_url="$1"
+local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
+
+if command -v wget > /dev/null 2>&1; then
+	if ! 2>&1 \wget --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}'; then
+		printf "\n${LRV}Error.${NCV} Failed to get remote file size with wget.\n"
+		return 1
+	fi
+elif command -v openssl > /dev/null 2>&1; then
+	if ! printf "HEAD ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | grep "Content-Length" | awk '{print $2}'; then
+		printf "\n${LRV}Error.${NCV} Failed to get remote file size with openssl s_client.\n"
+		return 1
+	fi
+else
+	printf "\n${LRV}Error.${NCV} Neither wget nor openssl is available in this system to get the remote file size.\n"
+	return 1
+fi
+
+}
+
+download_file_func() {
+
+if wget_openssl_exists_check; then
+	
+	# check args n
+	if [[ $# -ne 2 ]]; then
+		printf "\n${LRV}Error:${NCV} Not enouth args.\n"
 		printf "\n${LRV}1:${NCV}$1\n"
 		printf "\n${LRV}2:${NCV}$2\n"
 		return 1
 	fi
-done
-
-local full_url="$1"
-local file_path_local="$2"
-local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
-
-printf "\nDownloading ${full_url} to ${file_path_local}"
-
-{
-if \wget --timeout 4 --no-check-certificate -q -O ${file_path_local} ${full_url}; then
-	full_url_size=$(wget --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}')
-else
-	if printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > "${file_path_local}"; then
-		full_url_size=$(printf "HEAD ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | grep "Content-Length" | awk '{print $2}')
+	
+	# check args not empty
+	for arg in "$@"; do
+		if [[ -z "$arg" ]]; then
+			printf "\n${LRV}Error:${NCV} Empty arg.\n"
+			printf "\n${LRV}1:${NCV}$1\n"
+			printf "\n${LRV}2:${NCV}$2\n"
+			return 1
+		fi
+	done
+	
+	local full_url="$1"
+	local file_path_local="$2"
+	local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
+	files_diff_check() { diff -q ${file_path_local} <(\timeout 5 \wget -qO- ${full_url}) > /dev/null 2>&1 || diff -q ${file_path_local} <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
+	
+	# get filesize in bytes for downloaded file_path_local file
+	local file_path_local_size=$(\stat --printf="%s" ${file_path_local} 2>/dev/null || echo 0)
+	
+	# get filesize in bytes for full_url file
+	local full_url_size=$(get_remote_file_size_bytes ${full_url})
+	
+	# if remote file size differ from local and is greater than 30 bytes (empty), downloading it
+	if [[ ${full_url_size} -gt 30 ]] > /dev/null 2>&1; then
+		if ! files_diff_check > /dev/null 2>&1; then
+		
+			printf "\nDownloading ${full_url} to ${file_path_local}"
+			
+			{
+			if ! \wget --timeout 4 --no-check-certificate -q -O ${file_path_local} ${full_url}; then
+				printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > ${file_path_local}
+			fi
+			}  > /dev/null 2>&1
+		
+			# file diff check
+			if [[ ${full_url_size} -gt 30 ]]; then
+				if files_diff_check > /dev/null 2>&1; then
+					printf " - ${GCV}OK${NCV}\n"
+					return 0
+				else
+					printf " - ${LRV}FAIL${NCV}\n"
+					return 1
+				fi
+			else
+				printf "${LRV}Error.${NCV} Remote size is ${full_url_size}\n"
+				return 1
+			fi
+		else
+			#printf "\nSize of ${full_url} is ${full_url_size}bytes\n"
+			#printf "Size of ${file_path_local} is ${file_path_local_size}bytes\n"
+			printf "\nSkipping download as both remote and local are the same sizes in bytes\n"
+			return 0
+		fi
+	else
+		printf "${LRV}Error.${NCV} Remote size is ${full_url_size}\n"
+		return 1
 	fi
-fi
-}  >/dev/null 2>&1
-
-# get filesize in bytes for downloaded file_path_local file
-file_path_local_size=$(\stat --printf="%s" ${file_path_local} 2>/dev/null)
-
-# if both file sizes differs then something failed
-if [[ ${full_url_size} -gt 30 ]] && [[ ${full_url_size} -eq ${file_path_local_size} ]]; then
-	printf " - ${GCV}OK${NCV}\n"
-	return 0
 else
-	printf " - ${LRV}FAIL${NCV}\n"
+	printf "\n${LRV}Error.${NCV} Neither wget nor openssl is available in this system to get the remote file.\n"
 	return 1
 fi
-
 }
 
 bitrix_install_update_admin_sh_func() {
@@ -1034,7 +1092,7 @@ bitrix_install_update_admin_sh_func() {
 if [[ $BITRIXALIKE == "yes" ]]; then
 
 	if [[ $BITRIX == "GT" ]]; then
-		if cat /etc/*rele* | grep "CentOS Linux 7" >/dev/null 2>&1; then
+		if cat /etc/*rele* | grep "CentOS Linux 7" > /dev/null 2>&1; then
 			ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin.sh"
 		else
 			ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-gt.sh"
@@ -1047,12 +1105,12 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
 	{
-	if command -v wget >/dev/null 2>&1; then 
-		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
+	if command -v wget > /dev/null 2>&1; then 
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
 	else
 		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
 	fi
-	}  >/dev/null 2>&1
+	}  > /dev/null 2>&1
 	
 	# get / update admin.sh for GT or Vanilla
 	if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
@@ -1066,7 +1124,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 				cp_date=$(date '+%d-%b-%Y-%H-%M')
-				\cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} >/dev/null 2>&1
+				\cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} > /dev/null 2>&1
 				if [[ -f ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} ]]; then
 					# backup previous
 					printf "\nPrevious file - ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date}"
@@ -1131,7 +1189,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	fi
 
 	# check if cURL PHP not enabled
-	if ! \php -m | grep -i curl >/dev/null 2>&1; then
+	if ! \php -m | grep -i curl > /dev/null 2>&1; then
 		echo
 		read -p "Enable PHP cURL extension ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
@@ -1143,9 +1201,9 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 				echo "extension=curl.so" > /etc/php/${bitrix_php_version}/mods-available/curl.ini && ln -s /etc/php/${bitrix_php_version}/mods-available/curl.ini /etc/php/${bitrix_php_version}/apache2/conf.d/20-curl.ini && ln -s /etc/php/${bitrix_php_version}/mods-available/curl.ini /etc/php/${bitrix_php_version}/cli/conf.d/20-curl.ini
 			fi
 			sleep 1
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 		 		
-			if \php -m | grep -i curl >/dev/null 2>&1; then
+			if \php -m | grep -i curl > /dev/null 2>&1; then
 				systemctl restart httpd* apache2* php-fpm*
 				printf " - ${GCV}OK${NCV}\n"
 			else
@@ -1195,7 +1253,7 @@ for site in $($MGR_CTL webdomain | grep "secure=on" | awk -F'name=' '{print $2}'
 	# converting to idn
 	site=$(puny_converter ${site})
 
-	if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" >/dev/null 2>&1; then
+	if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" > /dev/null 2>&1; then
 		# check for dupes in array
 		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
 			SITES_TWEAKS_NEEDED="YES"
@@ -1204,7 +1262,7 @@ for site in $($MGR_CTL webdomain | grep "secure=on" | awk -F'name=' '{print $2}'
 	fi
 done
 
-} >/dev/null 2>&1
+} > /dev/null 2>&1
 
 ispmanager_enable_sites_tweaks_func() {
 
@@ -1214,13 +1272,13 @@ if [[ -f $MGR_BIN ]]; then
 	isp_panel_check_license_version
 	
 	# enable http/2
-	if $MGR_CTL websettings | grep "http2=off" >/dev/null 2>&1; then
+	if $MGR_CTL websettings | grep "http2=off" > /dev/null 2>&1; then
 		echo
 		read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			# Enable http/2 isp manager
 			printf "Running"
-			if $MGR_CTL websettings http2=on sok=ok >/dev/null 2>&1; then
+			if $MGR_CTL websettings http2=on sok=ok > /dev/null 2>&1; then
 				printf " - ${GCV}OK${NCV}\n"
 			else
 				printf " - ${LRV}FAIL${NCV}\n"
@@ -1267,6 +1325,16 @@ if [[ -f $MGR_BIN ]]; then
 fi
 }
 
+# installing ispmanager-pkg-php
+isp_mod_php_install() {
+
+if ! $MGR_CTL feature | grep "name=web" | grep "PHP module"; then
+	$MGR_CTL feature.edit elid=web package_php=on sok=ok
+fi
+
+} > /dev/null 2>&1
+
+
 isp_no_mod_php_check() {
 
 # check no mod-php php versions
@@ -1278,7 +1346,8 @@ for php_version in $($MGR_CTL feature | grep PHP | grep "active=on" | grep -E 'n
 	fi
 done
 
-} >/dev/null 2>&1
+} > /dev/null 2>&1
+
 
 ispmanager_switch_cgi_mod_func() {
 
@@ -1287,7 +1356,7 @@ if [[ -f $MGR_BIN ]]; then
 	# lic validation
 	isp_panel_check_license_version
 	
-	if $MGR_CTL webdomain | grep -i "PHP CGI" >/dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" >/dev/null 2>&1; then
+	if $MGR_CTL webdomain | grep -i "PHP CGI" > /dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" > /dev/null 2>&1; then
 		echo
 		read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
@@ -1295,13 +1364,14 @@ if [[ -f $MGR_BIN ]]; then
 			isp_panel_check_license_version
 	
 			# install all ISP Manager mod-php for installed PHP if not already installed
+			isp_mod_php_install
 			isp_no_mod_php_check
 	
 			if [[ ! -z "${NO_MOD_PHP+x}" ]]; then
 	
 				printf "Running mod-php installation"
 				for no_mod_php in ${NO_MOD_PHP[@]}; do
-					$MGR_CTL feature.edit elid=altphp${no_mod_php} package_ispphp${no_mod_php}_fpm=on package_ispphp${no_mod_php}_mod_apache=on packagegroup_altphp${no_mod_php}gr=ispphp${no_mod_php} sok=ok >/dev/null 2>&1
+					$MGR_CTL feature.edit elid=altphp${no_mod_php} package_ispphp${no_mod_php}_fpm=on package_ispphp${no_mod_php}_mod_apache=on packagegroup_altphp${no_mod_php}gr=ispphp${no_mod_php} sok=ok > /dev/null 2>&1
 				done
 		
 				# waiting for installation
@@ -1319,6 +1389,7 @@ if [[ -f $MGR_BIN ]]; then
 					fi
 					
 					# checking for all php-mod installed
+					isp_mod_php_install
 					isp_no_mod_php_check
 					if [[ -z "${NO_MOD_PHP+x}" ]]; then
 					printf " - ${GCV}DONE${NCV}\n"
@@ -1379,7 +1450,7 @@ if [[ -f $MGR_BIN ]]; then
 	isp_panel_check_license_version
 
 	# nginx install
-	if $MGR_CTL feature | grep "nginx" | grep "active=off" >/dev/null 2>&1
+	if $MGR_CTL feature | grep "nginx" | grep "active=off" > /dev/null 2>&1
 	then
 		echo
 		read -p "Install Nginx in ISP panel ? [Y/n]" -n 1 -r
@@ -1403,7 +1474,7 @@ if [[ -f $MGR_BIN ]]; then
 				fi
 
 				# checking for nginx installed
-				if $MGR_CTL feature 2> /dev/null | grep "nginx" | grep "active=on" >/dev/null 2>&1; then
+				if $MGR_CTL feature 2> /dev/null | grep "nginx" | grep "active=on" > /dev/null 2>&1; then
 				printf " - ${GCV}DONE${NCV}\n"
 					break
 				else
@@ -1421,12 +1492,13 @@ if [[ -f $MGR_BIN ]]; then
 
 	{
 	$MGR_CTL feature | grep "PHP" | grep "active=off" || $MGR_CTL feature | grep -i "opendkim" | grep "active=off"
-	} >/dev/null 2>&1
+	} > /dev/null 2>&1
 
 	then
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			printf "Running"
+			isp_mod_php_install
 			{
 			isp_php_versions=("52" "53" "54" "55" "56" "70" "71" "72" "73" "74" "80" "81" "82" "83" "84" "85" "90" "91" "92")
 
@@ -1442,7 +1514,7 @@ if [[ -f $MGR_BIN ]]; then
 			# running while cycle until we found latest php or timed out
 			timeout_duration=600
 			start_time=$(date +%s)
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 			
 			while true; do
 			    # timeout check
@@ -1481,10 +1553,10 @@ if [[ -f $MGR_BIN ]]; then
 	# ISP mysql 8 include bugfix
 	isp_mysql_include_bugfix() {
 		# fix ISP panel mysql include bug
-		if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf >/dev/null 2>&1; then
+		if [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]] && ! grep "^\!includedir /etc/mysql/mysql.conf.d/" /etc/mysql/my.cnf > /dev/null 2>&1; then
 			printf "\n${GCV}ISP panel MySQL 8 no include path bug was fixed${NCV}\n"
 			echo '!'"includedir /etc/mysql/mysql.conf.d/" >> /etc/mysql/my.cnf
-			systemctl restart mysql mysqld mariadb >/dev/null 2>&1
+			systemctl restart mysql mysqld mariadb > /dev/null 2>&1
 			sleep 5s
 		fi
 	}
@@ -1533,7 +1605,7 @@ if [[ -f $MGR_BIN ]]; then
 			# tweaking native php version for phpmyadmin upload size large dumps
 			$MGR_CTL phpconf.settings plid=native elid=native max_execution_time=1800 memory_limit=2048 post_max_size=2048 upload_max_filesize=2048 sok=ok
 
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 		fi
 	}
 
@@ -1545,7 +1617,7 @@ if [[ -f $MGR_BIN ]]; then
 		else
 			{
 			# check docker or not
-			if $MGR_CTL db.server | grep "$1" | grep "docker=on" >/dev/null 2>&1
+			if $MGR_CTL db.server | grep "$1" | grep "docker=on" > /dev/null 2>&1
 			then
 			MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
 			else
@@ -1553,24 +1625,24 @@ if [[ -f $MGR_BIN ]]; then
 			fi
 			
 			#native mysql version disable binlog if no replicas exists
-			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" >/dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* >/dev/null 2>&1
+			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" > /dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* > /dev/null 2>&1
 			then
 				# RHEL
 				if [[ $DISTR == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
 				then
 					{
 				        	printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mysql-server.cnf
-						systemctl restart mysql mysqld mariadb >/dev/null 2>&1
-						\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
-					} >/dev/null 2>&1
+						systemctl restart mysql mysqld mariadb > /dev/null 2>&1
+						\rm -f /var/lib/mysql/binlog.* > /dev/null 2>&1
+					} > /dev/null 2>&1
 				
 				elif [[ $DISTR == "rhel" ]] && [[ -f /etc/my.cnf.d/mariadb-server.cnf ]]
 				then
 					{
 						printf "\nskip-log-bin\n" >> /etc/my.cnf.d/mariadb-server.cnf
-						systemctl restart mysql mysqld mariadb >/dev/null 2>&1
-						\rm -f /var/lib/mysql/binlog.* >/dev/null 2>&1
-					} >/dev/null 2>&1
+						systemctl restart mysql mysqld mariadb > /dev/null 2>&1
+						\rm -f /var/lib/mysql/binlog.* > /dev/null 2>&1
+					} > /dev/null 2>&1
 				
 				# DEBIAN
 				elif [[ $DISTR == "debian" ]] && [[ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]]
@@ -1579,14 +1651,14 @@ if [[ -f $MGR_BIN ]]; then
 				        	printf "\nskip-log-bin\n" >> /etc/mysql/mysql.conf.d/mysqld.cnf
 						systemctl restart mysql mysqld mariadb
 						\rm -f /var/lib/mysql/binlog.* 
-					} >/dev/null 2>&1
+					} > /dev/null 2>&1
 				elif [[ $DISTR == "debian" ]] && [[ -f /etc/mysql/mariadb.conf.d/50-server.cnf ]]
 				then
 					{
 						printf "\nskip-log-bin\n" >> /etc/mysql/mariadb.conf.d/50-server.cnf
 						systemctl restart mysql mysqld mariadb
 						\rm -f /var/lib/mysql/binlog.* 
-					} >/dev/null 2>&1
+					} > /dev/null 2>&1
 				
 				# UNKNOWN
 				elif [[ $DISTR == "unknown" ]]
@@ -1607,7 +1679,7 @@ if [[ -f $MGR_BIN ]]; then
 			$MGR_CTL db.server.settings.edit plid=$1 elid=transaction-isolation name=transaction-isolation value=READ-COMMITTED str_value=READ-COMMITTED sok=ok
 
 			sleep 10
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 		fi
 	}
 
@@ -1782,7 +1854,7 @@ if [[ -f $MGR_BIN ]]; then
 	# same for sites that already exist
 	isp_php_fpm_enabled_sites=$(grep -RiIlE '^pm = ondemand|^pm.max_children = 5' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube')
 	
-	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") >/dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} >/dev/null 2>&1; then
+	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") > /dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} > /dev/null 2>&1; then
 		echo
 		read -p "Tweak ISP Manager php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
@@ -1797,7 +1869,7 @@ if [[ -f $MGR_BIN ]]; then
 			\cp -fp "$isp_apache_vhost_template_file_path" "${isp_apache_vhost_template_file_path}.original" > /dev/null && \
 			\chmod --reference="${isp_apache_vhost_template_file_path}" "${backup_dest_dir_path}${isp_apache_vhost_template_file_path}"
 
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 
 			if [[ -f ${isp_apache_vhost_template_file_path}.original ]]; then
 				printf "\nTemplate ${isp_apache_vhost_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path} and ${isp_apache_vhost_template_file_path}.original \n"
@@ -1814,7 +1886,7 @@ if [[ -f $MGR_BIN ]]; then
 			\cp -fp "$isp_fpm_template_file_path" "${isp_fpm_template_file_path}.original" && \
 			\chmod --reference="${isp_fpm_template_file_path}" "${backup_dest_dir_path}${isp_fpm_template_file_path}" 
 
-			} >/dev/null 2>&1
+			} > /dev/null 2>&1
 
 			if [[ -f ${isp_fpm_template_file_path}.original ]]; then
 				printf "\nTemplate ${isp_fpm_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path} and ${isp_apache_vhost_template_file_path}.original\n"
@@ -1830,7 +1902,7 @@ if [[ -f $MGR_BIN ]]; then
 			if [[ -n $isp_php_fpm_enabled_sites ]]; then
 				while IFS= read -r isp_fpm_config_file; do
 					printf "\nProcessing ${isp_fpm_config_file}"
-					\cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null && chmod --reference="$isp_fpm_config_file" "${backup_dest_dir_path}${isp_fpm_config_file}" >/dev/null 2>&1
+					\cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null && chmod --reference="$isp_fpm_config_file" "${backup_dest_dir_path}${isp_fpm_config_file}" > /dev/null 2>&1
 					if [[ -f "${backup_dest_dir_path}${isp_fpm_config_file}" ]]; then 
 						sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; return 1; }
 						sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; return 1; }
@@ -1870,10 +1942,10 @@ if [[ -f $MGR_BIN ]]; then
 						fi
 							
 						# restart
-						systemctl restart "$php_fpm_service" >/dev/null 2>&1
+						systemctl restart "$php_fpm_service" > /dev/null 2>&1
 							
 						# Check restart
-						if systemctl is-active --quiet "$php_fpm_service" >/dev/null 2>&1; then
+						if systemctl is-active --quiet "$php_fpm_service" > /dev/null 2>&1; then
 							printf " - ${GCV}OK${NCV}\n"
 						else
 							printf " - ${LRV}ERROR${NCV} Failed to restart ${php_fpm_service}. Check logs.\n"
@@ -1924,7 +1996,7 @@ check_param_exists() {
 	local param="$1"
 	local value="$2"
 	# Search for the parameter with the desired value in custom.conf
-	if grep -E "^\s*$param\s+$value\s*;" "$NGINX_TWEAKS_INCLUDE_FILE" >/dev/null 2>&1; then
+	if grep -E "^\s*$param\s+$value\s*;" "$NGINX_TWEAKS_INCLUDE_FILE" > /dev/null 2>&1; then
 		return 0
 	fi
 	# Search for the parameter with the desired value in nginx.conf (before the server block)
@@ -1934,13 +2006,20 @@ check_param_exists() {
 	return 1
 }
 
-tweak_nginx_params_func() {
-
 # Check if Nginx is installed
-if ! command -v nginx >/dev/null 2>&1; then
+nginx_exists_check_func() {
+
+if ! command -v nginx > /dev/null 2>&1; then
 	printf "\nNginx ${GCV}not detected${NCV}\n"
 	return 1
 fi
+
+}
+
+tweak_nginx_params_func() {
+
+# nginx check
+nginx_exists_check_func
 
 # Checking include directive exists in main nginx conf
 if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
@@ -1976,7 +2055,7 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 			sed -i '/http\s*{/a \	include '"$NGINX_TWEAKS_INCLUDE_FILE"';' "$NGINX_CONF_FILE"
 		
 			# Test the configuration after adding the include directive
-			if ! nginx -t >/dev/null 2>&1; then
+			if ! nginx -t > /dev/null 2>&1; then
 				# If the test fails, remove the include directive from the main configuration file
 				sed -i '/include '"$(echo "$NGINX_TWEAKS_INCLUDE_FILE" | sed 's/\//\\\//g')"';/d' "$NGINX_CONF_FILE"
 				# Remove the include file
@@ -2026,7 +2105,7 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 			fi
 		
 			# Test the configuration after adding or updating the parameter
-			if ! nginx -t >/dev/null 2>&1; then
+			if ! nginx -t > /dev/null 2>&1; then
 	
 				# If the test fails, revert the changes
 				if [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_CONF_FILE"* ]]; then
@@ -2054,7 +2133,7 @@ if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 		# Reload Nginx if changes were made
 		if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
 	
-			if systemctl reload nginx >/dev/null 2>&1; then
+			if systemctl reload nginx > /dev/null 2>&1; then
 				printf "\n${GCV}OK${NCV}\n"
 				printf "Nginx added/updated:\n\n"
 				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
@@ -2079,7 +2158,32 @@ fi
 # tweaker add nginx bad robot conf
 tweak_add_nginx_bad_robot_conf_func() {
 
-if command -v nginx >/dev/null 2>/dev/null && ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" >/dev/null 2>&1; then
+# check nginx exists
+nginx_exists_check_func
+
+local NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
+
+# bad_robot.conf file path depending the environment
+# if ISP Manager
+if [[ -f $MGR_BIN ]]; then
+	local nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
+# if Bitrix
+elif [[ $BITRIXALIKE == "yes" ]]; then
+	# Bitrix Env or GT
+	if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
+		local nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
+	# Other one bitrix "vanilla"
+	elif [[ $BITRIX == "VANILLA" ]]; then
+		local nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
+	else
+		true
+	fi
+else
+	true
+fi
+
+# if nginx check show no $http_user_agent configs, proceed
+if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
 
 	echo
 	read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
@@ -2088,42 +2192,37 @@ if command -v nginx >/dev/null 2>/dev/null && ! 2>&1 nginx -T | grep -i "if ( \$
 		# checking nginx configuration sanity
 		nginx_conf_sanity_check_fast
 
-		NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
-
-		# placing file depending the environment
 		# if ISP Manager
 		if [[ -f $MGR_BIN ]]; then
 			# lic validation
 			isp_panel_check_license_version
-			nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
 		# if Bitrix
 		elif [[ $BITRIXALIKE == "yes" ]]; then
 
 			# Bitrix Env or GT
 			if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
-				bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
-				nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
-			# fix could not build optimal proxy_headers_hash
-			printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
+				local bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
+
+				# fix could not build optimal proxy_headers_hash
+				printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
 
 			# Other one bitrix "vanilla"
 			elif [[ $BITRIX == "VANILLA" ]]; then
-				bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
-				nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
+				local bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
 			else
-				printf "\n${LRV}Error.${NCV} Unknown bitrix environment.Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
-				return
+				printf "\n${LRV}Error.${NCV} Unknown bitrix environment. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
+				return 1
 			fi
 
-			if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf >/dev/null 2>&1; then
+			if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
 					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_nginx_general_conf
 			else
 				printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in "bad_robot.conf" $bitrix_nginx_general_conf ). Include failed.\n"
-				return
+				return 1
 			fi
 		else
 			printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
-			return
+			return 1
 		fi
 
 		# downloading nginx bad_robot.conf file
@@ -2132,18 +2231,32 @@ if command -v nginx >/dev/null 2>/dev/null && ! 2>&1 nginx -T | grep -i "if ( \$
 		fi
 
 		# checking bad_robot file exist in nginx config
-		printf "\nChecking bad_robot file exist in nginx config"
-		if 2>&1 nginx -T | grep -i BlackWidow >/dev/null 2>&1; then
+		printf "\nChecking bad_robot.conf file exists in nginx config"
+		if 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
 			printf " - ${GCV}OK${NCV}"
 		else
 			printf " - ${LRV}FAIL${NCV}"
 		fi
-	
+
 		# checking nginx configuration sanity again
 		nginx_conf_sanity_check_fast
 	else
 		# user chose not to install bad_robot.conf in nginx 
 		printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
+	fi
+
+# updating bad_robot.conf
+elif [[ -f ${nginx_bad_robot_file_local} ]] && 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+
+	local remote_url_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
+	local nginx_bad_robot_file_local_size_bytes=$(\stat --printf="%s" ${nginx_bad_robot_file_local} 2>/dev/null || echo 0)
+
+	if [[ ${remote_url_size_bytes} -gt 30 ]] && [[ ${remote_url_size_bytes} -ne ${nginx_bad_robot_file_local_size_bytes} ]]; then
+		printf "\n${YCV}Updating${NCV} existing ${nginx_bad_robot_file_local} to the latest version "
+		# downloading nginx bad_robot.conf file
+		if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
+			return 1
+		fi
 	fi
 else
 	printf "\nAdding nginx blocking of annoying bots not needed or was ${GCV}already done${NCV}\n" 
@@ -2153,12 +2266,10 @@ fi
 # check nginx conf and reload configuration fast
 nginx_conf_sanity_check_fast() {
 
-
-
 printf "\nMaking nginx configuration check"
 if nginx_test_output=$({ nginx -t; } 2>&1); then
 	printf " - ${GCV}OK${NCV}\n"
-	nginx -s reload >/dev/null 2>&1
+	nginx -s reload > /dev/null 2>&1
 	EXIT_STATUS=0
 else
 	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
@@ -2173,7 +2284,7 @@ printf "\nMaking nginx configuration check"
 if nginx_test_output=$({ nginx -t; } 2>&1)
 then
 	printf " - ${GCV}OK${NCV}\n"
-	nginx -s reload >/dev/null 2>&1
+	nginx -s reload > /dev/null 2>&1
 	EXIT_STATUS=0
 else
 	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
@@ -2193,7 +2304,7 @@ fi
 # detecting nginx push & pull support
 nginx_push_pull_module_support() {
 
-if 2>&1 nginx -V | grep -i "push-stream" >/dev/null 2>&1
+if 2>&1 nginx -V | grep -i "push-stream" > /dev/null 2>&1
 then 
 	NGINX_HAVE_PUSH_PULL=1
 else
@@ -2366,15 +2477,15 @@ then
 				EXIT_STATUS=0
 				trap 'EXIT_STATUS=1' ERR
 				
-				$MGR_CTL preset.delete elid=$2 elname=$2 >/dev/null 2>&1
+				$MGR_CTL preset.delete elid=$2 elname=$2 > /dev/null 2>&1
 				
 				# removing $2 inject
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE >/dev/null 2>&1
-				sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE >/dev/null 2>&1
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE >/dev/null 2>&1
-				sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE >/dev/null 2>&1
-				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
-				sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_TEMPLATE > /dev/null 2>&1
+				sed -i '/^[[:space:]]*$/d' $NGINX_TEMPLATE > /dev/null 2>&1
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_SSL_TEMPLATE > /dev/null 2>&1
+				sed -i '/^[[:space:]]*$/d' $NGINX_SSL_TEMPLATE > /dev/null 2>&1
+				sed -i "/$2.*_START_DO_NOT_REMOVE/,/$2.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
+				sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
 				
 				#check result
 				check_exit_and_restore_func
@@ -2413,12 +2524,12 @@ then
 			for plist in $preset_list; do $MGR_CTL preset.delete elid=$plist elname=$plist; done
 			printf "\n${LRV}All ISP panel presets removed${NCV}\n"
 			# removing nginx templates
-			\rm -f $NGINX_SSL_TEMPLATE >/dev/null 2>&1
-			\rm -f $NGINX_TEMPLATE >/dev/null 2>&1
+			\rm -f $NGINX_SSL_TEMPLATE > /dev/null 2>&1
+			\rm -f $NGINX_TEMPLATE > /dev/null 2>&1
 			printf "\n${LRV}Custom nginx templates removed${NCV}\n"
 			# removing injects in $NGINX_MAIN_CONF_FILE
-			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
-			sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
+			sed -i "/$PROXY_PREFIX.*_START_DO_NOT_REMOVE/,/$PROXY_PREFIX.*_STOP_DO_NOT_REMOVE/d" $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
+			sed -i '/^[[:space:]]*$/d' $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
 			# panel graceful restart
 			isp_panel_graceful_restart_func
 		else
@@ -2442,7 +2553,7 @@ APACHE_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/apache_status_$RANDOM_N.conf
 #todo
 #FPM_STATUS_PAGE_FILE="/etc/nginx/vhosts-includes/fpm_status.conf"
 
-if nginx -t >/dev/null 2>&1
+if nginx -t > /dev/null 2>&1
 then
 	printf "\n${GCV}Injecting nginx status page at\n$NGX_STATUS_PAGE_FILE\n$APACHE_STATUS_PAGE_FILE\n$FPM_STATUS_PAGE_FILE${NCV}\n"
 	if 
@@ -2455,13 +2566,13 @@ then
 		#todo
 		#printf "\nlocation ~* /fpm-status-$RANDOM_N { allow all; fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name; include fastcgi_params; fastcgi_pass unix:/replace_with_fpm_pool_socket_file_path }\n" > "$FPM_STATUS_PAGE_FILE"
 	fi
-	} >/dev/null 2>&1
+	} > /dev/null 2>&1
 	
 	then
-		if nginx -t >/dev/null 2>&1
+		if nginx -t > /dev/null 2>&1
 		then
 			printf "\n${GCV}OK${NCV}\n"
-			nginx -s reload >/dev/null 2>&1
+			nginx -s reload > /dev/null 2>&1
 			EXIT_STATUS=0
 		else
 			printf "\n${LRV}FAIL (nginx -t)${NCV}\n"
@@ -2488,32 +2599,32 @@ then
 	exit 1
 fi
 
-if apachectl configtest  >/dev/null 2>&1
+if apachectl configtest  > /dev/null 2>&1
 then
 	if [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL" ]]
 	then
 		printf "\n${GCV}Injecting apache status page at $APACHE_STATUS_PAGE_INJECT_FILE_RHEL${NCV}"
 		printf "$APACHE_STATUS_PAGE_INJECT" >> "$APACHE_STATUS_PAGE_INJECT_FILE_RHEL"
-		if apachectl configtest >/dev/null 2>&1
+		if apachectl configtest > /dev/null 2>&1
 		then
 			printf " - ${GCV}OK${NCV}\n"
-			apachectl graceful  >/dev/null 2>&1
+			apachectl graceful  > /dev/null 2>&1
 		else
 			printf " - ${LRV}FAIL (apachectl configtest)${NCV}\n"
-			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" >/dev/null 2>&1
+			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" > /dev/null 2>&1
 			exit 1
 		fi
 	elif [[ -f "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" ]]
 	then
 		printf "\n${GCV}Injecting apache status page at $APACHE_STATUS_PAGE_INJECT_FILE_DEB${NCV}"
 		printf "$APACHE_STATUS_PAGE_INJECT" >> "$APACHE_STATUS_PAGE_INJECT_FILE_DEB"
-		if apachectl configtest >/dev/null 2>&1
+		if apachectl configtest > /dev/null 2>&1
 		then
 			printf " - ${GCV}OK${NCV}\n"
-			apachectl graceful  >/dev/null 2>&1
+			apachectl graceful  > /dev/null 2>&1
 		else
 			printf " - ${LRV}FAIL (apachectl configtest)${NCV}\n"
-			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" >/dev/null 2>&1
+			sed -i "s|$APACHE_STATUS_PAGE_INJECT||gi" "$APACHE_STATUS_PAGE_INJECT_FILE_DEB" > /dev/null 2>&1
 			exit 1
 		fi
 	else
@@ -2540,11 +2651,11 @@ if printf "GET $GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME HTTP/1.1\n
 then
 	# execute recompilation script
 	bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" 
-	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 	exit 0
 else
 	printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
-	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
+	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 	EXIT_STATUS=1
 	exit 1
 fi
@@ -2588,7 +2699,7 @@ if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
 then
 	printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
 	EXIT_STATUS=0
-	$MGR_CTL feature.edit elid=web package_php package_php-fpm=on sok=ok >/dev/null 2>&1
+	$MGR_CTL feature.edit elid=web package_php package_php-fpm=on sok=ok > /dev/null 2>&1
 	check_exit_and_restore_func
 	printf " - ${GCV}OK${NCV}\n"
 	# feature.edit return OK but actual install continues, so we need to sleep some time
@@ -2627,9 +2738,9 @@ then
 		exit 1
 	else
 		printf "\nNGINX default template exists. Copying it to $NGINX_TEMPLATE\n"
-		\cp -p "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" >/dev/null 2>&1
+		\cp -p "$NGINX_DEFAULT_TEMPLATE" "$NGINX_TEMPLATE" > /dev/null 2>&1
 		# fix importing default ssl template
-		sed -i 's@import etc/templates/default/@import etc/templates/@gi' "$NGINX_TEMPLATE" >/dev/null 2>&1
+		sed -i 's@import etc/templates/default/@import etc/templates/@gi' "$NGINX_TEMPLATE" > /dev/null 2>&1
 	fi
 fi
 
@@ -2641,7 +2752,7 @@ then
 		exit 1
 	else
 		printf "NGINX default ssl template exists. Copying it to $NGINX_SSL_TEMPLATE\n"
-		\cp -p "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" >/dev/null 2>&1
+		\cp -p "$NGINX_DEFAULT_SSL_TEMPLATE" "$NGINX_SSL_TEMPLATE" > /dev/null 2>&1
 	fi
 fi
 
@@ -2698,7 +2809,7 @@ do
 		limit_dirindex_var=index.php
 	fi
 	# check for error / success
-	if $MGR_CTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok >/dev/null 2>&1
+	if $MGR_CTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok > /dev/null 2>&1
 	then
 		printf " - ${GCV}OK${NCV}\n"
 		preset_raise_error="0"
@@ -2972,19 +3083,19 @@ do
 							# execute recompilation script
 							printf "This will take some time\nRecompiling"
 							
-							if printf "1\n" | bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
+							if printf "1\n" | bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 							then
 								printf " - ${GCV}OK${NCV}\n"
-								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
+								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 							else
 								printf " - ${LRV}FAIL${NCV}\n"
-								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
+								\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 								EXIT_STATUS=1
 								check_exit_and_restore_func
 							fi
 						else
 							printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NCV}\n"
-							\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" >/dev/null 2>&1
+							\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 							EXIT_STATUS=1
 							check_exit_and_restore_func
 						fi
@@ -3033,11 +3144,11 @@ do
 				if [[ -f "$NGINX_MAIN_CONF_FILE" ]]
 				then 
 					# we have main conf, check includes
-					if ! grep -v "#" $NGINX_MAIN_CONF_FILE | grep "include /etc/nginx/conf.d/\*.conf.*;" >/dev/null 2>&1
+					if ! grep -v "#" $NGINX_MAIN_CONF_FILE | grep "include /etc/nginx/conf.d/\*.conf.*;" > /dev/null 2>&1
 					then
 						# nginx's include /etc/nginx/conf.d/*.conf.* was not found
 						# check that we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
-						if ! grep "$PROXY_PREFIX$proxy_target" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
+						if ! grep "$PROXY_PREFIX$proxy_target" $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
 						then
 							sed -i "s@http {@&\n# $PROXY_PREFIX$proxy_target\_START_DO_NOT_REMOVE\n# date added - $current_date_time\n# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE\n@g" $NGINX_MAIN_CONF_FILE
 							# download
@@ -3045,7 +3156,7 @@ do
 							
 							# adding inject if /etc/nginx/conf.d/*.conf.* was not found
 							printf "Updating $NGINX_MAIN_CONF_FILE\n"
-							sed -i "s@# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE@    include\t$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file;\n&@g" $NGINX_MAIN_CONF_FILE >/dev/null 2>&1
+							sed -i "s@# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE@    include\t$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file;\n&@g" $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
 						else
 							# we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
 							printf "\n${LRV}ERROR - $existing $PROXY_PREFIX$proxy_target found in $NGINX_MAIN_CONF_FILE\nUse \"$BASH_SOURCE del $PROXY_PREFIX$proxy_target\" to remove it${NCV}\n"
@@ -3082,7 +3193,7 @@ do
 				
 				# set status pages for nginx and apache
 				BITRIX_FPM_STATUS_SET=1
-				#set_status_pages >/dev/null 2>&1
+				#set_status_pages > /dev/null 2>&1
 				
 				# tweak
 				run_all_tweaks
