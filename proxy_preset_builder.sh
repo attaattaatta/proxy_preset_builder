@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.75"
+self_current_version="1.0.76"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1550,6 +1550,14 @@ if [[ -f $MGR_BIN ]]; then
 	# lic validation
 	isp_panel_check_license_version
 
+	# ISP mysqldump tweak
+	isp_mysqldump_tweak() {
+		if $MGR_CTL paramlist | grep -i mysqldump | grep DEFAULT > /dev/null 2>&1; then
+			printf "\n${GCV}Applying ISP Manager MySQLDumpOptions${NCV}\n"
+			$MGR_CTL paramlist.edit elid=MySQLDumpOptions value="--insert-ignore --complete-insert --events --routines --triggers --single-transaction --max_allowed_packet=1G --quick --lock-tables=false" sok=ok > /dev/null 2>&1
+		fi
+	}
+
 	# ISP mysql 8 include bugfix
 	isp_mysql_include_bugfix() {
 		# fix ISP panel mysql include bug
@@ -1725,6 +1733,7 @@ if [[ -f $MGR_BIN ]]; then
 
 			# run all mysql versions tweak
 			isp_all_mysql_version_tweak
+			isp_mysqldump_tweak
 
 			break
 			;;
@@ -1747,12 +1756,14 @@ if [[ -f $MGR_BIN ]]; then
 
 			# run all mysql versions tweak
 			isp_all_mysql_version_tweak
+			isp_mysqldump_tweak
 
 			break
 			;;
 	
 		"Exact PHP and MySQL versions")
 			isp_mysql_include_bugfix
+			isp_mysqldump_tweak
 			
 			printf "\n${GCV}PHP${NCV}\n"
 			# get isp panel installed php versions into the array phpversions
