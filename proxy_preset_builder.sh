@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.78"
+self_current_version="1.0.79"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -520,7 +520,7 @@ backup_etc_func() {
             fi
         else
             printf " - ${LRV}FAIL${NCV}"
-            printf "\n${LRV}Cannot create configs backup, disk used for 95\% or more${NCV}\n"
+            printf "\n${LRV}Cannot create configs backup, disk used for 95%% or more${NCV}\n"
             exit 1
         fi
     else
