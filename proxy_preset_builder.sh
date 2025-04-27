@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.76"
+self_current_version="1.0.77"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -520,7 +520,7 @@ backup_etc_func() {
             fi
         else
             printf " - ${LRV}FAIL${NCV}"
-            printf "\n%sCannot create configs backup, disk used for 95%% or more%s\n" "${LRV}" "${NCV}"
+            printf "\n${LRV}Cannot create configs backup, disk used for 95% or more${NCV}\n"
             exit 1
         fi
     else
@@ -1553,7 +1553,7 @@ if [[ -f $MGR_BIN ]]; then
 	# ISP mysqldump tweak
 	isp_mysqldump_tweak() {
 		if $MGR_CTL paramlist | grep -i mysqldump | grep DEFAULT > /dev/null 2>&1; then
-			printf "\n${GCV}Applying ISP Manager MySQLDumpOptions${NCV}\n"
+			printf "\nApplying ISP Manager ${GCV}MySQLDumpOptions${NCV}\n"
 			$MGR_CTL paramlist.edit elid=MySQLDumpOptions value="--insert-ignore --complete-insert --events --routines --triggers --single-transaction --max_allowed_packet=1G --quick --lock-tables=false" sok=ok > /dev/null 2>&1
 		fi
 	}
@@ -1721,12 +1721,12 @@ if [[ -f $MGR_BIN ]]; then
 	printf "\nApply above tweaks to all PHP version (and MySQL) or exact version ?\n"
 	printf "${NCV}"
 	
-	options=("All PHP and MySQL" "All PHP only" "All MySQL only" "Exact PHP and MySQL versions" "Skip")
+	options=("All installed PHP and MySQL" "All installed PHP only" "All installed MySQL only" "Exact installed PHP and MySQL versions" "Skip")
 
 	select opt in "${options[@]}"; do
 	case $opt in
 
-		"All MySQL only")
+		"All installed MySQL only")
 
 			# applying bugfixes
 			isp_mysql_include_bugfix
@@ -1738,7 +1738,7 @@ if [[ -f $MGR_BIN ]]; then
 			break
 			;;
 
-		"All PHP only")
+		"All installed PHP only")
 
 			# run all php versions tweak
 			isp_all_php_version_tweak
@@ -1746,7 +1746,7 @@ if [[ -f $MGR_BIN ]]; then
 			break
 			;;
 	
-		"All PHP and MySQL")
+		"All installed PHP and MySQL")
 
 			# applying bugfixes
 			isp_mysql_include_bugfix
@@ -1761,7 +1761,7 @@ if [[ -f $MGR_BIN ]]; then
 			break
 			;;
 	
-		"Exact PHP and MySQL versions")
+		"Exact installed PHP and MySQL versions")
 			isp_mysql_include_bugfix
 			isp_mysqldump_tweak
 			
