@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.79"
+self_current_version="1.0.80"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -562,8 +562,110 @@ else
 fi
 }
 
-# check swap file exists if this is virtual server
+# check zram and swap file exists if this is virtual server
 tweak_swapfile_func() {
+
+ZRAM_SCRIPT_PATH="/usr/local/bin/zram-init.sh"
+ZRAM_UNIT_PATH="/etc/systemd/system/zram-init.service"
+SYSCTL_CONF_FILE="/etc/sysctl.conf"
+		
+mem_total_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+mem_total_mib=$((mem_total_kb / 1024))
+half_mem=$((mem_total_mib / 2))
+zram_size_bytes=$(( (mem_total_kb / 2) * 1024 ))
+		
+zram_size_kib=$(swapon --noheadings --bytes | awk '$1 ~ /zram/ {sum += $3} END {print sum}')
+zram_size_mib=$((zram_size_kib / 1024))
+
+# Checking zswap file exists and its settings
+if ( ! swapon | grep -q zram ) && [[ ! -f $ZRAM_SCRIPT_PATH ]] && [[ ! -f $ZRAM_UNIT_PATH ]] || [[ "$zram_size_mib" -gt "$half_mem" ]]; then
+	echo
+	read -p "Enable zram swap (or fix) ? [Y/n]" -n 1 -r
+	echo
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+
+		ZRAM_SCRIPT_PATH="/usr/local/bin/zram-init.sh"
+		ZRAM_UNIT_PATH="/etc/systemd/system/zram-init.service"
+		SYSCTL_CONF_FILE="/etc/sysctl.conf"
+		
+		mem_total_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+		mem_total_mib=$((mem_total_kb / 1024))
+		half_mem=$((mem_total_mib / 2))
+		zram_size_bytes=$(( (mem_total_kb / 2) * 1024 ))
+		
+		zram_size_kib=$(swapon --noheadings --bytes | awk '$1 ~ /zram/ {sum += $3} END {print sum}')
+		zram_size_mib=$((zram_size_kib / 1024))
+
+		cat > "$ZRAM_SCRIPT_PATH" <<'EOF'
+#!/bin/bash
+
+if swapon | grep -q zram; then
+	echo "ZRAM already enabled"
+	exit 1
+fi
+
+# cleaning all zram config if exists
+{
+	swapoff /dev/zram0
+	echo 1 > /sys/block/zram0/reset
+	echo 0 > /sys/class/zram-control/hot_remove
+	modprobe -r zram
+} > /dev/null 2>&1
+
+modprobe zram
+[ -e /dev/zram0 ] || echo 1 > /sys/class/zram-control/hot_add
+
+mem_total_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+zram_size_bytes=$(( (mem_total_kb / 2) * 1024 ))
+
+echo $zram_size_bytes > /sys/block/zram0/disksize
+
+mkswap /dev/zram0
+swapon --discard --priority 100 /dev/zram0
+
+echo "zram0 enabled swap for $((zram_size_bytes / 1024 / 1024))MB"
+EOF
+
+	chmod +x "$ZRAM_SCRIPT_PATH"
+	printf "$ZRAM_SCRIPT_PATH ${GCV}created${NCV}\n"
+
+# zram systemd-unit
+cat > "$ZRAM_UNIT_PATH" <<EOF
+[Unit]
+Description=ZRAM Swap Initializer
+After=local-fs.target
+Before=swap.target
+
+[Service]
+Type=oneshot
+ExecStart=$ZRAM_SCRIPT_PATH
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+	# Setting tuning parameters
+	if ! grep -q '^vm.page-cluster' ${SYSCTL_CONF_FILE} || ! grep -q '^vm.min_free_kbytes' ${SYSCTL_CONF_FILE}; then
+		{
+			echo "vm.page-cluster = 0"
+			echo "vm.min_free_kbytes = 65536"
+		} >> /etc/sysctl.conf
+	
+		sysctl -p > /dev/null 2>&1
+	fi
+
+	systemctl daemon-reexec > /dev/null 2>&1
+	systemctl daemon-reload > /dev/null 2>&1
+	systemctl enable --now zram-init.service > /dev/null 2>&1
+
+	printf "$ZRAM_UNIT_PATH ${GCV}created and started${NCV}\n"
+
+	else
+		# user chose not to fix zswap
+		printf "zram swap creation was canceled by user choice\n"
+	fi
+fi
 
 if [[ $VIRTUAL == "yes" ]]; then
 
@@ -579,10 +681,17 @@ if [[ $VIRTUAL == "yes" ]]; then
 
 			VFS_CACHE_PRESSURE=$(cat /proc/sys/vm/vfs_cache_pressure)
 			SWAPPINESS=$(cat /proc/sys/vm/swappiness)
-		
-			printf "Current vfs_cache_pressure - $VFS_CACHE_PRESSURE ( ${GCV}echo \"vm.vfs_cache_pressure = 100\" >> /etc/sysctl.conf && sysctl -p ${NCV})\n"
-			printf "Current swappiness - $SWAPPINESS ( ${GCV}echo \"vm.swappiness = 60\" >> /etc/sysctl.conf && sysctl -p ${NCV})\n"
-	
+
+			# Setting tuning parameters
+			if ! grep -q '^vm.swappiness' ${SYSCTL_CONF_FILE} || ! grep -q '^vm.vfs_cache_pressure' ${SYSCTL_CONF_FILE}; then
+				{
+					echo "vm.swappiness = 180"
+					echo "vm.vfs_cache_pressure = 100"
+				} >> /etc/sysctl.conf > /dev/null 2>&1
+
+				sysctl -p > /dev/null 2>&1
+			fi
+
 			TOTAL_RAM_IN_GB=$(awk '/MemTotal/ { printf "%.1f\n", $2/1024/1024 }' /proc/meminfo)
 			FREE_RAM_IN_MB=$(awk '/MemAvailable/ { printf "%i\n", $2/1024 }' /proc/meminfo)
 	
@@ -607,12 +716,12 @@ if [[ $VIRTUAL == "yes" ]]; then
 						\dd if=/dev/zero of=/swapfile bs=1024 count=$DD_COUNT
 						\mkswap /swapfile
 						\chmod 600 /swapfile
-						\swapon /swapfile
+						\swapon -p 10 /swapfile
 						} > /dev/null 2>&1
 	
 	
 						if swapon --show | grep -i "/swapfile" > /dev/null 2>&1; then
-							echo "/swapfile                                 none                    swap    sw              0 0" >> /etc/fstab
+							echo "/swapfile                                 none                    swap    sw,pri=10              0 0" >> /etc/fstab
 							printf " - ${GCV}DONE${NCV}\n"
 							break
 						else
@@ -2030,139 +2139,142 @@ fi
 tweak_nginx_params_func() {
 
 # nginx check
-nginx_exists_check_func
-
-# Checking include directive exists in main nginx conf
-if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
-	echo
-	read -p "Tweak nginx parameters ? [Y/n]" -n 1 -r
-	echo
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-		declare -A NGINX_PARAMS
-		NGINX_PARAMS=(
-			["proxy_buffers"]="32 16k"
-			["proxy_buffer_size"]="16k"
-			["proxy_max_temp_file_size"]="0"
-			["fastcgi_buffers"]="16 16k"
-			["fastcgi_buffer_size"]="32k"
-			["client_body_buffer_size"]="32k"
-			["client_header_buffer_size"]="1k"
-			["client_max_body_size"]="1024m"
-			["large_client_header_buffers"]="4 16k"
-			["etag"]="on"
-			["sendfile"]="on"
-			["sendfile_max_chunk"]="512k"
-			["tcp_nopush"]="on"
-			["tcp_nodelay"]="on"
-			["server_names_hash_bucket_size"]="512"
-			["server_names_hash_max_size"]="1024"
-		)
-
-		echo "# Custom settings" > "$NGINX_TWEAKS_INCLUDE_FILE"
-		
-		# Add the include directive to the main config if it's not already there
-		if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
-			# Add the include directive directly to the main configuration file
-			sed -i '/http\s*{/a \	include '"$NGINX_TWEAKS_INCLUDE_FILE"';' "$NGINX_CONF_FILE"
-		
-			# Test the configuration after adding the include directive
-			if ! nginx -t > /dev/null 2>&1; then
-				# If the test fails, remove the include directive from the main configuration file
-				sed -i '/include '"$(echo "$NGINX_TWEAKS_INCLUDE_FILE" | sed 's/\//\\\//g')"';/d' "$NGINX_CONF_FILE"
-				# Remove the include file
-				rm -f "$NGINX_TWEAKS_INCLUDE_FILE"
-				printf "\n${LRV}Error:${NCV}  Failed to add include directive to $NGINX_CONF_FILE. Changes reverted."
-				exit 1
-			else
-				printf "${NGINX_TWEAKS_INCLUDE_FILE} was ${GCV}successfully${NCV} added to ${NGINX_CONF_FILE}" 
-			fi
-		fi
-
-		printf "\nRunning nginx params tweaks"
-		
-		# Sort NGINX_PARAMS param
-		sorted_params=$(for param in "${!NGINX_PARAMS[@]}"; do echo "$param"; done | sort)
+if nginx_exists_check_func; then
 	
-		config_test_fail_msg="The configuration test failed after the change"
-		
-		# Add or update parameters in the include file or nginx.conf
-		for param in $sorted_params; do
-			new_value="${NGINX_PARAMS[$param]}"
-		
-			# Check if the parameter with the desired value already exists in the specified files
-			if check_param_exists "$param" "$new_value"; then
+	# Checking include directive exists in main nginx conf
+	if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
+		echo
+		read -p "Tweak nginx parameters ? [Y/n]" -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			declare -A NGINX_PARAMS
+			NGINX_PARAMS=(
+				["proxy_buffers"]="32 16k"
+				["proxy_buffer_size"]="16k"
+				["proxy_max_temp_file_size"]="0"
+				["fastcgi_buffers"]="16 16k"
+				["fastcgi_buffer_size"]="32k"
+				["client_body_buffer_size"]="32k"
+				["client_header_buffer_size"]="1k"
+				["client_max_body_size"]="1024m"
+				["large_client_header_buffers"]="4 16k"
+				["etag"]="on"
+				["sendfile"]="on"
+				["sendfile_max_chunk"]="512k"
+				["tcp_nopush"]="on"
+				["tcp_nodelay"]="on"
+				["server_names_hash_bucket_size"]="512"
+				["server_names_hash_max_size"]="1024"
+			)
 	
-				# If the parameter with the desired value already exists, skip it
-				continue
-			fi
-
-			# Try to update the parameter in nginx.conf (before the server block)
-			old_value=$(awk '/^\s*'"$param"'\s+.*;/' "$NGINX_CONF_FILE" | awk '{for (i=2; i<=NF; i++) if ($i ~ /;/) {print substr($i, 1, length($i)-1); exit} else printf "%s ", $i}')
-			if [[ -n "$old_value" ]]; then
-				if update_param_in_file "$NGINX_CONF_FILE" "$param" "$new_value"; then
-					NGINX_TWEAKS_SUCCESS_ADDED+=("$param (!updated in $NGINX_CONF_FILE, old: $old_value, new: $new_value)")
+			echo "# Custom settings" > "$NGINX_TWEAKS_INCLUDE_FILE"
+			
+			# Add the include directive to the main config if it's not already there
+			if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
+				# Add the include directive directly to the main configuration file
+				sed -i '/http\s*{/a \	include '"$NGINX_TWEAKS_INCLUDE_FILE"';' "$NGINX_CONF_FILE"
+			
+				# Test the configuration after adding the include directive
+				if ! nginx -t > /dev/null 2>&1; then
+					# If the test fails, remove the include directive from the main configuration file
+					sed -i '/include '"$(echo "$NGINX_TWEAKS_INCLUDE_FILE" | sed 's/\//\\\//g')"';/d' "$NGINX_CONF_FILE"
+					# Remove the include file
+					rm -f "$NGINX_TWEAKS_INCLUDE_FILE"
+					printf "\n${LRV}Error:${NCV}  Failed to add include directive to $NGINX_CONF_FILE. Changes reverted."
+					exit 1
 				else
-					printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_CONF_FILE - ${config_test_fail_msg}\n"
-				continue
-				fi
-			else
-				# If the parameter is not found in nginx.conf, try to update or add it in custom.conf
-				if update_param_in_file "$NGINX_TWEAKS_INCLUDE_FILE" "$param" "$new_value"; then
-					NGINX_TWEAKS_SUCCESS_ADDED+=("$param (!updated in $NGINX_TWEAKS_INCLUDE_FILE)")
-				else
-					add_param_to_file "$NGINX_TWEAKS_INCLUDE_FILE" "$param" "$new_value"
-					NGINX_TWEAKS_SUCCESS_ADDED+=("$param (added to $NGINX_TWEAKS_INCLUDE_FILE)")
+					printf "${NGINX_TWEAKS_INCLUDE_FILE} was ${GCV}successfully${NCV} added to ${NGINX_CONF_FILE}" 
 				fi
 			fi
+	
+			printf "\nRunning nginx params tweaks"
+			
+			# Sort NGINX_PARAMS param
+			sorted_params=$(for param in "${!NGINX_PARAMS[@]}"; do echo "$param"; done | sort)
 		
-			# Test the configuration after adding or updating the parameter
-			if ! nginx -t > /dev/null 2>&1; then
-	
-				# If the test fails, revert the changes
-				if [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_CONF_FILE"* ]]; then
-	
-					sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_CONF_FILE"
-					printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_CONF_FILE - ${config_test_fail_msg}\n"
-	
-				elif [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_TWEAKS_INCLUDE_FILE"* ]]; then
-	
-					sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_TWEAKS_INCLUDE_FILE"
-					printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_TWEAKS_INCLUDE_FILE - ${config_test_fail_msg}\n"
-	
-				else
-	
-					sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_TWEAKS_INCLUDE_FILE"
-					printf "\n${LRV}Error:${NCV} Failed to add $param to $NGINX_TWEAKS_INCLUDE_FILE - ${config_test_fail_msg}\n"
-	
+			config_test_fail_msg="The configuration test failed after the change"
+			
+			# Add or update parameters in the include file or nginx.conf
+			for param in $sorted_params; do
+				new_value="${NGINX_PARAMS[$param]}"
+			
+				# Check if the parameter with the desired value already exists in the specified files
+				if check_param_exists "$param" "$new_value"; then
+		
+					# If the parameter with the desired value already exists, skip it
+					continue
 				fi
 	
-				# Remove the parameter from the success list
-				NGINX_TWEAKS_SUCCESS_ADDED=("${NGINX_TWEAKS_SUCCESS_ADDED[@]/$param *}")
-			fi
-		done
+				# Try to update the parameter in nginx.conf (before the server block)
+				old_value=$(awk '/^\s*'"$param"'\s+.*;/' "$NGINX_CONF_FILE" | awk '{for (i=2; i<=NF; i++) if ($i ~ /;/) {print substr($i, 1, length($i)-1); exit} else printf "%s ", $i}')
+				if [[ -n "$old_value" ]]; then
+					if update_param_in_file "$NGINX_CONF_FILE" "$param" "$new_value"; then
+						NGINX_TWEAKS_SUCCESS_ADDED+=("$param (!updated in $NGINX_CONF_FILE, old: $old_value, new: $new_value)")
+					else
+						printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_CONF_FILE - ${config_test_fail_msg}\n"
+					continue
+					fi
+				else
+					# If the parameter is not found in nginx.conf, try to update or add it in custom.conf
+					if update_param_in_file "$NGINX_TWEAKS_INCLUDE_FILE" "$param" "$new_value"; then
+						NGINX_TWEAKS_SUCCESS_ADDED+=("$param (!updated in $NGINX_TWEAKS_INCLUDE_FILE)")
+					else
+						add_param_to_file "$NGINX_TWEAKS_INCLUDE_FILE" "$param" "$new_value"
+						NGINX_TWEAKS_SUCCESS_ADDED+=("$param (added to $NGINX_TWEAKS_INCLUDE_FILE)")
+					fi
+				fi
+			
+				# Test the configuration after adding or updating the parameter
+				if ! nginx -t > /dev/null 2>&1; then
 		
-		# Reload Nginx if changes were made
-		if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
-	
-			if systemctl reload nginx > /dev/null 2>&1; then
-				printf "\n${GCV}OK${NCV}\n"
-				printf "Nginx added/updated:\n\n"
-				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
+					# If the test fails, revert the changes
+					if [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_CONF_FILE"* ]]; then
+		
+						sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_CONF_FILE"
+						printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_CONF_FILE - ${config_test_fail_msg}\n"
+		
+					elif [[ "${NGINX_TWEAKS_SUCCESS_ADDED[-1]}" == *"updated in $NGINX_TWEAKS_INCLUDE_FILE"* ]]; then
+		
+						sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_TWEAKS_INCLUDE_FILE"
+						printf "\n${LRV}Error:${NCV} Failed to update $param in $NGINX_TWEAKS_INCLUDE_FILE - ${config_test_fail_msg}\n"
+		
+					else
+		
+						sed -i -E "/^\s*$param\s+.*;/d" "$NGINX_TWEAKS_INCLUDE_FILE"
+						printf "\n${LRV}Error:${NCV} Failed to add $param to $NGINX_TWEAKS_INCLUDE_FILE - ${config_test_fail_msg}\n"
+		
+					fi
+		
+					# Remove the parameter from the success list
+					NGINX_TWEAKS_SUCCESS_ADDED=("${NGINX_TWEAKS_SUCCESS_ADDED[@]/$param *}")
+				fi
+			done
+			
+			# Reload Nginx if changes were made
+			if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
+		
+				if systemctl reload nginx > /dev/null 2>&1; then
+					printf "\n${GCV}OK${NCV}\n"
+					printf "Nginx added/updated:\n\n"
+					printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
+				else
+					printf "\n${LRV}FAIL${NCV}\n"
+					printf "${LRV}Error:${NCV} Failed to reload Nginx ( run: nginx -t )\n"
+					printf "\nNginx added/updated:\n"
+					printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
+				fi
 			else
-				printf "\n${LRV}FAIL${NCV}\n"
-				printf "${LRV}Error:${NCV} Failed to reload Nginx ( run: nginx -t )\n"
-				printf "\nNginx added/updated:\n"
-				printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
+				printf "\nTweak nginx not needed or was ${GCV}already done${NCV}\n"
 			fi
 		else
-			printf "\nTweak nginx not needed or was ${GCV}already done${NCV}\n"
+			# user chose not to tweak nginx
+			printf "Nginx params tweak was canceled by user choice\n"
 		fi
 	else
-		# user chose not to tweak nginx
-		printf "Nginx params tweak was canceled by user choice\n"
+		printf "\nTweak nginx not needed or was ${GCV}already done${NCV}\n"
 	fi
 else
-	printf "\nTweak nginx not needed or was ${GCV}already done${NCV}\n"
+	return 1
 fi
 }
 
@@ -2170,110 +2282,113 @@ fi
 tweak_add_nginx_bad_robot_conf_func() {
 
 # check nginx exists
-nginx_exists_check_func
-
-local NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
-
-# bad_robot.conf file path depending the environment
-# if ISP Manager
-if [[ -f $MGR_BIN ]]; then
-	local nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
-# if Bitrix
-elif [[ $BITRIXALIKE == "yes" ]]; then
-	# Bitrix Env or GT
-	if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
-		local nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
-	# Other one bitrix "vanilla"
-	elif [[ $BITRIX == "VANILLA" ]]; then
-		local nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
+if nginx_exists_check_func; then
+	
+	local NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
+	
+	# bad_robot.conf file path depending the environment
+	# if ISP Manager
+	if [[ -f $MGR_BIN ]]; then
+		local nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
+	# if Bitrix
+	elif [[ $BITRIXALIKE == "yes" ]]; then
+		# Bitrix Env or GT
+		if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
+			local nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
+		# Other one bitrix "vanilla"
+		elif [[ $BITRIX == "VANILLA" ]]; then
+			local nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
+		else
+			true
+		fi
 	else
 		true
 	fi
-else
-	true
-fi
-
-# if nginx check show no $http_user_agent configs, proceed
-if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
-
-	echo
-	read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-
-		# checking nginx configuration sanity
-		nginx_conf_sanity_check_fast
-
-		# if ISP Manager
-		if [[ -f $MGR_BIN ]]; then
-			# lic validation
-			isp_panel_check_license_version
-		# if Bitrix
-		elif [[ $BITRIXALIKE == "yes" ]]; then
-
-			# Bitrix Env or GT
-			if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
-				local bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
-
-				# fix could not build optimal proxy_headers_hash
-				printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
-
-			# Other one bitrix "vanilla"
-			elif [[ $BITRIX == "VANILLA" ]]; then
-				local bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
+	
+	# if nginx check show no $http_user_agent configs, proceed
+	if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+	
+		echo
+		read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+	
+			# checking nginx configuration sanity
+			nginx_conf_sanity_check_fast
+	
+			# if ISP Manager
+			if [[ -f $MGR_BIN ]]; then
+				# lic validation
+				isp_panel_check_license_version
+			# if Bitrix
+			elif [[ $BITRIXALIKE == "yes" ]]; then
+	
+				# Bitrix Env or GT
+				if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
+					local bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
+	
+					# fix could not build optimal proxy_headers_hash
+					printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
+	
+				# Other one bitrix "vanilla"
+				elif [[ $BITRIX == "VANILLA" ]]; then
+					local bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
+				else
+					printf "\n${LRV}Error.${NCV} Unknown bitrix environment. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
+					return 1
+				fi
+	
+				if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
+						sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_nginx_general_conf
+				else
+					printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in "bad_robot.conf" $bitrix_nginx_general_conf ). Include failed.\n"
+					return 1
+				fi
 			else
-				printf "\n${LRV}Error.${NCV} Unknown bitrix environment. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
+				printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
 				return 1
 			fi
-
-			if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
-					sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_nginx_general_conf
-			else
-				printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in "bad_robot.conf" $bitrix_nginx_general_conf ). Include failed.\n"
+	
+			# downloading nginx bad_robot.conf file
+			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
 				return 1
 			fi
+	
+			# checking bad_robot file exist in nginx config
+			printf "\nChecking bad_robot.conf file exists in nginx config"
+			if 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+				printf " - ${GCV}OK${NCV}"
+			else
+				printf " - ${LRV}FAIL${NCV}"
+			fi
+	
+			# checking nginx configuration sanity again
+			nginx_conf_sanity_check_fast
 		else
-			printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
-			return 1
+			# user chose not to install bad_robot.conf in nginx 
+			printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
 		fi
-
-		# downloading nginx bad_robot.conf file
-		if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
-			return 1
+	
+	# updating bad_robot.conf
+	elif [[ -f ${nginx_bad_robot_file_local} ]] && 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+	
+		local remote_url_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
+		local nginx_bad_robot_file_local_size_bytes=$(\stat --printf="%s" ${nginx_bad_robot_file_local} 2>/dev/null || echo 0)
+	
+		if [[ ${remote_url_size_bytes} -gt 30 ]] && [[ ${remote_url_size_bytes} -ne ${nginx_bad_robot_file_local_size_bytes} ]]; then
+			printf "\n${YCV}Updating${NCV} existing ${nginx_bad_robot_file_local} to the latest version "
+			# downloading nginx bad_robot.conf file
+			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
+				return 1
+			fi
 		fi
-
-		# checking bad_robot file exist in nginx config
-		printf "\nChecking bad_robot.conf file exists in nginx config"
-		if 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
-			printf " - ${GCV}OK${NCV}"
-		else
-			printf " - ${LRV}FAIL${NCV}"
-		fi
-
-		# checking nginx configuration sanity again
-		nginx_conf_sanity_check_fast
 	else
-		# user chose not to install bad_robot.conf in nginx 
-		printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
-	fi
-
-# updating bad_robot.conf
-elif [[ -f ${nginx_bad_robot_file_local} ]] && 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
-
-	local remote_url_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
-	local nginx_bad_robot_file_local_size_bytes=$(\stat --printf="%s" ${nginx_bad_robot_file_local} 2>/dev/null || echo 0)
-
-	if [[ ${remote_url_size_bytes} -gt 30 ]] && [[ ${remote_url_size_bytes} -ne ${nginx_bad_robot_file_local_size_bytes} ]]; then
-		printf "\n${YCV}Updating${NCV} existing ${nginx_bad_robot_file_local} to the latest version "
-		# downloading nginx bad_robot.conf file
-		if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
-			return 1
-		fi
+		printf "\nAdding nginx blocking of annoying bots not needed or was ${GCV}already done${NCV}\n" 
 	fi
 else
-	printf "\nAdding nginx blocking of annoying bots not needed or was ${GCV}already done${NCV}\n" 
-fi
+	return 1
+fi	
 }
-
+	
 # check nginx conf and reload configuration fast
 nginx_conf_sanity_check_fast() {
 
