@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.80"
+self_current_version="1.0.81"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -571,32 +571,23 @@ SYSCTL_CONF_FILE="/etc/sysctl.conf"
 		
 mem_total_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 mem_total_mib=$((mem_total_kb / 1024))
-half_mem=$((mem_total_mib / 2))
+half_mem_mib=$((mem_total_mib / 2))
 zram_size_bytes=$(( (mem_total_kb / 2) * 1024 ))
-		
-zram_size_kib=$(swapon --noheadings --bytes | awk '$1 ~ /zram/ {sum += $3} END {print sum}')
-zram_size_mib=$((zram_size_kib / 1024))
+
+existing_zram_size_bytes=$(swapon --noheadings --bytes | awk '$1 ~ /zram/ {sum += $3} END {print sum}')
+existing_zram_size_kib=$((zram_size_bytes / 1024))
+existing_zram_size_mib=$((zram_size_kib / 1024))
+
+zram_active=$(swapon --noheadings --raw | grep -q zram; echo $?)
 
 # Checking zswap file exists and its settings
-if ( ! swapon | grep -q zram ) && [[ ! -f $ZRAM_SCRIPT_PATH ]] && [[ ! -f $ZRAM_UNIT_PATH ]] || [[ "$zram_size_mib" -gt "$half_mem" ]]; then
-	echo
-	read -p "Enable zram swap (or fix) ? [Y/n]" -n 1 -r
-	echo
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-
-		ZRAM_SCRIPT_PATH="/usr/local/bin/zram-init.sh"
-		ZRAM_UNIT_PATH="/etc/systemd/system/zram-init.service"
-		SYSCTL_CONF_FILE="/etc/sysctl.conf"
-		
-		mem_total_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-		mem_total_mib=$((mem_total_kb / 1024))
-		half_mem=$((mem_total_mib / 2))
-		zram_size_bytes=$(( (mem_total_kb / 2) * 1024 ))
-		
-		zram_size_kib=$(swapon --noheadings --bytes | awk '$1 ~ /zram/ {sum += $3} END {print sum}')
-		zram_size_mib=$((zram_size_kib / 1024))
-
-		cat > "$ZRAM_SCRIPT_PATH" <<'EOF'
+if [[ "$zram_active" -ne 0 ]]; then
+	if [[ ! -f $ZRAM_SCRIPT_PATH ]] || [[ ! -f $ZRAM_UNIT_PATH ]] || [[ "$existing_zram_size_mib" -eq 0 ]] || [[ "$existing_zram_size_mib" -gt "$half_mem_mib" ]] ; then
+		echo
+		read -p "Enable zram swap (or fix) ? [Y/n]" -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			cat > "$ZRAM_SCRIPT_PATH" <<'EOF'
 #!/bin/bash
 
 if swapon | grep -q zram; then
@@ -635,6 +626,7 @@ cat > "$ZRAM_UNIT_PATH" <<EOF
 Description=ZRAM Swap Initializer
 After=local-fs.target
 Before=swap.target
+DefaultDependencies=no
 
 [Service]
 Type=oneshot
@@ -645,26 +637,33 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 EOF
 
-	# Setting tuning parameters
-	if ! grep -q '^vm.page-cluster' ${SYSCTL_CONF_FILE} || ! grep -q '^vm.min_free_kbytes' ${SYSCTL_CONF_FILE}; then
-		{
-			echo "vm.page-cluster = 0"
-			echo "vm.min_free_kbytes = 65536"
-		} >> /etc/sysctl.conf
-	
+		# Setting tuning parameters
+		if ! grep -Eq '^\s*vm\.page-cluster' "$SYSCTL_CONF_FILE"; then
+			echo "vm.page-cluster = 0" >> "$SYSCTL_CONF_FILE"
+		fi
+		
+		if ! grep -Eq '^\s*vm\.min_free_kbytes' "$SYSCTL_CONF_FILE"; then
+			echo "vm.min_free_kbytes = 65536" >> "$SYSCTL_CONF_FILE"
+		fi
+		
 		sysctl -p > /dev/null 2>&1
+	
+	
+		systemctl daemon-reexec > /dev/null 2>&1
+		systemctl daemon-reload > /dev/null 2>&1
+		systemctl enable --now zram-init.service > /dev/null 2>&1
+		sleep 2
+		systemctl restart zram-init.service > /dev/null 2>&1
+	
+		printf "$ZRAM_UNIT_PATH ${GCV}created and started${NCV}\n"
+	
+		else
+			# user chose not to fix zswap
+			printf "zram swap creation was canceled by user choice\n"
+		fi
 	fi
-
-	systemctl daemon-reexec > /dev/null 2>&1
-	systemctl daemon-reload > /dev/null 2>&1
-	systemctl enable --now zram-init.service > /dev/null 2>&1
-
-	printf "$ZRAM_UNIT_PATH ${GCV}created and started${NCV}\n"
-
-	else
-		# user chose not to fix zswap
-		printf "zram swap creation was canceled by user choice\n"
-	fi
+else
+	printf "\nzram swap ${GCV}already active${NCV} ( $(swapon --noheadings --raw | grep zram) ) \n"
 fi
 
 if [[ $VIRTUAL == "yes" ]]; then
