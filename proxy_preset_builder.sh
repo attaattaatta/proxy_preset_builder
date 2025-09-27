@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.81"
+self_current_version="1.0.82"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2378,6 +2378,9 @@ if nginx_exists_check_func; then
 			# downloading nginx bad_robot.conf file
 			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
 				return 1
+			else
+				# checking nginx configuration sanity
+				nginx_conf_sanity_check_fast
 			fi
 		fi
 	else
