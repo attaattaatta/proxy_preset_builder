@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.82"
+self_current_version="1.0.83"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2146,6 +2146,32 @@ if nginx_exists_check_func; then
 		read -p "Tweak nginx parameters ? [Y/n]" -n 1 -r
 		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+	
+			declare -A BASE_NGINX_PARAMS=(
+				["worker_processes"]="auto"
+				["worker_rlimit_nofile"]="200000"
+				["worker_connections"]="10240"
+			)
+			for param in "${!BASE_NGINX_PARAMS[@]}"; do
+				val="${BASE_NGINX_PARAMS[$param]}"
+
+				if [[ "$param" == "worker_connections" ]]; then
+					sed -i "s|^\s*worker_connections\s\+.*;|    worker_connections ${val};|" "$NGINX_CONF_FILE"
+				else
+					if ! grep -qE "^\s*${param}\s+${val};" "$NGINX_CONF_FILE"; then
+						if grep -qE "^\s*${param}\s+" "$NGINX_CONF_FILE"; then
+							sed -i "s|^\s*${param}\s\+.*;|${param} ${val};|" "$NGINX_CONF_FILE"
+						else
+							sed -i "1i${param} ${val};" "$NGINX_CONF_FILE"
+						fi
+					fi
+				fi
+
+				if ! nginx -t > /dev/null 2>&1; then
+					printf "\n${LRV}Error:${NCV} Failed to update ${param} in $NGINX_CONF_FILE\n"
+				fi
+			done
+
 			declare -A NGINX_PARAMS
 			NGINX_PARAMS=(
 				["proxy_buffers"]="32 16k"
