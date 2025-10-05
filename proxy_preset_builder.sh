@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.83"
+self_current_version="1.0.84"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -22,6 +22,20 @@ if [[ $EUID -ne 0 ]]; then
 	printf "\n${LRV}ERROR - This script must be run as root.${NCV}" 
 	exit 1
 fi
+
+#check tools
+WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout' 'stat' 'diff' 'wget')
+
+for needitem in "${WE_NEED[@]}"
+do
+	if ! command -v $needitem > /dev/null 2>&1; then 
+		if ! apt-get update > /dev/null 2>&1 && apt-get install -y "$needitem" > /dev/null 2>&1 || ! yum install -y "$needitem" > /dev/null 2>&1; then
+			printf "\n${LRV}Error:${NCV} cannot install ${needitem}. Please install it first or export correct \$PATH.\n"
+			show_help_func
+			exit 1
+		fi
+	fi
+done
 
 # isp vars
 MGR_PATH="/usr/local/mgr5"
@@ -141,20 +155,6 @@ printf "\n${GCV}Recompile nginx${NCV} (add/remove modules | update/change SSL): 
 printf "\nCurrent special ${YCV}templates list${NCV}: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm\n"
 
 }
-
-#check tools
-WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout' 'stat' 'diff')
-
-for needitem in "${WE_NEED[@]}"
-do
-	if ! command -v $needitem > /dev/null 2>&1; then 
-		if ! apt-get update > /dev/null 2>&1 && apt-get install -y "$needitem" > /dev/null 2>&1 || ! yum install -y "$needitem" > /dev/null 2>&1; then
-			printf "\n${LRV}Error:${NCV} cannot install ${needitem}. Please install it first or export correct \$PATH.\n"
-			show_help_func
-			exit 1
-		fi
-	fi
-done
 
 # check OS
 if ! check_os_func > /dev/null 2>/dev/null; then
@@ -2154,26 +2154,17 @@ if nginx_exists_check_func; then
 			)
 			for param in "${!BASE_NGINX_PARAMS[@]}"; do
 				val="${BASE_NGINX_PARAMS[$param]}"
-
-				if [[ "$param" == "worker_connections" ]]; then
-					sed -i "s|^\s*worker_connections\s\+.*;|    worker_connections ${val};|" "$NGINX_CONF_FILE"
-				else
-					if ! grep -qE "^\s*${param}\s+${val};" "$NGINX_CONF_FILE"; then
-						if grep -qE "^\s*${param}\s+" "$NGINX_CONF_FILE"; then
-							sed -i "s|^\s*${param}\s\+.*;|${param} ${val};|" "$NGINX_CONF_FILE"
-						else
-							sed -i "1i${param} ${val};" "$NGINX_CONF_FILE"
-						fi
+				cur=$(grep -Po "^\s*${param}\s+\K[^;]+" "$NGINX_CONF_FILE" | head -1)
+				if [[ -z "$cur" || "$val" =~ [^0-9] && "$cur" != "$val" || "$val" =~ ^[0-9]+$ && "$cur" =~ ^[0-9]+$ && "$val" -gt "$cur" ]]; then
+					if grep -qE "^\s*${param}\s+" "$NGINX_CONF_FILE"; then
+						sed -i "s|^\s*${param}\s\+.*;|${param} ${val};|" "$NGINX_CONF_FILE"
+					else
+						sed -i "1i${param} ${val};" "$NGINX_CONF_FILE"
 					fi
-				fi
-
-				if ! nginx -t > /dev/null 2>&1; then
-					printf "\n${LRV}Error:${NCV} Failed to update ${param} in $NGINX_CONF_FILE\n"
 				fi
 			done
 
-			declare -A NGINX_PARAMS
-			NGINX_PARAMS=(
+			declare -A NGINX_PARAMS=(
 				["proxy_buffers"]="32 16k"
 				["proxy_buffer_size"]="16k"
 				["proxy_max_temp_file_size"]="0"
