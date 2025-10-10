@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.84"
+self_current_version="1.0.85"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -24,12 +24,12 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 #check tools
-WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout' 'stat' 'diff' 'wget')
+WE_NEED=('sed' 'awk' 'perl' 'cp' 'grep' 'printf' 'cat' 'rm' 'test' 'openssl' 'getent' 'mkdir' 'timeout' 'stat' 'diff')
 
 for needitem in "${WE_NEED[@]}"
 do
-	if ! command -v $needitem > /dev/null 2>&1; then 
-		if ! apt-get update > /dev/null 2>&1 && apt-get install -y "$needitem" > /dev/null 2>&1 || ! yum install -y "$needitem" > /dev/null 2>&1; then
+	if ! command -v "$needitem" >/dev/null 2>&1; then
+		if ! (apt-get update -y >/dev/null 2>&1 && apt-get install -y "$needitem" >/dev/null 2>&1) && ! (yum install -y "$needitem" >/dev/null 2>&1); then
 			printf "\n${LRV}Error:${NCV} cannot install ${needitem}. Please install it first or export correct \$PATH.\n"
 			show_help_func
 			exit 1
@@ -2824,6 +2824,20 @@ fi
 # run tweak function
 if [[ $1 = "tweak" ]]
 then
+	#check tools
+	WE_NEED=('wget')
+	
+	for needitem in "${WE_NEED[@]}"
+	do
+		if ! command -v "$needitem" >/dev/null 2>&1; then
+			if ! (apt-get update -y >/dev/null 2>&1 && apt-get install -y "$needitem" >/dev/null 2>&1) && ! (yum install -y "$needitem" >/dev/null 2>&1); then
+				printf "\n${LRV}Error:${NCV} cannot install ${needitem}. Please install it first or export correct \$PATH.\n"
+				show_help_func
+				exit 1
+			fi
+		fi
+	done
+
 	run_all_tweaks
 	exit 0
 fi
