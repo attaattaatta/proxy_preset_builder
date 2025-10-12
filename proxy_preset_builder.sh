@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.86"
+self_current_version="1.0.87"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -557,7 +557,7 @@ else
 	ispmanager_enable_features_func
 	ispmanager_switch_cgi_mod_func
 	ispmanager_tweak_php_and_mysql_settings_func
-	ispmanager_tweak_apache_and_php_fpm_func
+	ispmanager_tweak_nginx_apache_php_fpm_func
 	tweak_nginx_params_func
 	tweak_add_nginx_bad_robot_conf_func
 
@@ -1960,7 +1960,7 @@ fi
 }
 
 # tweak isp manager fpm
-ispmanager_tweak_apache_and_php_fpm_func() {
+ispmanager_tweak_nginx_apache_php_fpm_func() {
 
 if [[ -f $MGR_BIN ]]; then
 
@@ -1969,6 +1969,8 @@ if [[ -f $MGR_BIN ]]; then
 
 	isp_fpm_template_file_path="/usr/local/mgr5/etc/templates/fpm_site_pool.conf"
 	isp_apache_vhost_template_file_path="/usr/local/mgr5/etc/templates/default/apache2-directory.template"
+	isp_nginx_vhost_template_file1_path="/usr/local/mgr5/etc/templates/default/nginx-suspend.template"
+	isp_nginx_vhost_template_file2_path="/usr/local/mgr5/etc/templates/default/nginx-vhosts.template"
 	
 	# backup to /root/support
 	backup_dest_dir_path="/root/support/$(date '+%d-%b-%Y-%H-%M-%Z')/"
@@ -1976,14 +1978,37 @@ if [[ -f $MGR_BIN ]]; then
 	# same for sites that already exist
 	isp_php_fpm_enabled_sites=$(grep -RiIlE '^pm = ondemand|^pm.max_children = 5' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube')
 	
-	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") > /dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} > /dev/null 2>&1; then
+	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") > /dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} > /dev/null 2>&1 || grep -qE 'return.*SSL_PORT' "$isp_nginx_vhost_template_file1_path" "$isp_nginx_vhost_template_file2_path"; then
 		echo
-		read -p "Tweak ISP Manager php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
+		read -p "Tweak ISP Manager nginx, php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 			# creating backup dir
 			\mkdir -p "$backup_dest_dir_path" > /dev/null || { printf "\n${LRV}Error${NCV} creating backup dir - ${backup_dest_dir_path}\n"; return 1; }
-	
+
+			# isp nginx vhost template patch
+			{
+
+			\cp -Rfp --parents "${isp_nginx_vhost_template_file1_path}" "${backup_dest_dir_path}" && \
+			\cp -fp "$isp_nginx_vhost_template_file1_path" "${isp_nginx_vhost_template_file1_path}.original" > /dev/null && \
+			\chmod --reference="${isp_nginx_vhost_template_file1_path}" "${backup_dest_dir_path}${isp_nginx_vhost_template_file1_path}"
+
+			\cp -Rfp --parents "${isp_nginx_vhost_template_file2_path}" "${backup_dest_dir_path}" && \
+			\cp -fp "$isp_nginx_vhost_template_file2_path" "${isp_nginx_vhost_template_file2_path}.original" > /dev/null && \
+			\chmod --reference="${isp_nginx_vhost_template_file2_path}" "${backup_dest_dir_path}${isp_nginx_vhost_template_file2_path}"
+
+			} > /dev/null 2>&1
+
+			if [[ -f ${isp_nginx_vhost_template_file1_path}.original && -f ${isp_nginx_vhost_template_file2_path}.original ]]; then
+				printf "\nTemplate ${isp_nginx_vhost_template_file1_path} and ${isp_nginx_vhost_template_file2_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path} and ${isp_nginx_vhost_template_file1_path}.original and ${isp_nginx_vhost_template_file2_path}.original \n"
+				# removing 443 port from isp nginx templates for SEO proposes 
+				sed -i 's/:{% \$SSL_PORT %}//' ${isp_nginx_vhost_template_file1_path} > /dev/null
+				sed -i 's/:{% \$SSL_PORT %}//' ${isp_nginx_vhost_template_file2_path} > /dev/null
+			else
+				printf "\n${LRV}Error:${NCV} Cannot backup file ${isp_nginx_vhost_template_file1_path} and ${isp_nginx_vhost_template_file2_path} to ${backup_dest_dir_path} or ${isp_nginx_vhost_template_file1_path}.original and ${isp_nginx_vhost_template_file2_path}.original \n"
+				return 1
+			fi
+
 			# isp apache vhost template patch
 			{
 
