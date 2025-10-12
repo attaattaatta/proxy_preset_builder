@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.87"
+self_current_version="1.0.88"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1978,7 +1978,7 @@ if [[ -f $MGR_BIN ]]; then
 	# same for sites that already exist
 	isp_php_fpm_enabled_sites=$(grep -RiIlE '^pm = ondemand|^pm.max_children = 5' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube')
 	
-	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") > /dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} > /dev/null 2>&1 || grep -qE 'return.*SSL_PORT' "$isp_nginx_vhost_template_file1_path" "$isp_nginx_vhost_template_file2_path"; then
+	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") > /dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} > /dev/null 2>&1 || grep -qE 'return.*SSL_PORT.*request_uri;' "$isp_nginx_vhost_template_file1_path" "$isp_nginx_vhost_template_file2_path"; then
 		echo
 		read -p "Tweak ISP Manager nginx, php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
