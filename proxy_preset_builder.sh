@@ -524,7 +524,14 @@ backup_etc_func() {
         else
             printf " - ${LRV}FAIL${NCV}"
             printf "\n${LRV}Cannot create configs backup, disk used for 95%% or more${NCV}\n"
-            exit 1
+            	read -p "Continue ? [y/N]" -n 1 -r
+		echo
+		if [[ $REPLY =~ ^[Yy]$ ]]
+		then
+			return 0
+		else
+			exit 1
+		fi
         fi
     else
         printf "\n${LRV}Cannot create backup dir${NCV}\n"
