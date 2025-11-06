@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.88"
+self_current_version="1.0.89"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1115,7 +1115,7 @@ local full_url="$1"
 local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
 if command -v wget > /dev/null 2>&1; then
-	if ! 2>&1 \wget --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}'; then
+	if ! 2>&1 \wget --no-check-certificate --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}'; then
 		printf "\n${LRV}Error.${NCV} Failed to get remote file size with wget.\n"
 		return 1
 	fi
@@ -1186,7 +1186,7 @@ if wget_openssl_exists_check; then
 					return 1
 				fi
 			else
-				printf "${LRV}Error.${NCV} Remote size is ${full_url_size}\n"
+				printf "${LRV}Error.${NCV} Remote size less than expected. \n"
 				return 1
 			fi
 		else
@@ -1224,7 +1224,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
 	{
 	if command -v wget > /dev/null 2>&1; then 
-		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --no-check-certificate --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
 	else
 		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
 	fi
