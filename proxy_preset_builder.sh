@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.89"
+self_current_version="1.0.90"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1493,7 +1493,7 @@ if [[ -f $MGR_BIN ]]; then
 				done
 		
 				# waiting for installation
-				timeout_duration=300
+				timeout_duration=500
 				start_time=$(date +%s)
 		
 				while true; do
