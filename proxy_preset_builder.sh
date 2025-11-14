@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.90"
+self_current_version="1.0.91"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2200,13 +2200,13 @@ if nginx_exists_check_func; then
 			done
 
 			declare -A NGINX_PARAMS=(
-				["proxy_buffers"]="32 16k"
-				["proxy_buffer_size"]="16k"
+				["proxy_buffers"]="16 64k"
+				["proxy_buffer_size"]="64k"
 				["proxy_max_temp_file_size"]="0"
-				["fastcgi_buffers"]="16 16k"
-				["fastcgi_buffer_size"]="32k"
-				["client_body_buffer_size"]="32k"
-				["client_header_buffer_size"]="1k"
+				["fastcgi_buffers"]="8 64k"
+				["fastcgi_buffer_size"]="64k"
+				["client_body_buffer_size"]="128k"
+				["client_header_buffer_size"]="4k"
 				["client_max_body_size"]="1024m"
 				["large_client_header_buffers"]="4 16k"
 				["etag"]="on"
