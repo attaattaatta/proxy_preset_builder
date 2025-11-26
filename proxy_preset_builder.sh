@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.91"
+self_current_version="1.0.92"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2357,7 +2357,7 @@ if nginx_exists_check_func; then
 	fi
 	
 	# if nginx check show no $http_user_agent configs, proceed
-	if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+	if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" | grep -v '^[[:space:]]*#' > /dev/null 2>&1; then
 	
 		echo
 		read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
