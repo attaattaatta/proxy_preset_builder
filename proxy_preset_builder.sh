@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.93"
+self_current_version="1.0.94"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -100,7 +100,7 @@ load_shared_functions_func() {
 
 # check args n
 if [[ $# -ne 1 ]]; then
-	printf "\n${LRV}Error:${NCV} Not enouth args.\n"
+	printf "\n${LRV}Error:${NCV} Not enouth arguments.\n"
 	printf "\n${LRV}1:${NCV}$1\n"
 	return 1
 fi
@@ -108,7 +108,7 @@ fi
 # check args not empty
 for arg in "$@"; do
 	if [[ -z "$arg" ]]; then
-		printf "\n${LRV}Error:${NCV} Empty arg.\n"
+		printf "\n${LRV}Error:${NCV} Empty argument.\n"
 		printf "\n${LRV}1:${NCV}$1\n"
 		return 1
 	fi
@@ -1137,7 +1137,7 @@ if wget_openssl_exists_check; then
 	
 	# check args n
 	if [[ $# -ne 2 ]]; then
-		printf "\n${LRV}Error:${NCV} Not enouth args.\n"
+		printf "\n${LRV}Error:${NCV} Not enouth arguments.\n"
 		printf "\n${LRV}1:${NCV}$1\n"
 		printf "\n${LRV}2:${NCV}$2\n"
 		return 1
@@ -1146,7 +1146,7 @@ if wget_openssl_exists_check; then
 	# check args not empty
 	for arg in "$@"; do
 		if [[ -z "$arg" ]]; then
-			printf "\n${LRV}Error:${NCV} Empty arg.\n"
+			printf "\n${LRV}Error:${NCV} Empty arguments.\n"
 			printf "\n${LRV}1:${NCV}$1\n"
 			printf "\n${LRV}2:${NCV}$2\n"
 			return 1
@@ -1240,6 +1240,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		if [[ ! -z $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -ne $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
 			echo
 			read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
+			echo
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 				cp_date=$(date '+%d-%b-%Y-%H-%M')
 				\cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} > /dev/null 2>&1
@@ -1291,6 +1292,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		if ! checking_mod_rpaf_func || nginx_port_expose_detect_func ; then
 			echo
 			read -p "Install apache mod_rpaf and disable nginx port expose ? [Y/n]" -n 1 -r
+			echo
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 				bash <(timeout 4 wget --timeout 4 --no-check-certificate -q -o /dev/null -O- https://bit.ly/3wL8B2u)
 			else
@@ -1310,6 +1312,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	if ! \php -m | grep -i curl > /dev/null 2>&1; then
 		echo
 		read -p "Enable PHP cURL extension ? [Y/n]" -n 1 -r
+		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 			printf "Enabling cURL extension for PHP ${bitrix_php_version}"
@@ -1393,6 +1396,7 @@ if [[ -f $MGR_BIN ]]; then
 	if $MGR_CTL websettings | grep "http2=off" > /dev/null 2>&1; then
 		echo
 		read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
+		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			# Enable http/2 isp manager
 			printf "Running"
@@ -1414,7 +1418,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		printf "${GCV}"
 		read -p "Apply above tweaks ? [Y/n]" -n 1 -r
-		printf "${NCV}"	
+		printf "${NCV}"
 	
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			echo
@@ -1477,6 +1481,7 @@ if [[ -f $MGR_BIN ]]; then
 	if $MGR_CTL webdomain | grep -i "PHP CGI" > /dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" > /dev/null 2>&1; then
 		echo
 		read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
+		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			# check isp lic
 			isp_panel_check_license_version
@@ -1614,6 +1619,7 @@ if [[ -f $MGR_BIN ]]; then
 
 	then
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
+		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 			printf "Running"
 			isp_mod_php_install
@@ -1988,6 +1994,7 @@ if [[ -f $MGR_BIN ]]; then
 	if [[ -n "$isp_php_fpm_enabled_sites" ]] || ! (grep -qE '^pm = static$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_children = 15$' "$isp_fpm_template_file_path" && grep -qE '^pm.max_requests = 1500$' "$isp_fpm_template_file_path") > /dev/null 2>&1 || ! grep -P '\tOptions -Indexes' ${isp_apache_vhost_template_file_path} > /dev/null 2>&1 || grep -qE 'return.*SSL_PORT.*request_uri;' "$isp_nginx_vhost_template_file1_path" "$isp_nginx_vhost_template_file2_path"; then
 		echo
 		read -p "Tweak ISP Manager nginx, php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
+		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
 			# creating backup dir
@@ -2305,11 +2312,9 @@ if nginx_exists_check_func; then
 			if [ "${#NGINX_TWEAKS_SUCCESS_ADDED[@]}" -gt 0 ]; then
 		
 				if systemctl reload nginx > /dev/null 2>&1; then
-					printf "\n${GCV}OK${NCV}\n"
-					printf "Nginx added/updated:\n\n"
+					printf "\n${GCV}Nginx added/updated${NCV}:\n\n"
 					printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
 				else
-					printf "\n${LRV}FAIL${NCV}\n"
 					printf "${LRV}Error:${NCV} Failed to reload Nginx ( run: nginx -t )\n"
 					printf "\nNginx added/updated:\n"
 					printf '%s\n' "${NGINX_TWEAKS_SUCCESS_ADDED[@]}"
@@ -2337,21 +2342,25 @@ if nginx_exists_check_func; then
 
 	local NGINX_BAD_ROBOT_MAP_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot_map.conf"
 	local NGINX_BAD_ROBOT_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
-	local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
+	local NGINX_BAD_ROBOT_MAP_FILE_LOCAL=""
+	local NGINX_BAD_ROBOT_FILE_LOCAL=""
 	local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent|is_bad_robot)' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
 	
 	# bad_robot.conf file path depending the environment
 	# if ISP Manager
 	if [[ -f $MGR_BIN ]]; then
 		local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/vhosts-includes/bad_robot.conf"
+		local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
 	# if Bitrix
 	elif [[ $BITRIXALIKE == "yes" ]]; then
 		# Bitrix Env or GT
 		if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
 			local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/bx/conf/bad_robot.conf"
+			local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/bx/maps/bad_robot_map.conf"
 		# Other one bitrix "vanilla"
 		elif [[ $BITRIX == "VANILLA" ]]; then
 			local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/conf.d/bad_robot.conf"
+			local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
 		else
 			true
 		fi
@@ -2364,6 +2373,7 @@ if nginx_exists_check_func; then
 	
 		echo
 		read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
+		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 	
 			# checking nginx configuration sanity
@@ -2397,23 +2407,35 @@ if nginx_exists_check_func; then
 				if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
 						sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${NGINX_BAD_ROBOT_FILE_LOCAL};\n@" $bitrix_nginx_general_conf
 				else
-					printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in "bad_robot.conf" $bitrix_nginx_general_conf ). Include failed.\n"
+					printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in \"bad_robot.conf\" $bitrix_nginx_general_conf ). Include failed.\n"
 					return 1
 				fi
+
+			# if default install
+			elif 2>&1 nginx -T | grep -iq "include /etc/nginx/conf.d/\*.conf;" > /dev/null 2>&1 && ! 2>&1 nginx -T | grep -iqE 'if\s*\(\s*\$(http_user_agent|is_bad_robot)' > /dev/null 2>&1; then
+				local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
+				printf "\n${YCV}Cannot detect this nginx environment${NCV}\n"
+				printf "\nBad bot map file will be placed in - ${GCV}${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}${NCV}\n"
+				printf "\nDownload ${GCV}${NGINX_BAD_ROBOT_FILE_URL}${NCV} to all servers includes yourself\n"
 			else
-				printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Links:\n ${NGINX_BAD_ROBOT_FILE_URL}\n${NGINX_BAD_ROBOT_MAP_FILE_URL}\n"
-				return 1
-			fi
-	
-			# downloading NGINX_BAD_ROBOT_FILE_URL and NGINX_BAD_ROBOT_MAP_FILE_URL
-			if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
+				printf "\n${LRV}Error.${NCV}\nUnknown environment.\nDon't know where to place the include.\nLinks:\n ${NGINX_BAD_ROBOT_FILE_URL}\n ${NGINX_BAD_ROBOT_MAP_FILE_URL}\n"
 				return 1
 			fi
 
-			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$NGINX_BAD_ROBOT_FILE_LOCAL"; then
-				return 1
+			# downloading NGINX_BAD_ROBOT_FILE_URL and NGINX_BAD_ROBOT_MAP_FILE_URL
+			if [[ -n $NGINX_BAD_ROBOT_MAP_FILE_URL ]]; then
+
+				if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
+					return 1
+				fi
 			fi
-	
+
+			if [[ -n $NGINX_BAD_ROBOT_FILE_LOCAL ]]; then
+				if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$NGINX_BAD_ROBOT_FILE_LOCAL"; then
+					return 1
+				fi
+			fi
+
 			# checking bad_robot files exist in nginx config
 			printf "\nChecking bad robot files exists in nginx config"
 			if 2>&1 nginx -T | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1; then
@@ -2433,7 +2455,7 @@ if nginx_exists_check_func; then
 		fi
 	
 	# updating bad_robot_map.conf and bad_robot.conf
-	elif { [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && [[ -f "${NGINX_BAD_ROBOT_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1; } || grep -q '\$http_user_agent' "${NGINX_BAD_ROBOT_FILE_LOCAL}" 2>/dev/null; then
+	elif ( [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && [[ -f "${NGINX_BAD_ROBOT_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1 ) || grep -q '\$http_user_agent' "${NGINX_BAD_ROBOT_FILE_LOCAL}" 2>/dev/null; then
 
 		local remote_bad_robot_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
 		local local_bad_robot_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_FILE_LOCAL} 2>/dev/null || echo 0)
