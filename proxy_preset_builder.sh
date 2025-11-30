@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.92"
+self_current_version="1.0.93"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1159,7 +1159,7 @@ if wget_openssl_exists_check; then
 	files_diff_check() { diff -q ${file_path_local} <(\timeout 5 \wget -qO- ${full_url}) > /dev/null 2>&1 || diff -q ${file_path_local} <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
 	
 	# get filesize in bytes for downloaded file_path_local file
-	local file_path_local_size=$(\stat --printf="%s" ${file_path_local} 2>/dev/null || echo 0)
+	local file_path_local_size=$(stat --printf="%s" ${file_path_local} 2>/dev/null || echo 0)
 	
 	# get filesize in bytes for full_url file
 	local full_url_size=$(get_remote_file_size_bytes ${full_url})
@@ -1234,7 +1234,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	if [[ -f $ADMIN_SH_BITRIX_FILE_LOCAL ]]; then
 		
 		# get filesize in bytes for existing ADMIN_SH_BITRIX_FILE_LOCAL file
-		ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(\stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
+		ADMIN_SH_BITRIX_FILE_LOCAL_SIZE=$(stat --printf="%s" ${ADMIN_SH_BITRIX_FILE_LOCAL})
 
 		# if ADMIN_SH_BITRIX_FILE_REMOTE_SIZE defined, remote file size not null and both file sizes differs ask user for update
 		if [[ ! -z $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -gt 30 ]] && [[ $ADMIN_SH_BITRIX_FILE_REMOTE_SIZE -ne $ADMIN_SH_BITRIX_FILE_LOCAL_SIZE ]]; then
@@ -2334,21 +2334,24 @@ tweak_add_nginx_bad_robot_conf_func() {
 
 # check nginx exists
 if nginx_exists_check_func; then
-	
-	local NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bad_robot.conf"
+
+	local NGINX_BAD_ROBOT_MAP_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot_map.conf"
+	local NGINX_BAD_ROBOT_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
+	local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
+	local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$http_user_agent' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
 	
 	# bad_robot.conf file path depending the environment
 	# if ISP Manager
 	if [[ -f $MGR_BIN ]]; then
-		local nginx_bad_robot_file_local="/etc/nginx/vhosts-includes/bad_robot.conf"
+		local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/vhosts-includes/bad_robot.conf"
 	# if Bitrix
 	elif [[ $BITRIXALIKE == "yes" ]]; then
 		# Bitrix Env or GT
 		if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
-			local nginx_bad_robot_file_local="/etc/nginx/bx/conf/bad_robot.conf"
+			local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/bx/conf/bad_robot.conf"
 		# Other one bitrix "vanilla"
 		elif [[ $BITRIX == "VANILLA" ]]; then
-			local nginx_bad_robot_file_local="/etc/nginx/conf.d/bad_robot.conf"
+			local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/conf.d/bad_robot.conf"
 		else
 			true
 		fi
@@ -2357,7 +2360,7 @@ if nginx_exists_check_func; then
 	fi
 	
 	# if nginx check show no $http_user_agent configs, proceed
-	if ! 2>&1 nginx -T | grep -i "if ( \$http_user_agent" | grep -v '^[[:space:]]*#' > /dev/null 2>&1; then
+	if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*(\$http_user_agent|\$is_bad_robot)' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
 	
 		echo
 		read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
@@ -2389,24 +2392,28 @@ if nginx_exists_check_func; then
 				fi
 	
 				if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
-						sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${nginx_bad_robot_file_local};\n@" $bitrix_nginx_general_conf
+						sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${NGINX_BAD_ROBOT_FILE_LOCAL};\n@" $bitrix_nginx_general_conf
 				else
 					printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in "bad_robot.conf" $bitrix_nginx_general_conf ). Include failed.\n"
 					return 1
 				fi
 			else
-				printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
+				printf "\n${LRV}Error.${NCV} Unknown environment. Don't know where to place the include. Links:\n ${NGINX_BAD_ROBOT_FILE_URL}\n${NGINX_BAD_ROBOT_MAP_FILE_URL}\n"
 				return 1
 			fi
 	
-			# downloading nginx bad_robot.conf file
-			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
+			# downloading NGINX_BAD_ROBOT_FILE_URL and NGINX_BAD_ROBOT_MAP_FILE_URL
+			if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
+				return 1
+			fi
+
+			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$NGINX_BAD_ROBOT_FILE_LOCAL"; then
 				return 1
 			fi
 	
-			# checking bad_robot file exist in nginx config
-			printf "\nChecking bad_robot.conf file exists in nginx config"
-			if 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+			# checking bad_robot files exist in nginx config
+			printf "\nChecking bad robot files exists in nginx config"
+			if 2>&1 nginx -T | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1; then
 				printf " - ${GCV}OK${NCV}"
 			else
 				printf " - ${LRV}FAIL${NCV}"
@@ -2416,27 +2423,37 @@ if nginx_exists_check_func; then
 			nginx_conf_sanity_check_fast
 		else
 			# user chose not to install bad_robot.conf in nginx 
-			printf "\n${YCV}Nignx's bad_robot.conf include was skipped.${NCV} \n"
+			printf "\n${YCV}Nignx's bad_robot_map.conf and bad_robot.conf include was skipped.${NCV} \n"
 		fi
 	
-	# updating bad_robot.conf
-	elif [[ -f ${nginx_bad_robot_file_local} ]] && 2>&1 nginx -T | grep -i "if ( \$http_user_agent" > /dev/null 2>&1; then
+	# updating bad_robot_map.conf and bad_robot.conf
+	elif { [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && [[ -f "${NGINX_BAD_ROBOT_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1; } || grep -q '\$http_user_agent' "${NGINX_BAD_ROBOT_FILE_LOCAL}" 2>/dev/null; then
+
+		local remote_bad_robot_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
+		local local_bad_robot_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_FILE_LOCAL} 2>/dev/null || echo 0)
+
+		local remote_bad_robot_map_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_MAP_FILE_URL})
+		local local_bad_robot_map_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} 2>/dev/null || echo 0)
 	
-		local remote_url_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
-		local nginx_bad_robot_file_local_size_bytes=$(\stat --printf="%s" ${nginx_bad_robot_file_local} 2>/dev/null || echo 0)
-	
-		if [[ ${remote_url_size_bytes} -gt 30 ]] && [[ ${remote_url_size_bytes} -ne ${nginx_bad_robot_file_local_size_bytes} ]]; then
-			printf "\n${YCV}Updating${NCV} existing ${nginx_bad_robot_file_local} to the latest version "
-			# downloading nginx bad_robot.conf file
-			if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$nginx_bad_robot_file_local"; then
+		if [[ ${remote_bad_robot_map_file_size_bytes} -gt 30 ]] && [[ ${remote_bad_robot_map_file_size_bytes} -ne ${local_bad_robot_map_file_size_bytes} ]]; then
+			printf "\n${YCV}Updating${NCV} existing ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} to the latest version "
+			# downloading nginx bad_robot_map.conf and bad_robot.conf file
+			if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
 				return 1
+			
 			else
-				# checking nginx configuration sanity
-				nginx_conf_sanity_check_fast
+				if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$NGINX_BAD_ROBOT_FILE_LOCAL"; then
+					return 1
+				else
+					# checking nginx configuration sanity
+					nginx_conf_sanity_check_fast
+				fi
 			fi
+		else
+			printf "\nAdding nginx bad robot block was ${GCV}already done${NCV} in file ${NGINX_HTTP_UA_FILE}\n"
 		fi
 	else
-		printf "\nAdding nginx blocking of annoying bots not needed or was ${GCV}already done${NCV}\n" 
+		printf "\nAdding nginx bad robot block was ${GCV}already done${NCV} in file ${NGINX_HTTP_UA_FILE}\n" 
 	fi
 else
 	return 1
