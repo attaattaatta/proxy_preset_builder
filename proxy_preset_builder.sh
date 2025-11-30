@@ -1115,12 +1115,12 @@ local full_url="$1"
 local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
 if command -v wget > /dev/null 2>&1; then
-	if ! 2>&1 \wget --no-check-certificate --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | awk '{print $2}'; then
+	if ! 2>&1 \wget --no-check-certificate --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | grep -oE '[0-9]+'; then
 		printf "\n${LRV}Error.${NCV} Failed to get remote file size with wget.\n"
 		return 1
 	fi
 elif command -v openssl > /dev/null 2>&1; then
-	if ! printf "HEAD ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | grep "Content-Length" | awk '{print $2}'; then
+	if ! printf "HEAD ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | grep "Content-Length" | grep -oE '[0-9]+'; then
 		printf "\n${LRV}Error.${NCV} Failed to get remote file size with openssl s_client.\n"
 		return 1
 	fi
@@ -1156,23 +1156,23 @@ if wget_openssl_exists_check; then
 	local full_url="$1"
 	local file_path_local="$2"
 	local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
-	files_diff_check() { diff -q ${file_path_local} <(\timeout 5 \wget -qO- ${full_url}) > /dev/null 2>&1 || diff -q ${file_path_local} <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
+	files_diff_check() { diff -q "${file_path_local}" <(\timeout 5 \wget -qO- "${full_url}") > /dev/null 2>&1 || diff -q "${file_path_local}" <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
 	
 	# get filesize in bytes for downloaded file_path_local file
-	local file_path_local_size=$(stat --printf="%s" ${file_path_local} 2>/dev/null || echo 0)
+	local file_path_local_size=$(stat --printf="%s" "${file_path_local}" 2>/dev/null || echo 0)
 	
 	# get filesize in bytes for full_url file
-	local full_url_size=$(get_remote_file_size_bytes ${full_url})
+	local full_url_size=$(get_remote_file_size_bytes "${full_url}" || printf "{LRV}error{NCV}")
 	
-	# if remote file size differ from local and is greater than 30 bytes (empty), downloading it
-	if [[ ${full_url_size} -gt 30 ]] > /dev/null 2>&1; then
+	# if remote file size differ from local and is greater than 30 bytes (not empty), downloading it
+	if [[ ${full_url_size} -gt 30 ]]; then
 		if ! files_diff_check > /dev/null 2>&1; then
 		
-			printf "\nDownloading ${full_url} to ${file_path_local}"
+			printf "\nDownloading \"${full_url}\" to \"${file_path_local}\""
 			
 			{
-			if ! \wget --timeout 4 --no-check-certificate -q -O ${file_path_local} ${full_url}; then
-				printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > ${file_path_local}
+			if ! \wget --timeout 4 --no-check-certificate -q -O "${file_path_local}" "${full_url}"; then
+				printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d' > "${file_path_local}"
 			fi
 			}  > /dev/null 2>&1
 		
@@ -1186,17 +1186,17 @@ if wget_openssl_exists_check; then
 					return 1
 				fi
 			else
-				printf "${LRV}Error.${NCV} Remote size less than expected. \n"
+				printf "${LRV}Error.${NCV} Remote size of \"${full_url}\" less than expected. \n"
 				return 1
 			fi
 		else
 			#printf "\nSize of ${full_url} is ${full_url_size}bytes\n"
 			#printf "Size of ${file_path_local} is ${file_path_local_size}bytes\n"
-			printf "\nSkipping download as both remote and local are the same sizes in bytes\n"
+			printf "\nSkipping download of \"${full_url}\"\nBoth remote and local \"${file_path_local}\" are the same\n"
 			return 0
 		fi
 	else
-		printf "${LRV}Error.${NCV} Remote size is ${full_url_size}\n"
+		printf "${LRV}Error.${NCV} Remote size of ${full_url} is ${full_url_size} bytes\n"
 		return 1
 	fi
 else
@@ -1224,9 +1224,9 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
 	{
 	if command -v wget > /dev/null 2>&1; then 
-		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --no-check-certificate --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | awk '{print $2}')
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --no-check-certificate --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | grep -oE '[0-9]+')
 	else
-		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | awk '{print $2}')
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | grep -oE '[0-9]+')
 	fi
 	}  > /dev/null 2>&1
 	
@@ -2367,7 +2367,10 @@ if nginx_exists_check_func; then
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 	
 			# checking nginx configuration sanity
-			nginx_conf_sanity_check_fast
+			if ! nginx_conf_sanity_check_fast; then
+				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
+				return 1
+			fi
 	
 			# if ISP Manager
 			if [[ -f $MGR_BIN ]]; then
@@ -2420,7 +2423,10 @@ if nginx_exists_check_func; then
 			fi
 	
 			# checking nginx configuration sanity again
-			nginx_conf_sanity_check_fast
+			if ! nginx_conf_sanity_check_fast; then
+				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
+				return 1
+			fi
 		else
 			# user chose not to install bad_robot.conf in nginx 
 			printf "\n${YCV}Nignx's bad_robot_map.conf and bad_robot.conf include was skipped.${NCV} \n"
@@ -2446,7 +2452,10 @@ if nginx_exists_check_func; then
 					return 1
 				else
 					# checking nginx configuration sanity
-					nginx_conf_sanity_check_fast
+					if ! nginx_conf_sanity_check_fast; then
+						printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
+						return 1
+					fi
 				fi
 			fi
 		else
@@ -2468,9 +2477,11 @@ if nginx_test_output=$({ nginx -t; } 2>&1); then
 	printf " - ${GCV}OK${NCV}\n"
 	nginx -s reload > /dev/null 2>&1
 	EXIT_STATUS=0
+	return 0
 else
 	printf " - ${LRV}FAIL${NCV}\n$nginx_test_output\n"
 	EXIT_STATUS=1
+	return 1
 fi
 }
 
