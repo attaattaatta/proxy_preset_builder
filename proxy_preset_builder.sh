@@ -2338,7 +2338,7 @@ if nginx_exists_check_func; then
 	local NGINX_BAD_ROBOT_MAP_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot_map.conf"
 	local NGINX_BAD_ROBOT_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot.conf"
 	local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
-	local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$http_user_agent' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
+	local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent|is_bad_robot)' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
 	
 	# bad_robot.conf file path depending the environment
 	# if ISP Manager
@@ -2359,8 +2359,8 @@ if nginx_exists_check_func; then
 		true
 	fi
 	
-	# if nginx check show no $http_user_agent configs, proceed
-	if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*(\$http_user_agent|\$is_bad_robot)' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
+	# if nginx check show no $http_user_agent or $is_bad_robot configs, proceed
+	if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*\$(http_user_agent|is_bad_robot)' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
 	
 		echo
 		read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
