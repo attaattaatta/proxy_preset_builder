@@ -1168,7 +1168,7 @@ if wget_openssl_exists_check; then
 	if [[ ${full_url_size} -gt 30 ]]; then
 		if ! files_diff_check > /dev/null 2>&1; then
 		
-			printf "\nDownloading \"${full_url}\" to \"${file_path_local}\""
+			printf "\nDownloading: \"${full_url}\"\nTo: \"${file_path_local}\""
 			
 			{
 			if ! \wget --timeout 4 --no-check-certificate -q -O "${file_path_local}" "${full_url}"; then
@@ -1186,13 +1186,13 @@ if wget_openssl_exists_check; then
 					return 1
 				fi
 			else
-				printf "${LRV}Error.${NCV} Remote size of \"${full_url}\" less than expected. \n"
+				printf "${LRV}Error.${NCV} Remote size of ${full_url} less than expected. \n"
 				return 1
 			fi
 		else
 			#printf "\nSize of ${full_url} is ${full_url_size}bytes\n"
 			#printf "Size of ${file_path_local} is ${file_path_local_size}bytes\n"
-			printf "\nSkipping download of \"${full_url}\"\nBoth remote and local \"${file_path_local}\" are the same\n"
+			printf "\nSkipping download of \"${full_url}\"\nBoth remote and local \"${file_path_local}\" are the same in bytes\n"
 			return 0
 		fi
 	else
