@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.94"
+self_current_version="1.0.95"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -312,7 +312,7 @@ panel_release_name="$($MGR_CTL license.info |  grep -o -P '(?<=panel_name=)\w+\s
 
 if [[ -z $panel_release_name ]] || [[ -z $panel_current_version ]]; then
 	printf "\n${LRV}ERROR - Cannot get ISP Manager panel version or release name.\nPlease check \"$MGR_CTL license.info\" command${NCV}\n"
-	exit 1
+	return 1
 fi
 
 # set case insence for regexp
@@ -320,11 +320,11 @@ shopt -s nocasematch
 if [[ $panel_release_name =~ .*busines.* ]]; then 
 	printf "\n${LRV}ISP Manager Business detected. Not yet supported.${NCV}\n"
 	shopt -u nocasematch
-	exit 1
+	return 1
 else
 	if [[ $panel_current_version -lt $panel_required_version ]]; then 
 		printf "\n${LRV}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NCV}\n${GCV}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/master/proxy_preset_builder.sh\nfor older panel release version of this script${NCV}\n"
-		exit 1
+		return 1
 	else
 		ISP_MGR_LIC_GOOD=1
 	fi
@@ -1387,10 +1387,32 @@ done
 
 ispmanager_enable_sites_tweaks_func() {
 
-if [[ -f $MGR_BIN ]]; then
+if [[ -f $MGR_BIN ]]; then	
 
 	# lic validation
-	isp_panel_check_license_version
+	if ! isp_panel_check_license_version; then
+		echo
+		printf "\n${LRV}Tweaking ISP Manager sites was skipped due to ISP panel check error${NCV} \n"
+		return 1;
+	fi
+
+	# enabling ISP PHP-FPM FastCGI feature
+	if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
+	then
+		printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
+		EXIT_STATUS=0
+		$MGR_CTL feature.edit elid=web package_php package_php-fpm=on sok=ok > /dev/null 2>&1
+		check_exit_and_restore_func
+		printf " - ${GCV}OK${NCV}\n"
+		# feature.edit return OK but actual install continues, so we need to sleep some time
+		printf "\n${GCV}Waiting 60 seconds for ISP Panel PHP-FPM FastCGI feature install${NCV}"
+		sleep 60
+		if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
+		then
+			printf "\n${LRV}ISP Manager PHP-FPM FastCGI feature still not exists\nCheck /usr/local/mgr5/var/pkg.log logfile${NCV}"
+			exit 1
+		fi
+	fi
 	
 	# enable http/2
 	if $MGR_CTL websettings | grep "http2=off" > /dev/null 2>&1; then
@@ -1476,15 +1498,17 @@ ispmanager_switch_cgi_mod_func() {
 if [[ -f $MGR_BIN ]]; then
 
 	# lic validation
-	isp_panel_check_license_version
+	if ! isp_panel_check_license_version; then
+		echo
+		printf "\n${LRV}Switch or disable php-cgi sites was skipped due to ISP panel check error${NCV} \n"
+		return 1;
+	fi
 	
 	if $MGR_CTL webdomain | grep -i "PHP CGI" > /dev/null 2>&1 || [[ -f $MGR_BIN ]] && $MGR_CTL user | grep "limit_php_mode_cgi=on" > /dev/null 2>&1; then
 		echo
 		read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
 		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-			# check isp lic
-			isp_panel_check_license_version
 	
 			# install all ISP Manager mod-php for installed PHP if not already installed
 			isp_mod_php_install
@@ -1570,7 +1594,11 @@ ispmanager_enable_features_func() {
 if [[ -f $MGR_BIN ]]; then
 
 	# lic validation
-	isp_panel_check_license_version
+	if ! isp_panel_check_license_version; then
+		echo
+		printf "\n${LRV}Enable ISP Manager features was skipped due to ISP panel check error${NCV} \n"
+		return 1;
+	fi
 
 	# nginx install
 	if $MGR_CTL feature | grep "nginx" | grep "active=off" > /dev/null 2>&1
@@ -1672,7 +1700,11 @@ ispmanager_tweak_php_and_mysql_settings_func() {
 if [[ -f $MGR_BIN ]]; then
 
 	# lic validation
-	isp_panel_check_license_version
+	if ! isp_panel_check_license_version; then
+		echo
+		printf "\n${LRV}Tweaking ISP Manager PHP and MySQL was skipped due to ISP panel check error${NCV} \n"
+		return 1;
+	fi
 
 	# ISP mysqldump tweak
 	isp_mysqldump_tweak() {
@@ -1978,7 +2010,11 @@ ispmanager_tweak_nginx_apache_php_fpm_func() {
 if [[ -f $MGR_BIN ]]; then
 
 	# lic validation
-	isp_panel_check_license_version
+	if ! isp_panel_check_license_version; then
+		echo
+		printf "\n${LRV}Tweaking ISP Manager nginx, apache and php-fpm was skipped due to ISP panel check error${NCV} \n"
+		return 1;
+	fi
 
 	isp_fpm_template_file_path="/usr/local/mgr5/etc/templates/fpm_site_pool.conf"
 	isp_apache_vhost_template_file_path="/usr/local/mgr5/etc/templates/default/apache2-directory.template"
@@ -2381,13 +2417,9 @@ if nginx_exists_check_func; then
 				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
 				return 1
 			fi
-	
-			# if ISP Manager
-			if [[ -f $MGR_BIN ]]; then
-				# lic validation
-				isp_panel_check_license_version
+
 			# if Bitrix
-			elif [[ $BITRIXALIKE == "yes" ]]; then
+			if [[ $BITRIXALIKE == "yes" ]]; then
 	
 				# Bitrix Env or GT
 				if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
@@ -2922,26 +2954,6 @@ then
 fi
 
 main_func() {
-
-isp_panel_check_license_version
-
-# enabling ISP PHP-FPM FastCGI feature
-if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
-then
-	printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
-	EXIT_STATUS=0
-	$MGR_CTL feature.edit elid=web package_php package_php-fpm=on sok=ok > /dev/null 2>&1
-	check_exit_and_restore_func
-	printf " - ${GCV}OK${NCV}\n"
-	# feature.edit return OK but actual install continues, so we need to sleep some time
-	printf "\n${GCV}Waiting 60 seconds for ISP Panel PHP-FPM FastCGI feature install${NCV}"
-	sleep 60
-	if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
-	then
-		printf "\n${LRV}ISP Manager PHP-FPM FastCGI feature still not exists\nCheck /usr/local/mgr5/var/pkg.log logfile${NCV}"
-		exit 1
-	fi
-fi
 
 # enought arguments check and if nothing in the list of presets show help
 if [[ "$#" -lt 1 ]]
