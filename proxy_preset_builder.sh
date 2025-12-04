@@ -2418,8 +2418,12 @@ if nginx_exists_check_func; then
 				return 1
 			fi
 
+			# if ISP Manager
+			if [[ -f $MGR_BIN ]]; then
+				true
+
 			# if Bitrix
-			if [[ $BITRIXALIKE == "yes" ]]; then
+			elif [[ $BITRIXALIKE == "yes" ]]; then
 	
 				# Bitrix Env or GT
 				if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
