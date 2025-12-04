@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.95"
+self_current_version="1.0.96"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1395,24 +1395,6 @@ if [[ -f $MGR_BIN ]]; then
 		printf "\n${LRV}Tweaking ISP Manager sites was skipped due to ISP panel check error${NCV} \n"
 		return 1;
 	fi
-
-	# enabling ISP PHP-FPM FastCGI feature
-	if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
-	then
-		printf "\n${GCV}Enabling ISP Manager PHP-FPM FastCGI feature${NCV}"
-		EXIT_STATUS=0
-		$MGR_CTL feature.edit elid=web package_php package_php-fpm=on sok=ok > /dev/null 2>&1
-		check_exit_and_restore_func
-		printf " - ${GCV}OK${NCV}\n"
-		# feature.edit return OK but actual install continues, so we need to sleep some time
-		printf "\n${GCV}Waiting 60 seconds for ISP Panel PHP-FPM FastCGI feature install${NCV}"
-		sleep 60
-		if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
-		then
-			printf "\n${LRV}ISP Manager PHP-FPM FastCGI feature still not exists\nCheck /usr/local/mgr5/var/pkg.log logfile${NCV}"
-			exit 1
-		fi
-	fi
 	
 	# enable http/2
 	if $MGR_CTL websettings | grep "http2=off" > /dev/null 2>&1; then
@@ -1611,7 +1593,7 @@ if [[ -f $MGR_BIN ]]; then
 			$MGR_CTL feature.edit elid=web package_logrotate=on package_nginx=on package_php=on package_php-fpm=on sok=ok
 
 			# waiting for installation
-			timeout_duration=300
+			timeout_duration=60
 			start_time=$(date +%s)
 		
 			while true; do
@@ -1635,6 +1617,45 @@ if [[ -f $MGR_BIN ]]; then
 		else
 			# user chose not to enable ISP manager nginx feature
 			printf "\n${YCV}Nginx was not installed${NCV}\n"
+		fi
+	fi
+
+	# enabling ISP PHP-FPM FastCGI feature
+	if ! [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]
+	then
+
+		echo
+		read -p "Enable ISP Manager PHP-FPM FastCGI feature ? [Y/n]" -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			printf "Running"
+
+			$MGR_CTL feature.edit elid=web package_php=on package_php-fpm=on sok=ok > /dev/null 2>&1
+			# waiting for installation
+			timeout_duration=60
+			start_time=$(date +%s)
+	
+			while true; do
+				# timeout check
+				current_time=$(date +%s)
+				elapsed_time=$((current_time - start_time))
+							
+				if [[ "$elapsed_time" -ge "$timeout_duration" ]]; then
+					printf "\n${LRV}Timed out waiting for PHP-FPM FastCGI while check $MGR_CTL feature ${NCV}\n"
+					break
+				fi
+							
+				# checking for install
+				if [[ $($MGR_CTL feature | grep "name=web" | grep -i fpm) ]]; then
+					printf " - ${GCV}DONE${NCV}\n"
+					break
+				else
+					sleep 5
+				fi
+			done
+		else
+			# user chose not to enable ISP manager PHP-FPM FastCGI feature
+			printf "\n${YCV}PHP-FPM FastCGI was not installed${NCV}\n"			
 		fi
 	fi
 
