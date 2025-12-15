@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.96"
+self_current_version="1.0.97"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -567,6 +567,7 @@ else
 	ispmanager_tweak_nginx_apache_php_fpm_func
 	tweak_nginx_params_func
 	tweak_add_nginx_bad_robot_conf_func
+	bitrix_reg_fix
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
@@ -2546,6 +2547,30 @@ if nginx_exists_check_func; then
 else
 	return 1
 fi	
+}
+
+bitrix_reg_fix() {
+	echo
+	read -p "Check and fix Bitrix reg paths and bitrixsupport_ users in MySQL ? [Y/n]" -n 1 -r
+	echo
+	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		local SCRIPT="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bitrix_reg_fix.sh"
+
+		if command -v curl &> /dev/null; then
+			bash <(timeout 4 curl -kLs "$SCRIPT" --connect-timeout 4)
+			return $?
+		elif command -v wget &> /dev/null; then
+			bash <(timeout 4 wget --timeout 4 --no-check-certificate -q -o /dev/null -O- "$SCRIPT")
+			return $?
+		else
+			echo
+			printf "${LRV}FAIL${NCV}\ncurl or wget not found\n"
+			return 1
+		fi
+	else
+		echo
+		printf "Check and fix Bitrix reg paths and bitrixsupport_ users in MySQL was canceled by user choice\n"
+	fi
 }
 	
 # check nginx conf and reload configuration fast
