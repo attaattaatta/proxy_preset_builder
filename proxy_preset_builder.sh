@@ -1,6 +1,6 @@
 #!/bin/bash
 # enable debug
-#set -x -v
+# set -x -v
 #set -e -o verbose
 #pipefail | verbose
 
@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.97"
+self_current_version="1.0.98"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -22,6 +22,27 @@ if [[ $EUID -ne 0 ]]; then
 	printf "\n${LRV}ERROR - This script must be run as root.${NCV}" 
 	exit 1
 fi
+
+# one instance run lock
+LOCKFILE=/tmp/proxy_preset_builder.lock
+exec 9>$LOCKFILE
+
+if ! flock -n 9; then
+    echo
+    if command -v lsof >/dev/null 2>&1; then
+        PID=$(lsof -t "$LOCKFILE" 2>/dev/null | grep -v "^$$\$" | head -n1)
+        printf "%s is ${LRV}already locked${NCV} by PID %s\n\n" "$LOCKFILE" "$PID"
+    elif command -v fuser >/dev/null 2>&1; then
+        PID=$(fuser "$LOCKFILE" 2>/dev/null | tr ' ' '\n' | grep -v "^$$\$" | head -n1)
+        printf "%s is ${LRV}already locked${NCV} by PID %s\n\n" "$LOCKFILE" "$PID"
+    else
+        printf "%s ${LRV}already exists${NCV}\n\nInstall 'lsof -t' or 'fuser' to see the PID.\n" "$LOCKFILE"
+    fi
+    exit 1
+fi
+
+trap 'exec 9>&-; rm -f "$LOCKFILE"' EXIT
+
 
 #check tools
 check_tools_func() {
@@ -147,16 +168,27 @@ fi
 
 show_help_func() {
 
-printf "\n\n${YCV}Usage help:${NCV}\n"
-printf "\n${GCV}Tweak${NCV} this box: $BASH_SOURCE tweak\n"
-printf "\nExample for ${GCV}1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
-printf "Example for ${GCV}4 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
-printf "\n${GCV}Delete all${NCV} existing %%$PROXY_PREFIX*%% presets and injects: $BASH_SOURCE del all $PROXY_PREFIX"
-printf "\n${GCV}Delete one${NCV} existing preset and inject: $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
-printf "\n${GCV}Restore${NCV} default templates and ${GCV}delete all presets${NCV}:${NCV} $BASH_SOURCE reset\n"
-printf "\n${GCV}Recompile nginx${NCV} (add/remove modules | update/change SSL): $BASH_SOURCE recompile\n"
-printf "\nCurrent special ${YCV}templates list${NCV}: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm\n"
+	printf "\n\n${YCV}Usage help:${NCV}\n"
+	printf "\n${GCV}Tweak${NCV} this box: $BASH_SOURCE tweak\n"
+	printf "\nExample for ${GCV}1 preset:${NCV} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
+	printf "Example for ${GCV}4 presets:${NCV} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
+	printf "\n${GCV}Delete all${NCV} existing %%$PROXY_PREFIX*%% presets and injects: $BASH_SOURCE del all $PROXY_PREFIX"
+	printf "\n${GCV}Delete one${NCV} existing preset and inject: $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
+	printf "\n${GCV}Restore${NCV} default templates and ${GCV}delete all presets${NCV}:${NCV} $BASH_SOURCE reset\n"
+	printf "\n${GCV}Recompile nginx${NCV} (add/remove modules | update/change SSL): $BASH_SOURCE recompile\n"
+	printf "\nCurrent special ${YCV}templates list${NCV}: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm\n"
 
+}
+
+show_help_func_noisp() {
+
+	printf "\n\n${YCV}Usage help:${NCV}\n"
+	printf "\n${GCV}Tweak${NCV} this box: $BASH_SOURCE tweak\n"
+	printf "\n${GCV}Recompile nginx${NCV} (add/remove modules | update/change SSL): $BASH_SOURCE recompile\n"
+}
+
+check_mgrctl() {
+	command -v "$MGR_BIN" >/dev/null 2>&1 || { printf "\n${YCV}ISP Manager not installed${NCV}\n"; show_help_func_noisp; exit 1; }
 }
 
 # check OS
@@ -288,21 +320,11 @@ fi
 # check panel version and release name
 isp_panel_check_license_version() {
 
+check_mgrctl
+
 if [[ ! -z "$ISP_MGR_LIC_GOOD" ]]; then
 	return
 fi
-
-#check mgrctl
-WE_NEED=("$MGR_BIN")
-
-for needitem in "${WE_NEED[@]}"
-do
-	if ! command -v $needitem > /dev/null 2>&1; then 
-		printf "\n${LRV}ERROR - $needitem could not be found. Please install it first or export correct \$PATH.${NCV}"
-		show_help_func
-		exit 1
-	fi
-done
 
 #minimum version 6.11.02
 panel_required_version="61102"
@@ -3008,8 +3030,11 @@ main_func() {
 # enought arguments check and if nothing in the list of presets show help
 if [[ "$#" -lt 1 ]]
 then
+	# check ISP Manager binary exists
+	check_mgrctl
+
 	# check if any presets exist
-	if [[ $($MGR_CTL preset) ]]
+	if [[ $($MGR_CTL preset 2>/dev/null) ]]
 	then
 		printf "\n${GCV}Listing existing templates:${NCV}\n---------------\n"
 		$MGR_CTL preset | awk -F '=' '{print $3}'

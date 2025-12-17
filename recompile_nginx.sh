@@ -12,7 +12,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # Show script version
-self_current_version="1.0.5"
+self_current_version="1.0.6"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n\n${NCV}"
 
 # check privileges
@@ -21,6 +21,26 @@ then
         printf "\n${LRV}ERROR - This script must be run as root.${NCV}"
         exit 1
 fi
+
+# one instance run lock
+LOCKFILE=/tmp/recompile_nginx.lock
+exec 9>$LOCKFILE
+
+if ! flock -n 9; then
+    echo
+    if command -v lsof >/dev/null 2>&1; then
+        PID=$(lsof -t "$LOCKFILE" 2>/dev/null | grep -v "^$$\$" | head -n1)
+        printf "%s is ${LRV}already locked${NCV} by PID %s\n\n" "$LOCKFILE" "$PID"
+    elif command -v fuser >/dev/null 2>&1; then
+        PID=$(fuser "$LOCKFILE" 2>/dev/null | tr ' ' '\n' | grep -v "^$$\$" | head -n1)
+        printf "%s is ${LRV}already locked${NCV} by PID %s\n\n" "$LOCKFILE" "$PID"
+    else
+        printf "%s ${LRV}already exists${NCV}\n\nInstall 'lsof -t' or 'fuser' to see the PID.\n" "$LOCKFILE"
+    fi
+    exit 1
+fi
+
+trap 'exec 9>&-; rm -f "$LOCKFILE"' EXIT
 
 # check free space
 printf "\n${GCV}Checking free space${NCV}"
