@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.0.98"
+self_current_version="1.0.99"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -321,10 +321,7 @@ fi
 isp_panel_check_license_version() {
 
 check_mgrctl
-
-if [[ ! -z "$ISP_MGR_LIC_GOOD" ]]; then
-	return
-fi
+[[ -n "$ISP_MGR_LIC_GOOD" ]] && return 0
 
 #minimum version 6.11.02
 panel_required_version="61102"
@@ -426,9 +423,8 @@ git_check() {
 		
 		# check result and restore if error
 		printf "\nResolving $GIT_DOMAIN_NAME and $GIT_BACKUP_DOMAIN_NAME"
-		if [[ $1 == "no_check_exit" ]] 
-		then
-			exit 1
+		if [[ $1 == "no_check_exit" ]]; then
+			EXIT_STATUS=1
 		else
 			check_exit_and_restore_func
 		fi
@@ -871,7 +867,7 @@ if ! systemctl | grep -i tuned > /dev/null 2>&1; then
 	
 	else
 	        printf "\n${LRV}Sorry, cannot detect this OS${NCV}\n"
-	        break
+	        return 1
 	fi
 	
 	if [[ $DEDICATED == "yes" ]]; then
@@ -1233,15 +1229,13 @@ bitrix_install_update_admin_sh_func() {
 if [[ $BITRIXALIKE == "yes" ]]; then
 
 	if [[ $BITRIX == "GT" ]]; then
-		if cat /etc/*rele* | grep "CentOS Linux 7" > /dev/null 2>&1; then
+		if grep -q "CentOS Linux 7" /etc/*rele* > /dev/null 2>&1; then
 			ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin.sh"
 		else
 			ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-gt.sh"
 		fi
 	elif [[ $BITRIX == "VANILLA" ]]; then
 		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-vanilla.sh"
-	else
-		return
 	fi
 	
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
@@ -2064,7 +2058,76 @@ if [[ -f $MGR_BIN ]]; then
 	isp_apache_vhost_template_file_path="/usr/local/mgr5/etc/templates/default/apache2-directory.template"
 	isp_nginx_vhost_template_file1_path="/usr/local/mgr5/etc/templates/default/nginx-suspend.template"
 	isp_nginx_vhost_template_file2_path="/usr/local/mgr5/etc/templates/default/nginx-vhosts.template"
+
+	# removing 443 port redirect from ISP Manager existing sites for SEO proposes 
+	local search_pattern='\$host:443\$request_uri'
+	local sed_pattern='s@https://\$host:443\$request_uri;@https://\$host\$request_uri;@i'
+
+	if grep -RiIn "$search_pattern" /etc/nginx* >/dev/null 2>&1; then
+		echo
+		read -p "Apply SEO redirect ISP Manager fix? [Y/n] " -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+
+			if ! nginx_conf_sanity_check_fast >/dev/null 2>&1; then
+				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
+				return 1
+			fi
+
+			printf "Running"
+			grep -RiIl "return 301 https://${search_pattern}" /etc/nginx* | xargs -r sed -i "$sed_pattern"
+
+			if grep -RiIn "return 301 https://${search_pattern}" /etc/nginx* >/dev/null 2>&1; then
+				printf " - ${LRV}FAIL${NCV}\n"
+				printf "\n${LRV}Error:${NCV} Cannot apply SEO redirect ISP Manager fix\n${search_pattern} still exists in nginx configs\n"
+			else
+				if nginx_conf_sanity_check_fast >/dev/null 2>&1; then
+					printf " - ${GCV}OK${NCV}\n"
+				else
+					printf " - ${LRV}FAIL${NCV}\n"
+					printf "${LRV}Error:${NCV}Fix applied. But nginx config test failed\nRun nginx -t and check for errors\n"
+				fi
+			fi
+		else
+			printf "SEO redirect ISP Manager fix was canceled by user choice\n"
+		fi
+	else
+		printf "\nSkipping SEO redirect ISP Manager fix, not needed or was ${GCV}already done${NCV}\n"
+	fi
+
+	# ISP Manager cleanup every day sess_* files in all locations based on gc_maxlifetime of only native PHP version
+	# Set this to one week
+	local PHPS_CLEAN="/usr/local/mgr5/sbin/phpsess_clean.sh"
+	local TARGET_VALUE=1440 # 1day
+	local NEW_VALUE=604800 # 1week
 	
+	if [[ -f $PHPS_CLEAN ]] && [[ $(wc -l < "$PHPS_CLEAN") -eq 165 ]]; then
+		if grep -RiIE "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" /opt/php* /etc/php* >/dev/null 2>&1; then
+			echo
+			echo "One day php sessions ISP manager cleanup detected in $PHPS_CLEAN"
+			read -p "Set session.gc_maxlifetime to one week ? [Y/n] " -n 1 -r
+			echo
+			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+				grep -RiIl "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" /opt/php* /etc/php* 2>/dev/null | while read -r ini; do
+					sed -i "s/^session\.gc_maxlifetime\s*=.*/session.gc_maxlifetime = $NEW_VALUE/" "$ini"
+					printf "$ini - ${GCV}updated${NCV}\n"
+				done
+	
+				systemctl list-unit-files | awk '{print $1}' | grep -E '^(apache2|httpd|php-fpm)' | while read -r svc; do
+					# doing twice restart, also a bug in some apache
+					systemctl restart "$svc" >/dev/null 2>&1
+					systemctl restart "$svc" >/dev/null 2>&1
+				done
+			else
+				printf "PHP sessions ISP manager cleanup fix was canceled by user choice\n"
+			fi
+		else
+			printf "\nSkipping PHP sessions ISP manager cleanup fix, not needed or was ${GCV}already done${NCV}\n"
+		fi		
+	else
+		printf "\n${PHPS_CLEAN} ${GCV}probably already fixed${NCV}\n"
+	fi
+
 	# backup to /root/support
 	backup_dest_dir_path="/root/support/$(date '+%d-%b-%Y-%H-%M-%Z')/"
 
