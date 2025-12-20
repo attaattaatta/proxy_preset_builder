@@ -2102,7 +2102,7 @@ if [[ -f $MGR_BIN ]]; then
 	local NEW_VALUE=604800 # 1week
 	
 	if [[ -f $PHPS_CLEAN ]] && [[ $(wc -l < "$PHPS_CLEAN") -eq 165 ]]; then
-		if grep -RiIE "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" /opt/php* /etc/php* >/dev/null 2>&1; then
+		if find /opt/php* /etc/php* -type f -name "php.ini" 2>/dev/null | xargs grep -HE "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" > /dev/null 2>&1; then
 			echo
 			echo "One day php sessions ISP manager cleanup detected in $PHPS_CLEAN"
 			read -p "Set session.gc_maxlifetime to one week ? [Y/n] " -n 1 -r
@@ -2114,9 +2114,9 @@ if [[ -f $MGR_BIN ]]; then
 				done
 	
 				systemctl list-unit-files | awk '{print $1}' | grep -E '^(apache2|httpd|php-fpm)' | while read -r svc; do
-					# doing twice restart, also a bug in some apache
-					systemctl restart "$svc" >/dev/null 2>&1
-					systemctl restart "$svc" >/dev/null 2>&1
+					# doing restart
+					systemctl start "$svc" > /dev/null 2>&1
+					systemctl reload "$svc" > /dev/null 2>&1 || { sleep 2; systemctl restart "$svc" > /dev/null 2>&1; }
 				done
 			else
 				printf "PHP sessions ISP manager cleanup fix was canceled by user choice\n"
