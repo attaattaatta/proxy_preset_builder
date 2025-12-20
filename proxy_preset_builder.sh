@@ -2060,10 +2060,10 @@ if [[ -f $MGR_BIN ]]; then
 	isp_nginx_vhost_template_file2_path="/usr/local/mgr5/etc/templates/default/nginx-vhosts.template"
 
 	# removing 443 port redirect from ISP Manager existing sites for SEO proposes 
-	local search_pattern='\$host:443\$request_uri'
-	local sed_pattern='s@https://\$host:443\$request_uri;@https://\$host\$request_uri;@i'
+	local search_pattern='return[[:space:]]+301.*\$host:443\$request_uri'
+	local sed_pattern='s@\$host:443\$request_uri;@\$host\$request_uri;@i'
 
-	if grep -RiIn "$search_pattern" /etc/nginx* >/dev/null 2>&1; then
+	if grep -RiIlE "$search_pattern" /etc/nginx/* >/dev/null 2>&1; then
 		echo
 		read -p "Apply SEO redirect ISP Manager fix? [Y/n] " -n 1 -r
 		echo
@@ -2075,9 +2075,9 @@ if [[ -f $MGR_BIN ]]; then
 			fi
 
 			printf "Running"
-			grep -RiIl "return 301 https://${search_pattern}" /etc/nginx* | xargs -r sed -i "$sed_pattern"
+			grep -RiIlE "${search_pattern}" /etc/nginx/* | xargs -r sed -i "$sed_pattern"
 
-			if grep -RiIn "return 301 https://${search_pattern}" /etc/nginx* >/dev/null 2>&1; then
+			if grep -RiIlE "${search_pattern}" /etc/nginx/* >/dev/null 2>&1; then
 				printf " - ${LRV}FAIL${NCV}\n"
 				printf "\n${LRV}Error:${NCV} Cannot apply SEO redirect ISP Manager fix\n${search_pattern} still exists in nginx configs\n"
 			else
@@ -2208,11 +2208,11 @@ if [[ -f $MGR_BIN ]]; then
 					printf "\nProcessing ${isp_fpm_config_file}"
 					\cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null && chmod --reference="$isp_fpm_config_file" "${backup_dest_dir_path}${isp_fpm_config_file}" > /dev/null 2>&1
 					if [[ -f "${backup_dest_dir_path}${isp_fpm_config_file}" ]]; then 
-						sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; return 1; }
-						sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; return 1; }
+						sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; continue; }
+						sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; continue; }
 						sed -i 's@^pm =.*@pm = static@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm mode${NCV}\n"; return 1; }
-						sed -i 's@^pm.max_children = 5@pm.max_children = 15@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_children${NCV}\n"; return 1; }
-						sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_requests${NCV}\n"; return 1; }
+						sed -i 's@^pm.max_children = 5@pm.max_children = 15@gi' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_children${NCV}\n"; continue; }
+						sed -i 's@^pm.max_requests =.*@pm.max_requests = 1500@' "$isp_fpm_config_file" || { printf "\n${LRV}Error modifying pm.max_requests${NCV}\n"; continue; }
 		
 						# Check and restart php-fpm
 						php_fpm_version=$(echo "$isp_fpm_config_file" | grep -oP '(?<=/php/)\d+\.\d+|(?<=/php)\d{2,3}(?=/)')
@@ -2235,30 +2235,33 @@ if [[ -f $MGR_BIN ]]; then
 							# PHP-FPM (Debian)
 							if ! php-fpm${php_fpm_version} -t > /dev/null 2>&1; then
 								printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
-								return 1
+								continue
 							fi
 						else
 							# ISPmanager /opt/phpXX
 							if ! /opt/php${php_fpm_version}/sbin/php-fpm -t > /dev/null 2>&1; then
 								printf " - ${LRV}ERROR${NCV} Invalid PHP-FPM config for PHP ${php_fpm_version}\n"
-								return 1
+								continue
 							fi
 						fi
-							
+
+
 						# restart
-						systemctl restart "$php_fpm_service" > /dev/null 2>&1
+						systemctl start "$php_fpm_service" > /dev/null 2>&1
+						systemctl reload "$php_fpm_service" > /dev/null 2>&1 || { sleep 2; systemctl restart "$php_fpm_service" > /dev/null 2>&1; }
 							
 						# Check restart
 						if systemctl is-active --quiet "$php_fpm_service" > /dev/null 2>&1; then
 							printf " - ${GCV}OK${NCV}\n"
+							printf "Original file ${isp_fpm_config_file} backup'd to ${backup_dest_dir_path}${NCV}\n"
 						else
 							printf " - ${LRV}ERROR${NCV} Failed to restart ${php_fpm_service}. Check logs.\n"
-							return 1
+							printf "Original file ${isp_fpm_config_file} backup'd to ${backup_dest_dir_path}${NCV}\n"
+							continue
 						fi
-						printf "Original file ${isp_fpm_config_file} backup'd to ${backup_dest_dir_path}${NCV}\n"
 					else
 						printf " - ${LRV}FAIL${NCV}\nCannot backup file ${isp_fpm_config_file} to ${backup_dest_dir_path}\n"
-						return 1
+						continue
 					fi
 				done <<< "$isp_php_fpm_enabled_sites"
 			fi
