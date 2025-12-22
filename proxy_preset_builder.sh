@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.0"
+self_current_version="1.1.1"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2065,7 +2065,7 @@ if [[ -f $MGR_BIN ]]; then
 
 	if grep -RiIlE "$search_pattern" /etc/nginx/* >/dev/null 2>&1; then
 		echo
-		read -p "Apply SEO redirect ISP Manager fix? [Y/n] " -n 1 -r
+		read -p "Apply SEO redirect ISP Manager fix (remove 443 port from it) ? [Y/n] " -n 1 -r
 		echo
 		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 
@@ -2102,14 +2102,27 @@ if [[ -f $MGR_BIN ]]; then
 	local NEW_VALUE=604800 # 1week
 	
 	if [[ -f $PHPS_CLEAN ]] && [[ $(wc -l < "$PHPS_CLEAN") -eq 165 ]]; then
-		if find /opt/php* /etc/php* -type f -name "php.ini" 2>/dev/null | xargs grep -HE "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" > /dev/null 2>&1; then
+		if find /opt/php* /etc/php* -type f -name "php.ini" 2>/dev/null | xargs grep -HE -e "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" -e "^session\.gc_probability\s*=\s*0" -e "^session\.gc_divisor\s*=\s*1000" > /dev/null 2>&1; then
 			echo
 			echo "One day php sessions ISP manager cleanup detected in $PHPS_CLEAN"
-			read -p "Set session.gc_maxlifetime to one week ? [Y/n] " -n 1 -r
+			read -p "Set all PHP gc_maxlifetime to one week, gc_probability=1, gc_divisor=500 ? [Y/n] " -n 1 -r
 			echo
 			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
-				grep -RiIl "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" /opt/php* /etc/php* 2>/dev/null | while read -r ini; do
-					sed -i "s/^session\.gc_maxlifetime\s*=.*/session.gc_maxlifetime = $NEW_VALUE/" "$ini"
+				grep -RiIl -e "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" -e "^session\.gc_probability\s*=\s*0" -e "^session\.gc_divisor\s*=\s*1000" /opt/php* /etc/php* 2>/dev/null | while read -r ini; do
+					# gc_maxlifetime: 1440 -> 604800
+					if grep -Eq "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" "$ini"; then
+						sed -i "s/^session\.gc_maxlifetime\s*=.*/session.gc_maxlifetime = $NEW_VALUE/" "$ini"
+					fi
+
+					# gc_probability: 0 -> 1
+					if grep -Eq "^session\.gc_probability\s*=\s*0" "$ini"; then
+						sed -i "s/^session\.gc_probability\s*=.*/session.gc_probability = 1/" "$ini"
+					fi
+				
+					# gc_divisor: 1000 -> 500
+					if grep -Eq "^session\.gc_divisor\s*=\s*1000" "$ini"; then
+						sed -i "s/^session\.gc_divisor\s*=.*/session.gc_divisor = 500/" "$ini"
+					fi
 					printf "$ini - ${GCV}updated${NCV}\n"
 				done
 	
@@ -2123,7 +2136,7 @@ if [[ -f $MGR_BIN ]]; then
 			fi
 		else
 			printf "\nSkipping PHP sessions ISP manager cleanup fix, not needed or was ${GCV}already done${NCV}\n"
-		fi		
+		fi
 	else
 		printf "\n${PHPS_CLEAN} ${GCV}probably already fixed${NCV}\n"
 	fi
