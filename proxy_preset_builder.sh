@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.1"
+self_current_version="1.1.2"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1819,16 +1819,14 @@ if [[ -f $MGR_BIN ]]; then
 		else
 			{
 			# check docker or not
-			if $MGR_CTL db.server | grep "$1" | grep "docker=on" > /dev/null 2>&1
-			then
-			MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
+			if $MGR_CTL db.server | grep "$1" | grep "docker=on" > /dev/null 2>&1; then
+				MYSQL_CHOOSEN_VERSION_DOCKER="in_docker"
 			else
-			MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
+				MYSQL_CHOOSEN_VERSION_DOCKER="not_in_docker"
 			fi
 			
 			#native mysql version disable binlog if no replicas exists
-			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" > /dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* > /dev/null 2>&1
-			then
+			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" > /dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* > /dev/null 2>&1; then
 				# RHEL
 				if [[ $DISTR == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
 				then
@@ -1863,15 +1861,13 @@ if [[ -f $MGR_BIN ]]; then
 					} > /dev/null 2>&1
 				
 				# UNKNOWN
-				elif [[ $DISTR == "unknown" ]]
-				then
+				elif [[ $DISTR == "unknown" ]]; then
 				        printf "\n${LRV}Sorry, cannot detect this OS, add skip-log-bin to cnf file in [mysqld] section by hands${NCV}\n"
 				fi
 			fi
 			
-			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]]
-			then
-			printf "\nskip-log-bin\n" >> /etc/ispmysql/$1/custom.cnf
+			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "in_docker" ]] && docker exec "$1" mysql -e "show slave status;" -vv | grep -i "Empty set" > /dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/ispmysql/$1/* > /dev/null 2>&1; then
+				printf "\nskip-log-bin\n" >> /etc/ispmysql/$1/custom.cnf
 			fi
 			
 			$MGR_CTL db.server.settings.edit plid=$1 elid=innodb-strict-mode name=innodb-strict-mode bool_value=FALSE value=FALSE sok=ok
