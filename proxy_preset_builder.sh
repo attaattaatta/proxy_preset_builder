@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.2"
+self_current_version="1.1.3"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1377,7 +1377,7 @@ for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}'
 	site=$(puny_converter ${site})
 
 	# check tweaks needed or not
-	if $MGR_CTL site.edit elid=${site} | grep -i "site_ddosshield=on"  || ! $MGR_CTL site.edit elid=${site} | grep -i "site_gzip_level=5" || ! $MGR_CTL site.edit elid=${site} | grep -i "site_expire_times=expire_times_max" || $MGR_CTL site.edit elid=${site} | grep -i "site_srv_cache=off"; then
+	if $MGR_CTL site.edit elid=${site} | grep -i "site_ddosshield=on"  || ! $MGR_CTL site.edit elid=${site} | grep -i "site_gzip_level=5" || ! $MGR_CTL site.edit elid=${site} | grep -i "site_expire_times=expire_times_max" || $MGR_CTL site.edit elid=${site} | grep -i "site_srv_cache=off" || $MGR_CTL site.edit elid=${site} | grep -i "site_ssi=on"; then
 		# check for dupes in array
 		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
 			SITES_TWEAKS_NEEDED="YES"
@@ -1435,7 +1435,7 @@ if [[ -f $MGR_BIN ]]; then
 	ispmanager_enable_sites_tweaks_need_func
 	
 	if [[ $SITES_TWEAKS_NEEDED == "YES" ]]; then
-		printf "\n${GCV}Tweaking ISP Manager sites include:${NCV}\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
+		printf "\n${GCV}Tweaking ISP Manager sites include:${NCV}\nsite_ssi=off\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
 		echo
 		printf "${GCV}"
 		read -p "Apply above tweaks ? [Y/n]" -n 1 -r
@@ -1450,7 +1450,7 @@ if [[ -f $MGR_BIN ]]; then
 				# so getting it
 				site_ipaddrs=$($MGR_CTL site.edit elid=${site} | awk -F'site_ipaddrs=' '{print $2}' | awk '{print $1}' | grep . | tr '\n' ',' | sed 's/,$//')
 
-				$MGR_CTL site.edit elid=${site} site_ddosshield=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max site_ipaddrs=${site_ipaddrs} sok=ok
+				$MGR_CTL site.edit elid=${site} site_ddosshield=off site_ssi=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max site_ipaddrs=${site_ipaddrs} sok=ok
 			done
 		else
 			printf "\n${YCV}Tweaking ISP Manager sites was skipped.${NCV} \n"
