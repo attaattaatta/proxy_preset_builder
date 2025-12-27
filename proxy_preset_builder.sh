@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.3"
+self_current_version="1.1.4"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1236,6 +1236,9 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		fi
 	elif [[ $BITRIX == "VANILLA" ]]; then
 		ADMIN_SH_BITRIX_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/admin-bitrix-vanilla.sh"
+
+	else
+		return 0
 	fi
 	
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
