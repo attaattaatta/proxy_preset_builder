@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.4"
+self_current_version="1.1.5"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2278,7 +2278,7 @@ if [[ -f $MGR_BIN ]]; then
 				done <<< "$isp_php_fpm_enabled_sites"
 
 				# echo total memory of php-fpm usage
-				echo && echo "PHP-FPM memory usage:" && systemd-cgtop -b -n1 | grep fpm | awk '{split($1,a,"/"); gsub(/\.service/,"",a[2]); mem=$4; gsub(/M/,"",mem); print a[2]": "$4; sum+=mem} END {print "${GCV}Total memory usage${NCV: "sum" MB"}' || { return 1;}
+				echo && echo "PHP-FPM memory usage:" && systemd-cgtop -b -n1 | grep fpm | awk '{split($1,a,"/"); gsub(/\.service/,"",a[2]); mem=$4; gsub(/M/,"",mem); print a[2]": "$4; sum+=mem} END {print "Total memory usage: "sum" MB"}' || { return 1;}
 
 			fi
 		else
