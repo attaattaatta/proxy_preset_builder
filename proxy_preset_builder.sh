@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.5"
+self_current_version="1.1.6"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -578,8 +578,8 @@ else
 	bitrix_env_check_func
 	bitrix_fixes_func
 	bitrix_install_update_admin_sh_func
-	ispmanager_enable_sites_tweaks_func
 	ispmanager_enable_features_func
+	ispmanager_enable_sites_tweaks_func
 	ispmanager_switch_cgi_mod_func
 	ispmanager_tweak_php_and_mysql_settings_func
 	ispmanager_tweak_nginx_apache_php_fpm_func
