@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.6"
+self_current_version="1.1.7"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2128,7 +2128,8 @@ if [[ -f $MGR_BIN ]]; then
 				systemctl list-unit-files | awk '{print $1}' | grep -E '^(apache2|httpd|php-fpm)' | while read -r svc; do
 					# doing restart
 					systemctl start "$svc" > /dev/null 2>&1
-					systemctl reload "$svc" > /dev/null 2>&1 || { sleep 2; systemctl restart "$svc" > /dev/null 2>&1; }
+					sleep 2
+					systemctl restart "$svc" > /dev/null 2>&1
 				done
 			else
 				printf "PHP sessions ISP manager cleanup fix was canceled by user choice\n"
@@ -2260,7 +2261,8 @@ if [[ -f $MGR_BIN ]]; then
 
 						# restart
 						systemctl start "$php_fpm_service" > /dev/null 2>&1
-						systemctl reload "$php_fpm_service" > /dev/null 2>&1 || { sleep 2; systemctl restart "$php_fpm_service" > /dev/null 2>&1; }
+						sleep 2
+						systemctl restart "$php_fpm_service" > /dev/null 2>&1
 							
 						# Check restart
 						if systemctl is-active --quiet "$php_fpm_service" > /dev/null 2>&1; then
