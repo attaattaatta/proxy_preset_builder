@@ -1652,7 +1652,7 @@ if [[ -f $MGR_BIN ]]; then
 
 			$MGR_CTL feature.edit elid=web package_php=on package_php-fpm=on sok=ok > /dev/null 2>&1
 			# waiting for installation
-			timeout_duration=60
+			timeout_duration=300
 			start_time=$(date +%s)
 	
 			while true; do
