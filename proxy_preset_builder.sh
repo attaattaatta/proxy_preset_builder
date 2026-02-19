@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.7"
+self_current_version="1.1.8"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1601,6 +1601,10 @@ if [[ -f $MGR_BIN ]]; then
 		printf "\n${LRV}Enable ISP Manager features was skipped due to ISP panel check error${NCV} \n"
 		return 1;
 	fi
+
+	# Fixing LE SSL bug, disable cache for NS servers for ISP Manager
+	grep -q '^Option LetsencryptDisableIterativeDig$' $MGR_MAIN_CONF_FILE || sed -i '/^Option /{h};${x;s/$/\nOption LetsencryptDisableIterativeDig/;p;d}' $MGR_MAIN_CONF_FILE
+
 
 	# nginx install
 	if $MGR_CTL feature | grep "nginx" | grep "active=off" > /dev/null 2>&1
