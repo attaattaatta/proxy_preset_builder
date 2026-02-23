@@ -2593,7 +2593,7 @@ tweak_add_nginx_bad_robot_conf_func() {
 
 				# checking bad_robot file exists in nginx config
 				printf "\nChecking bad robot rate limit file exists in nginx config"
-				if 2>&1 nginx -T | grep -iE 'map\s*\$http_user_agent\s*\$limit_bad_bots' > /dev/null 2>&1; then
+				if 2>&1 nginx -T | grep -iE 'map\s*\$http_user_agent\s*\$is_bad_robot' > /dev/null 2>&1; then
 					printf " - ${GCV}OK${NCV}"
 				else
 					printf " - ${LRV}FAIL${NCV}"
