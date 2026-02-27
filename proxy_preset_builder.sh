@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.10"
+self_current_version="1.1.11"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2207,8 +2207,7 @@ if [[ -f $MGR_BIN ]]; then
 				printf "\n${LRV}Error:${NCV} Cannot backup file ${isp_apache_vhost_template_file_path} to ${backup_dest_dir_path} or ${isp_apache_vhost_template_file_path}.original\n"
 				return 1
 			fi
-		
-			# changing default php-fpm isp template from ondemand 5 to static 15
+
 			{
 
 			\cp -Rfp --parents "${isp_fpm_template_file_path}" "${backup_dest_dir_path}" && \
@@ -2216,6 +2215,29 @@ if [[ -f $MGR_BIN ]]; then
 			\chmod --reference="${isp_fpm_template_file_path}" "${backup_dest_dir_path}${isp_fpm_template_file_path}" 
 
 			} > /dev/null 2>&1
+
+			# looking for no_request_terminate_timeout_pool files
+			no_request_terminate_timeout_pools=$(grep -RiIlE '^pm.max_children' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube' | xargs -r grep -L 'request_terminate_timeout')
+			
+			# looking for no_request_terminate_timeout_track_finished files (only php7.3+)
+			no_request_terminate_timeout_track_finished_pools=$(grep -RiIlE '^pm.max_children' /*/php*/* 2>/dev/null | grep -vE '\.default|apache|www|roundcube' | grep -vE '/php5[0-9]|/php7[12]/' | xargs -r grep -L 'request_terminate_timeout_track_finished')
+			
+			# getting PHP max_execution_time max value in config files
+			max_execution_time_val=$(grep -RiI max_execution_time /*/php* 2>/dev/null | grep "=" | awk -F"=" '{print $2}' | sed 's/ //g' | sort -n | tail -1)
+			[[ ! "$max_execution_time_val" =~ ^[0-9]+$ || "$max_execution_time_val" -lt 3600 ]] && max_execution_time_val=3600
+
+			# adding request_terminate_timeout to pool files
+			grep -q '^request_terminate_timeout' "${isp_fpm_template_file_path}" || printf "\nrequest_terminate_timeout = $max_execution_time_val" >> "${isp_fpm_template_file_path}"
+			for f in $no_request_terminate_timeout_pools; do
+				grep -q '^request_terminate_timeout' "$f" || printf "\nrequest_terminate_timeout = $max_execution_time_val" >> "$f"
+			done
+			
+			# adding request_terminate_timeout_track_finished = yes to pool files
+			for f in $no_request_terminate_timeout_track_finished_pools; do
+				grep -q '^request_terminate_timeout_track_finished' "$f" || printf "\nrequest_terminate_timeout_track_finished = yes" >> "$f"
+			done
+		
+			# changing default php-fpm isp template from ondemand 5 to static 15, max_requests 500 -> 1500
 
 			if [[ -f ${isp_fpm_template_file_path}.original ]]; then
 				printf "\nTemplate ${isp_fpm_template_file_path} was ${GCV}processed${NCV} and origin was backed up to ${backup_dest_dir_path} and ${isp_apache_vhost_template_file_path}.original\n"
