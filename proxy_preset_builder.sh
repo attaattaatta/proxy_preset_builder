@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.9"
+self_current_version="1.1.10"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -571,6 +571,7 @@ if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 	printf "Tweaks was ${LRV}canceled${NCV} by user choice\n"
 else
 	backup_etc_func
+	tweak_ssh_func
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
@@ -589,6 +590,13 @@ else
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
+}
+
+# Ubuntu 24/25 add ssh-rsa for ssh client
+tweak_ssh_func() {
+
+. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[45]\. ]] && { grep -RiIqE 'HostKeyAlgorithms|PubkeyAcceptedKeyTypes' /etc/ssh/ssh_config* || { echo 'HostKeyAlgorithms +ssh-rsa' >> /etc/ssh/ssh_config && echo 'PubkeyAcceptedKeyTypes +ssh-rsa' >> /etc/ssh/ssh_config;} }
+
 }
 
 # check zram and swap file exists if this is virtual server
