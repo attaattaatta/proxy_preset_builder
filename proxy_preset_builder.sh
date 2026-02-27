@@ -2253,7 +2253,7 @@ if [[ -f $MGR_BIN ]]; then
 			if [[ -n $isp_php_fpm_enabled_sites ]]; then
 				while IFS= read -r isp_fpm_config_file; do
 					printf "\nProcessing ${isp_fpm_config_file}"
-					\cp -Rfp --parents "$isp_fpm_config_file" "$backup_dest_dir_path" > /dev/null && chmod --reference="$isp_fpm_config_file" "${backup_dest_dir_path}${isp_fpm_config_file}" > /dev/null 2>&1
+					\cp -Rfp --parents "${isp_fpm_config_file}" "${backup_dest_dir_path}" > /dev/null && chmod --reference="${isp_fpm_config_file}" "${backup_dest_dir_path}${isp_fpm_config_file}" > /dev/null 2>&1
 					if [[ -f "${backup_dest_dir_path}${isp_fpm_config_file}" ]]; then 
 						sed -i '/^pm\.min_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.min_spare_servers${NCV}\n"; continue; }
 						sed -i '/^pm\.max_spare_servers =/d' "$isp_fpm_config_file" || { printf "\n${LRV}Error deleting pm.max_spare_servers${NCV}\n"; continue; }
