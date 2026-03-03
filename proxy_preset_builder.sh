@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.11"
+self_current_version="1.1.12"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2572,45 +2572,6 @@ tweak_add_nginx_bad_robot_conf_func() {
 				# checking nginx configuration sanity
 				if ! nginx_conf_sanity_check_fast; then
 					printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
-					return 1
-				fi
-
-				# if ISP Manager
-				if [[ -f $MGR_BIN ]]; then
-					true
-
-				# if Bitrix
-				elif [[ $BITRIXALIKE == "yes" ]]; then
-		
-					# Bitrix Env or GT
-					if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
-						local bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
-		
-						# fix could not build optimal proxy_headers_hash
-						printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
-		
-					# Other one bitrix "vanilla"
-					elif [[ $BITRIX == "VANILLA" ]]; then
-						local bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
-					else
-						printf "\n${LRV}Error.${NCV} Unknown bitrix environment. Link - ${NGINX_BAD_ROBOT_MAP_FILE_URL}\n"
-						return 1
-					fi
-		
-					if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot_rate_limit.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
-							sed -i "1s@^@# bad robots rate limit added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL};\n@" $bitrix_nginx_general_conf
-					else
-						printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in \"bad_robot_rate_limit.conf\" $bitrix_nginx_general_conf ). Include failed.\n"
-						return 1
-					fi
-
-				# if default install
-				elif 2>&1 nginx -T | grep -iq "include /etc/nginx/conf.d/\*.conf;" > /dev/null 2>&1 && ! 2>&1 nginx -T | grep -iqE 'if\s*\(\s*\$(http_user_agent|is_bad_robot)' > /dev/null 2>&1; then
-					local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_rate_limit.conf"
-					printf "\n${YCV}Cannot detect this nginx environment${NCV}\n"
-					printf "\nBad bot rate limit file will be placed in - ${GCV}${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}${NCV}\n"
-				else
-					printf "\n${LRV}Error.${NCV}\nUnknown environment.\nDon't know where to place the include.\nLink:\n ${NGINX_BAD_ROBOT_MAP_FILE_URL}\n"
 					return 1
 				fi
 
