@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.12"
+self_current_version="1.1.13"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2551,6 +2551,10 @@ tweak_add_nginx_bad_robot_conf_func() {
 			# Bitrix Env or GT
 			if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
 				local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/bx/maps/bad_robot_rate_limit.conf"
+				
+				# fix could not build optimal proxy_headers_hash
+				printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
+
 			# Other one bitrix "vanilla"
 			elif [[ $BITRIX == "VANILLA" ]]; then
 				local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_rate_limit.conf"
