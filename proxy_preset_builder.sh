@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.13"
+self_current_version="1.1.14"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1142,7 +1142,7 @@ local full_url="$1"
 local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
 if command -v wget > /dev/null 2>&1; then
-	if ! 2>&1 \wget --no-check-certificate --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | grep -oE '[0-9]+'; then
+	if ! 2>&1 \wget --timeout 4 --no-check-certificate --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | grep -oE '[0-9]+'; then
 		printf "\n${LRV}Error.${NCV} Failed to get remote file size with wget.\n"
 		return 1
 	fi
@@ -1252,7 +1252,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	# get filesize in bytes for remote ADMIN_SH_BITRIX_FILE_URL
 	{
 	if command -v wget > /dev/null 2>&1; then 
-		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --no-check-certificate --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | grep -oE '[0-9]+')
+		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(2>&1 \wget --timeout 4 --no-check-certificate --spider --server-response $ADMIN_SH_BITRIX_FILE_URL 2>&1 | grep "Content-Length" | grep -oE '[0-9]+')
 	else
 		ADMIN_SH_BITRIX_FILE_REMOTE_SIZE=$(printf "HEAD $ADMIN_SH_BITRIX_FILE_URL HTTP/1.1\nHost:gitlab.hoztnode.net\nConnection:Close\n\n" | timeout 5 \openssl 2>/dev/null s_client -crlf -connect gitlab.hoztnode.net:443 -quiet | grep "Content-Length" | grep -oE '[0-9]+')
 	fi
@@ -2540,7 +2540,7 @@ tweak_add_nginx_bad_robot_conf_func() {
 
 		local NGINX_BAD_ROBOT_MAP_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot_rate_limit.conf"
 		local NGINX_BAD_ROBOT_MAP_FILE_LOCAL=""
-		local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent|is_bad_robot)' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
+		local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
 		
 		# bad_robot.conf file path depending the environment
 		# if ISP Manager
@@ -2566,7 +2566,7 @@ tweak_add_nginx_bad_robot_conf_func() {
 		fi
 		
 		# if nginx check show no $http_user_agent or $is_bad_robot configs, proceed
-		if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*\$(http_user_agent|is_bad_robot)' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
+		if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
 		
 			echo
 			read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
