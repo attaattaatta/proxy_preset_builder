@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.14"
+self_current_version="1.1.15"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1362,7 +1362,46 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	else
 		printf "\nEnable PHP cURL extension not needed or was ${GCV}already done${NCV}\n"
 	fi
-	
+
+	# excluding 1c_exchange.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
+	for f in $(grep -riIl "\.htsecure" /etc/ansible/roles/web/templates/nginx/* 2>/dev/null | grep -E 'http_' 2>/dev/null); do
+		grep -q "1c_exchange\.php" "$f" && continue
+
+		tmp=$(mktemp)
+		awk '
+		/\.htsecure/ {
+			print "    location ~ ^/(?!(bitrix/admin/1c_exchange.php)) {"
+			print "    " $0
+			print "    }"
+			next
+		}
+		{print}
+		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} from https redirect"
+
+		# validating
+		if command -v ansible-playbook >/dev/null 2>&1; then
+			out=$(ansible-playbook /etc/ansible/web.yml --syntax-check 2>&1) || (printf "\n${LRV}Errors found${NCV} while ansible-playbook /etc/ansible/web.yml --syntax-check\n Backup dir - $BACKUP_DIR" && echo && echo $out)
+		fi
+	done
+
+	# excluding 1c_exchange.php from https redirect in /etc/nginx/*
+	for f in $(grep -riIl "\.htsecure" /etc/nginx/* 2>/dev/null); do
+		grep -q "1c_exchange\.php" "$f" && continue
+
+		tmp=$(mktemp)
+		awk '
+		/\.htsecure/ {
+			print "    location ~ ^/(?!(bitrix/admin/1c_exchange.php)) {"
+			print "    " $0
+			print "    }"
+			next
+		}
+		{print}
+		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} from https redirect"
+	done
+	nginx_conf_sanity_check_fast || printf "\n${LRV}Errors found${NCV} while nginx -t. Backup dir - $BACKUP_DIR"
+
+
 else
 	# not bitrix env or user chosen not to fix Bitrix env
 	printf "\nSkipping Bitrix environment tweaks, ${GCV}not detected${NCV} or skipped\n"
