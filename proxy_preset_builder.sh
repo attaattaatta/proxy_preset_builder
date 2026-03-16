@@ -5,7 +5,7 @@
 #pipefail | verbose
 
 # fixing paths
-export PATH=$PATH:/usr/sbin:/usr/sbin:/usr/local/sbin
+export PATH=$PATH:/usr/sbin:/usr/local/sbin
 
 # set colors
 GCV="\033[0;92m"
@@ -24,7 +24,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # one instance run lock
-LOCKFILE=/tmp/proxy_preset_builder.lock
+LOCKFILE=/run/lock/proxy_preset_builder.lock
 exec 9>$LOCKFILE
 
 if ! flock -n 9; then
