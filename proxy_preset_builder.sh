@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.15"
+self_current_version="1.1.16"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -2644,7 +2644,7 @@ tweak_add_nginx_bad_robot_conf_func() {
 			fi
 		
 		# updating bad_robot_rate_limit.conf
-		elif ( [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE 'map\s*\$http_user_agent\s*\$limit_bad_bots' > /dev/null 2>&1 ); then
+		elif ( [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE 'map\s*\$http_user_agent\s*\$is_bad_robot' > /dev/null 2>&1 ); then
 
 			local remote_bad_robot_map_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_MAP_FILE_URL})
 			local local_bad_robot_map_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} 2>/dev/null || echo 0)
