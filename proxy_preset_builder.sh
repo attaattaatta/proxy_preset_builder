@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.17"
+self_current_version="1.1.18"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -571,6 +571,7 @@ if ! [[ $REPLY =~ ^[Nn]$ ]]; then
 	printf "Tweaks was ${LRV}canceled${NCV} by user choice\n"
 else
 	backup_etc_func
+	tweak_dns_func
 	tweak_ssh_func
 	tweak_swapfile_func
 	tweak_openfiles_func
@@ -590,6 +591,20 @@ else
 
 	printf "\nTweaks ${GCV}done${NCV}\n"
 fi
+}
+
+# DNS tweaks
+tweak_dns_func() {
+
+printf "\nFixing ${GCV}DNS${NCV}\n"
+
+local resolvconf="/etc/resolv.conf"
+systemctl disable --now systemd-resolved &>/dev/null
+unlink $resolvconf &>/dev/null
+printf "options timeout:1 attempts:1 edns0 trust-ad\nnameserver 1.1.1.1\nnameserver 77.88.8.1\nnameserver 185.60.132.11\nnameserver 188.120.247.8\nnameserver 82.146.59.250\nnameserver 188.120.247.2\n" > $resolvconf 2>/dev/null
+
+printf "${GCV}Done${NCV}, current $resolvconf:\n" && cat $resolvconf &&echo
+
 }
 
 # Ubuntu 24/25 add ssh-rsa for ssh client
