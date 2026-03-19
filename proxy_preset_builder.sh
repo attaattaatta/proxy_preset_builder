@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.16"
+self_current_version="1.1.17"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1363,20 +1363,20 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		printf "\nEnable PHP cURL extension not needed or was ${GCV}already done${NCV}\n"
 	fi
 
-	# excluding 1c_exchange.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
+	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
 	for f in $(grep -riIl "\.htsecure" /etc/ansible/roles/web/templates/nginx/* 2>/dev/null | grep -E 'http_' 2>/dev/null); do
-		grep -q "1c_exchange\.php" "$f" && continue
+		grep -q "1c_exchange" "$f" && continue
 
 		tmp=$(mktemp)
 		awk '
 		/\.htsecure/ {
-			print "    location ~ ^/(?!(bitrix/admin/1c_exchange.php)) {"
+			print "    location ~ ^/(?!(bitrix/admin/1c_exchange(_custom)?\.php)) {"
 			print "    " $0
 			print "    }"
 			next
 		}
 		{print}
-		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} from https redirect"
+		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} and ${GCV}1c_exchange_custom.php${NCV} from https redirect"
 
 		# validating
 		if command -v ansible-playbook >/dev/null 2>&1; then
@@ -1384,20 +1384,20 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		fi
 	done
 
-	# excluding 1c_exchange.php from https redirect in /etc/nginx/*
+	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/nginx/*
 	for f in $(grep -riIl "\.htsecure" /etc/nginx/* 2>/dev/null); do
-		grep -q "1c_exchange\.php" "$f" && continue
+		grep -q "1c_exchange" "$f" && continue
 
 		tmp=$(mktemp)
 		awk '
 		/\.htsecure/ {
-			print "    location ~ ^/(?!(bitrix/admin/1c_exchange.php)) {"
+			print "    location ~ ^/(?!(bitrix/admin/1c_exchange(_custom)?\.php)) {"
 			print "    " $0
 			print "    }"
 			next
 		}
 		{print}
-		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} from https redirect"
+		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} and ${GCV}1c_exchange_custom.php${NCV} from https redirect"
 	done
 	nginx_conf_sanity_check_fast || printf "\n${LRV}Errors found${NCV} while nginx -t. Backup dir - $BACKUP_DIR"
 
