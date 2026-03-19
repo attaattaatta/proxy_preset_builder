@@ -603,7 +603,7 @@ systemctl disable --now systemd-resolved &>/dev/null
 unlink $resolvconf &>/dev/null
 printf "options timeout:1 attempts:1 edns0 trust-ad\nnameserver 1.1.1.1\nnameserver 77.88.8.1\nnameserver 185.60.132.11\nnameserver 188.120.247.8\nnameserver 82.146.59.250\nnameserver 188.120.247.2\n" > $resolvconf 2>/dev/null
 
-printf "${GCV}Done${NCV}, current $resolvconf:\n" && cat $resolvconf &&echo
+printf "${GCV}Done${NCV}, current $resolvconf:\n" && cat $resolvconf
 
 }
 
