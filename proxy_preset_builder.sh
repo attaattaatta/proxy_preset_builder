@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.19"
+self_current_version="1.1.21"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -544,7 +544,7 @@ backup_etc_func() {
             printf "\n${LRV}Cannot create configs backup, disk used for 95%% or more${NCV}\n"
             	read -p "Continue ? [y/N]" -n 1 -r
 		echo
-		if [[ $REPLY =~ ^[Yy]$ ]]
+		if [[ $REPLY =~ ^([Yy]|$'\xd0\xbd'|$'\xd0\x9d')$ ]]
 		then
 			return 0
 		else
@@ -564,7 +564,7 @@ run_all_tweaks() {
 echo
 read -p "Skip all tweaks ? [Y/n]" -n 1 -r
 echo
-if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 	# user chose skip all tweaks
 	EXIT_STATUS=0
 
@@ -641,7 +641,7 @@ if [[ "$zram_active" -ne 0 ]]; then
 		echo
 		read -p "Enable zram swap (or fix) ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			cat > "$ZRAM_SCRIPT_PATH" <<'EOF'
 #!/bin/bash
 
@@ -728,7 +728,7 @@ if [[ $VIRTUAL == "yes" ]]; then
 		echo
 		read -p "No swap detected. Fix ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 			# check free space
 			CURRENT_FREE_SPACE_GIGABYTES=$(df -BG --sync / | awk '{print $4}' | tail -n 1 | grep -Eo [[:digit:]]+)
@@ -826,7 +826,7 @@ then
 	echo
 	read -p "Tweak files descriptors limits to 150K ? [Y/n]" -n 1 -r
 	echo
-	if ! [[ $REPLY =~ ^[Nn]$ ]]
+	if ! [[ $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]
 	then
 		sep0="echo =============";
 		$sep0
@@ -984,7 +984,7 @@ if [[ $DEDICATED == "yes" ]]; then
 			echo
 			read -p "Disable intel_pstate kernel driver? [Y/n] " -n 1 -r
 			echo
-			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 				if grubby --update-kernel=DEFAULT --args="intel_pstate=disable" > /dev/null 2>&1; then
 					printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for deactivate intel_pstate\n"
@@ -1057,7 +1057,7 @@ if [[ $DEDICATED == "yes" ]]; then
 			echo
 			read -p "Enable amd_pstate kernel driver and set it to passive (Update the BIOS/UEFI firmware may be required) ? [Y/n] " -n 1 -r
 			echo
-			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 				if grubby --update-kernel=DEFAULT --args="initcall_blacklist=acpi_cpufreq_init cpufreq.default_governor=performance amd_pstate.shared_mem=1 amd_pstate=passive" > /dev/null 2>&1; then
 					printf "\n${GCV}Sucess.${NCV} ${YCV}Reboot${NCV} the server for activate amd_pstate passive\n"
@@ -1287,7 +1287,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			echo
 			read -p "Update existing ${ADMIN_SH_BITRIX_FILE_LOCAL} script to the newer version ? [Y/n]" -n 1 -r
 			echo
-			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 				cp_date=$(date '+%d-%b-%Y-%H-%M')
 				\cp ${ADMIN_SH_BITRIX_FILE_LOCAL} ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} > /dev/null 2>&1
 				if [[ -f ${ADMIN_SH_BITRIX_FILE_LOCAL}.${cp_date} ]]; then
@@ -1339,7 +1339,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			echo
 			read -p "Install apache mod_rpaf and disable nginx port expose ? [Y/n]" -n 1 -r
 			echo
-			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 				bash <(timeout 4 wget --timeout 4 --no-check-certificate -q -o /dev/null -O- https://bit.ly/3wL8B2u)
 			else
 				# user chose not to install RPAF and fix nginx port exposion
@@ -1359,7 +1359,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		echo
 		read -p "Enable PHP cURL extension ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 			printf "Enabling cURL extension for PHP ${bitrix_php_version}"
 			{ 
@@ -1486,7 +1486,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Enable http/2 for webserver in ISP panel ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			# Enable http/2 isp manager
 			printf "Running"
 			if $MGR_CTL websettings http2=on sok=ok > /dev/null 2>&1; then
@@ -1509,7 +1509,7 @@ if [[ -f $MGR_BIN ]]; then
 		read -p "Apply above tweaks ? [Y/n]" -n 1 -r
 		printf "${NCV}"
 	
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			echo
 			for site in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
 				printf "Processing ${GCV}${site}${NCV} - "
@@ -1575,7 +1575,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Switch all php-cgi sites to mod-php and disable php-cgi for all users in ISP panel ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 	
 			# install all ISP Manager mod-php for installed PHP if not already installed
 			isp_mod_php_install
@@ -1677,7 +1677,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Install Nginx in ISP panel ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			printf "Running"
 			$MGR_CTL feature.edit elid=web package_logrotate=on package_nginx=on package_php=on package_php-fpm=on sok=ok
 
@@ -1716,7 +1716,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Enable ISP Manager PHP-FPM FastCGI feature ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			printf "Running"
 
 			$MGR_CTL feature.edit elid=web package_php=on package_php-fpm=on sok=ok > /dev/null 2>&1
@@ -1758,7 +1758,7 @@ if [[ -f $MGR_BIN ]]; then
 	then
 		read -p "Install opendkim, and all PHP versions in ISP panel ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			printf "Running"
 			isp_mod_php_install
 			{
@@ -2135,7 +2135,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Apply SEO redirect ISP Manager fix (remove 443 port from it) ? [Y/n] " -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 			if ! nginx_conf_sanity_check_fast >/dev/null 2>&1; then
 				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
@@ -2175,7 +2175,7 @@ if [[ -f $MGR_BIN ]]; then
 			echo "One day php sessions ISP manager cleanup detected in $PHPS_CLEAN"
 			read -p "Set all PHP gc_maxlifetime to one week, gc_probability=1, gc_divisor=500 ? [Y/n] " -n 1 -r
 			echo
-			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 				grep -RiIl -e "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" -e "^session\.gc_probability\s*=\s*0" -e "^session\.gc_divisor\s*=\s*1000" /opt/php* /etc/php* 2>/dev/null | while read -r ini; do
 					# gc_maxlifetime: 1440 -> 604800
 					if grep -Eq "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" "$ini"; then
@@ -2220,7 +2220,7 @@ if [[ -f $MGR_BIN ]]; then
 		echo
 		read -p "Tweak ISP Manager nginx, php-fpm and apache2 sites and templates ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 			# creating backup dir
 			\mkdir -p "$backup_dest_dir_path" > /dev/null || { printf "\n${LRV}Error${NCV} creating backup dir - ${backup_dest_dir_path}\n"; return 1; }
@@ -2442,7 +2442,7 @@ if nginx_exists_check_func; then
 		echo
 		read -p "Tweak nginx parameters ? [Y/n]" -n 1 -r
 		echo
-		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 	
 			declare -A BASE_NGINX_PARAMS=(
 				["worker_processes"]="auto"
@@ -2628,7 +2628,7 @@ tweak_add_nginx_bad_robot_conf_func() {
 			echo
 			read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
 			echo
-			if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 		
 				# checking nginx configuration sanity
 				if ! nginx_conf_sanity_check_fast; then
@@ -2694,7 +2694,7 @@ bitrix_reg_fix() {
 	echo
 	read -p "Check and fix Bitrix reg paths and bitrixsupport_ users in MySQL ? [Y/n]" -n 1 -r
 	echo
-	if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+	if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 		local SCRIPT="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bitrix_reg_fix.sh"
 
 		if command -v curl &> /dev/null; then
@@ -2887,7 +2887,7 @@ then
 		read -p "This will delete all $PROXY_PREFIX presets. Are you sure? [Y/n]" -n 1 -r
 		echo
 		printf "${NCV}"
-		if ! [[ $REPLY =~ ^[Nn]$ ]]
+		if ! [[ $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]
 		then
 			# backup
 			backup_func
@@ -2919,7 +2919,7 @@ then
 			read -p "This will delete $2 preset. Are you sure? [Y/n]" -n 1 -r
 			echo
 			printf "${NCV}"
-			if ! [[ $REPLY =~ ^[Nn]$ ]]
+			if ! [[ $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]
 			then
 				# backup
 				backup_func
@@ -2969,7 +2969,7 @@ then
 	read -p "This will delete all presets. Are you sure? [y/N]" -n 1 -r
 	echo
 	printf "${NCV}"
-	if [[ $REPLY =~ ^[Yy]$ ]]
+	if [[ $REPLY =~ ^([Yy]|$'\xd0\xbd'|$'\xd0\x9d')$ ]]
 		then
 			backup_func
 			# removing all presets 
@@ -3503,7 +3503,7 @@ do
 					printf "\n${YCV}Warning: nginx compiled without push and pull stream module\nI can recompile it with nginx-push-stream (and also with brotli, headers-more-nginx-module, latest openssl) OR you may just continue without it (modern bitrix core using own node.js or cloud stream server)\n${NCV}\n"
 					read -p "Continue without nginx recompilation ? [Y/n]" -n 1 -r
 					echo
-					if ! [[ $REPLY =~ ^[Nn]$ ]]
+					if ! [[ $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]
 					then
 						# no push and pull stream
 						BITRIX_NGX_PUSH="nginx_bitrix_http_context_push.conf.disabled"
