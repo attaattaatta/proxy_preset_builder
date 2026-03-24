@@ -14,7 +14,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # show script version
-self_current_version="1.1.21"
+self_current_version="1.1.22"
 printf "\n${YCV}Hello${NCV}, this is proxy_preset_builder.sh - ${YCV}$self_current_version\n${NCV}"
 
 # check privileges
@@ -1394,7 +1394,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			next
 		}
 		{print}
-		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} and ${GCV}1c_exchange_custom.php${NCV} from https redirect"
+		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} and ${GCV}1c_exchange_custom.php${NCV} from https redirect"
 
 		# validating
 		if command -v ansible-playbook >/dev/null 2>&1; then
@@ -1415,7 +1415,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			next
 		}
 		{print}
-		' "$f" > "$tmp" && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} and ${GCV}1c_exchange_custom.php${NCV} from https redirect"
+		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GCV}1c_exchange.php${NCV} and ${GCV}1c_exchange_custom.php${NCV} from https redirect"
 	done
 	nginx_conf_sanity_check_fast || printf "\n${LRV}Errors found${NCV} while nginx -t. Backup dir - $BACKUP_DIR"
 
