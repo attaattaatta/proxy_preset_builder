@@ -525,22 +525,22 @@ backup_etc_func () {
 					backup_item_size=$(\du -sm "${backup_item}" &>/dev/null | awk '{print $1}')
 
 					if [[ "${backup_item_size}" -lt 2000 ]]; then
-						printf "Processing ${G_C}backup${N_C} ${BACKUP_DIR}${backup_item}"
+						printf "Processing ${GC}backup${NC} ${BACKUP_DIR}${backup_item}"
 
 						if { rsync -RaHAXSlq "${backup_item}/" "${BACKUP_DIR}/" && exec_command="rsync"; } &>/dev/null || { \cp -Rfp --parents --reflink=auto "${backup_item}" "${BACKUP_DIR}"; \cp -Rfp --parents --reflink=auto "${backup_item}" "${BACKUP_DIR}" && chmod --reference="${backup_item}" "${BACKUP_DIR}${backup_item}" && exec_command="cp"; } &>/dev/null; then
-							printf " with $exec_command command - ${G_C}OK${N_C}\n"
+							printf " with $exec_command command - ${GC}OK${NC}\n"
 						else
-							printf " with $exec_command command - ${R_C}FAIL${N_C}\n"
+							printf " with $exec_command command - ${RC}FAIL${NC}\n"
 						fi
 					else
-						printf "${Y_C}BACKUP WARNING:${N_C} ${backup_item} / ${backup_item_size} - more than 2G, backup was skipped\n"
+						printf "${Y_C}BACKUP WARNING:${NC} ${backup_item} / ${backup_item_size} - more than 2G, backup was skipped\n"
 					fi
 				fi
 			done
 
 			\cp -Rfp --parents --reflink=auto "/opt/php"*"/etc/" "$BACKUP_DIR" &> /dev/null
 		else
-			printf "${Y_C}BACKUP ERROR:${N_C} Cannot create $BACKUP_ROOT_DIR\n\n"
+			printf "${RC}BACKUP ERROR:${NC} Cannot create $BACKUP_ROOT_DIR\n\n"
 		        read -p "Proceed anyway ? [y/N]" -n 1 -r
 		        echo
 		
@@ -550,7 +550,7 @@ backup_etc_func () {
 		fi
 
 	else
-		printf "${Y_C}BACKUP ERROR:${N_C} Low free space\n\n"
+		printf "${RC}BACKUP ERROR:${NC} Low free space\n\n"
 	        read -p "Proceed anyway ? [y/N]" -n 1 -r
 	        echo
 	
