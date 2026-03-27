@@ -9,7 +9,7 @@
 #pipefail | verbose
 
 # show script version
-bash_shared_func_version="1.0.2"
+bash_shared_func_version="1.0.3"
 
 # check OS
 check_os_func() {
@@ -77,7 +77,7 @@ nginx_port_expose_detect_func() {
 
 BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile)
 
-if [[ "$BITRIX_MAJOR_VER" -lt 9 ]] && (nginx -T 2>&1 | grep -qi "\$host:80;" >/dev/null 2>&1 || nginx -T 2>&1 | grep -qi "\$host:443;" >/dev/null 2>&1); then
+if [[ "$BITRIX_MAJOR_VER" -le 9 ]] && (nginx -T 2>&1 | grep -qi "\$host:80;" >/dev/null 2>&1 || nginx -T 2>&1 | grep -qi "\$host:443;" >/dev/null 2>&1); then
 	return 0
 else
 	return 1
