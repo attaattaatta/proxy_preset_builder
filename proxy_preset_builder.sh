@@ -1350,7 +1350,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 			fi
 		else
 			# RPAF installed and fix nginx port exposion done
-			printf "\nRPAF and nginx port exposion fix ${GC}already done${NC}\n"
+			printf "\nRPAF and nginx port exposion fix ${GC}not needed${NC} or ${GC}already done${NC}\n"
 		fi
 	else
 		# error loading checking_mod_rpaf_func or nginx_port_expose_detect_func
