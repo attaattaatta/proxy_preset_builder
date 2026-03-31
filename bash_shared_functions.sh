@@ -42,10 +42,17 @@ fi
 
 }
 
+BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null)
+
 # RPAF or not RPAF
 # 0 - detected correct version
 # 1 - not detected, need to fix
 checking_mod_rpaf_func() {
+
+if [[ "$BITRIX_MAJOR_VER" -le 9 ]]; then
+	return 0
+fi
+
 if [[ $DISTR == "rhel" ]]; then
 	apache_httpd_mod_folder="/usr/lib64/httpd"
 elif [[ $DISTR == "debian" ]]; then
@@ -74,8 +81,6 @@ fi
 # 0 - detected, need to fix
 # 1 - not detected
 nginx_port_expose_detect_func() {
-
-BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile)
 
 if [[ "$BITRIX_MAJOR_VER" -le 9 ]] && (nginx -T 2>&1 | grep -qi "\$host:80;" >/dev/null 2>&1 || nginx -T 2>&1 | grep -qi "\$host:443;" >/dev/null 2>&1); then
 	return 0
