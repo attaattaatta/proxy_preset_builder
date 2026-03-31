@@ -49,7 +49,7 @@ BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null
 # 1 - not detected, need to fix
 checking_mod_rpaf_func() {
 
-if [[ "$BITRIX_MAJOR_VER" -le 9 ]]; then
+if [[ "$BITRIX_MAJOR_VER" -ge 9 ]]; then
 	return 0
 fi
 
@@ -82,7 +82,11 @@ fi
 # 1 - not detected
 nginx_port_expose_detect_func() {
 
-if [[ "$BITRIX_MAJOR_VER" -le 9 ]] && (nginx -T 2>&1 | grep -qi "\$host:80;" >/dev/null 2>&1 || nginx -T 2>&1 | grep -qi "\$host:443;" >/dev/null 2>&1); then
+if [[ "$BITRIX_MAJOR_VER" -ge 9 ]]; then
+	return 1
+fi
+
+if nginx -T 2>&1 | grep -qi "\$host:80;" >/dev/null 2>&1 || nginx -T 2>&1 | grep -qi "\$host:443;" >/dev/null 2>&1; then
 	return 0
 else
 	return 1
