@@ -17,7 +17,7 @@ OOC="\033[38;5;214m"
 BBC="\033[1;34m"
 
 # show script version
-self_current_version="1.1.24"
+self_current_version="1.1.25"
 printf "\n${YC}Hello${NC}, this is proxy_preset_builder.sh - ${YC}$self_current_version\n${NC}"
 
 # check privileges
@@ -1387,42 +1387,60 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
 	for f in $(grep -riIl "\.htsecure" /etc/ansible/roles/web/templates/nginx/* 2>/dev/null | grep -E 'http_' 2>/dev/null); do
 		grep -q "1c_exchange" "$f" && continue
-
+	
 		tmp=$(mktemp)
 		awk '
 		/\.htsecure/ {
-			print "    location ~ ^/(?!(bitrix/admin/1c_exchange(_custom)?\.php)) {"
-			print "    " $0
+			gsub(/^[ \t]+if \(-f /, "", $0)
+			gsub(/\) { rewrite.*$/, "", $0)
+			
+			print "    set $do_https_redirect \"NO\";"
+			print "    if (-f " $0 ") {"
+			print "        set $do_https_redirect \"YES\";"
+			print "    }"
+			print "    if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php) {"
+			print "        set $do_https_redirect \"NO\";"
+			print "    }"
+			print "    if ($do_https_redirect = \"YES\") {"
+			print "        return 301 https://$host$request_uri;"
 			print "    }"
 			next
 		}
 		{print}
-		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
-
+		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
+	
 		# validating
 		if command -v ansible-playbook >/dev/null 2>&1; then
 			out=$(ansible-playbook /etc/ansible/web.yml --syntax-check 2>&1) || (printf "\n${RC}Errors found${NC} while ansible-playbook /etc/ansible/web.yml --syntax-check\n Backup dir - $BACKUP_DIR" && echo && echo $out)
 		fi
 	done
-
+	
 	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/nginx/*
 	for f in $(grep -riIl "\.htsecure" /etc/nginx/* 2>/dev/null); do
 		grep -q "1c_exchange" "$f" && continue
-
+	
 		tmp=$(mktemp)
 		awk '
 		/\.htsecure/ {
-			print "    location ~ ^/(?!(bitrix/admin/1c_exchange(_custom)?\.php)) {"
-			print "    " $0
+			gsub(/^[ \t]+if \(-f /, "", $0)
+			gsub(/\) { rewrite.*$/, "", $0)
+			
+			print "    set $do_https_redirect \"NO\";"
+			print "    if (-f " $0 ") {"
+			print "        set $do_https_redirect \"YES\";"
+			print "    }"
+			print "    if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php) {"
+			print "        set $do_https_redirect \"NO\";"
+			print "    }"
+			print "    if ($do_https_redirect = \"YES\") {"
+			print "        return 301 https://$host$request_uri;"
 			print "    }"
 			next
 		}
 		{print}
-		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excuded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
+		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
 	done
-	nginx_conf_sanity_check_fast || printf "\n${RC}Errors found${NC} while nginx -t. Backup dir - $BACKUP_DIR"
-
-
+	nginx_conf_sanity_check_fast || (printf "\n${RC}Errors found${NC} while nginx -t. Backup dir - $BACKUP_DIR" && exit 1)
 else
 	# not bitrix env or user chosen not to fix Bitrix env
 	printf "\nSkipping Bitrix environment tweaks, ${GC}not detected${NC} or skipped\n"
