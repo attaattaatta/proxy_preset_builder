@@ -17,7 +17,7 @@ OOC="\033[38;5;214m"
 BBC="\033[1;34m"
 
 # show script version
-self_current_version="1.1.25"
+self_current_version="1.1.26"
 printf "\n${YC}Hello${NC}, this is proxy_preset_builder.sh - ${YC}$self_current_version\n${NC}"
 
 # check privileges
@@ -1371,7 +1371,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 				echo "extension=curl.so" > /etc/php/${bitrix_php_version}/mods-available/curl.ini && ln -s /etc/php/${bitrix_php_version}/mods-available/curl.ini /etc/php/${bitrix_php_version}/apache2/conf.d/20-curl.ini && ln -s /etc/php/${bitrix_php_version}/mods-available/curl.ini /etc/php/${bitrix_php_version}/cli/conf.d/20-curl.ini
 			fi
 			sleep 1
-			} > /dev/null 2>&1
+			} &>/dev/null
 		 		
 			if \php -m | grep -i curl > /dev/null 2>&1; then
 				systemctl restart httpd* apache2* php-fpm*
@@ -1384,31 +1384,12 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		printf "\nEnable PHP cURL extension not needed or was ${GC}already done${NC}\n"
 	fi
 
+	local SED_CMD='/^[[:space:]]*#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{[[:space:]]*(rewrite[[:space:]].*permanent;|return[[:space:]]+301[[:space:]].*;)[[:space:]]*\}[[:space:]]*$/{s@^([[:space:]]*)#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{[[:space:]]*(rewrite[[:space:]].*permanent;|return[[:space:]]+301[[:space:]].*;)[[:space:]]*\}[[:space:]]*$@\1set $do_https_redirect "NO";\n\1if (-f /home/bitrix/www/.htsecure) { set $do_https_redirect "YES"; }\n\1if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php) { set $do_https_redirect "NO"; }\n\1if ($do_https_redirect = "YES") { return 301 https://$host$request_uri; }@}; /^[[:space:]]*#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{$/{:a;N;/\n[[:space:]]*\}/!ba;s@^([[:space:]]*).*@\1@;s@^(.*)$@\1set $do_https_redirect "NO";\n\1if (-f /home/bitrix/www/.htsecure) { set $do_https_redirect "YES"; }\n\1if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php) { set $do_https_redirect "NO"; }\n\1if ($do_https_redirect = "YES") { return 301 https://$host$request_uri; }@}'
+
 	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
 	for f in $(grep -riIl "\.htsecure" /etc/ansible/roles/web/templates/nginx/* 2>/dev/null | grep -E 'http_' 2>/dev/null); do
 		grep -q "1c_exchange" "$f" && continue
-	
-		tmp=$(mktemp)
-		awk '
-		/\.htsecure/ {
-			gsub(/^[ \t]+if \(-f /, "", $0)
-			gsub(/\) { rewrite.*$/, "", $0)
-			
-			print "    set $do_https_redirect \"NO\";"
-			print "    if (-f " $0 ") {"
-			print "        set $do_https_redirect \"YES\";"
-			print "    }"
-			print "    if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php) {"
-			print "        set $do_https_redirect \"NO\";"
-			print "    }"
-			print "    if ($do_https_redirect = \"YES\") {"
-			print "        return 301 https://$host$request_uri;"
-			print "    }"
-			next
-		}
-		{print}
-		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
-	
+		sed -E -i "$SED_CMD" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
 		# validating
 		if command -v ansible-playbook >/dev/null 2>&1; then
 			out=$(ansible-playbook /etc/ansible/web.yml --syntax-check 2>&1) || (printf "\n${RC}Errors found${NC} while ansible-playbook /etc/ansible/web.yml --syntax-check\n Backup dir - $BACKUP_DIR" && echo && echo $out)
@@ -1418,27 +1399,7 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/nginx/*
 	for f in $(grep -riIl "\.htsecure" /etc/nginx/* 2>/dev/null); do
 		grep -q "1c_exchange" "$f" && continue
-	
-		tmp=$(mktemp)
-		awk '
-		/\.htsecure/ {
-			gsub(/^[ \t]+if \(-f /, "", $0)
-			gsub(/\) { rewrite.*$/, "", $0)
-			
-			print "    set $do_https_redirect \"NO\";"
-			print "    if (-f " $0 ") {"
-			print "        set $do_https_redirect \"YES\";"
-			print "    }"
-			print "    if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php) {"
-			print "        set $do_https_redirect \"NO\";"
-			print "    }"
-			print "    if ($do_https_redirect = \"YES\") {"
-			print "        return 301 https://$host$request_uri;"
-			print "    }"
-			next
-		}
-		{print}
-		' "$f" > "$tmp" 2>/dev/null && \mv -f "$tmp" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
+		sed -E -i "$SED_CMD" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
 	done
 	nginx_conf_sanity_check_fast || (printf "\n${RC}Errors found${NC} while nginx -t. Backup dir - $BACKUP_DIR" && exit 1)
 else
