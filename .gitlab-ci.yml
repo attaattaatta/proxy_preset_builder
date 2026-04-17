@@ -1,0 +1,4 @@
+shellcheck:
+  stage: test
+  script:
+    - shellcheck -S error $(find . -type f -name "*.sh")
