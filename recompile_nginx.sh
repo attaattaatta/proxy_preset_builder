@@ -12,7 +12,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # Show script version
-self_current_version="1.0.6"
+self_current_version="1.0.7"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n\n${NCV}"
 
 # check privileges
@@ -305,7 +305,7 @@ ngx_configure_make_install_func
 ngx_compilation_custom_func() {
 printf "\n${GCV}List:${NCV}\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GCV}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NCV}"
 read -a nginx_modules_array
-for nginx_module in ${nginx_modules_array[@]}
+for nginx_module in "${nginx_modules_array[@]}"
 do
 if [[ "$nginx_module" =~ "openssl3" ]]
 then
@@ -330,17 +330,16 @@ then
 {
 	CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
 
-	if [[ $CMAKE_VERSION < "3.15" ]]
-		then
-			cd "$SRC_DIR"
-			git clone https://github.com/Kitware/CMake.git
-			cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
-			cd "$SRC_DIR/CMake" 
-			bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl3 -DOPENSSL_LIBRARIES=/usr/local/src/openssl3/lib
-			make -j$(nproc)
-			make -j$(nproc) install
-			hash -r
-		fi
+	if [[ $(printf '%s\n' "3.15" "$CMAKE_VERSION" | sort -V | head -n1) != "3.15" ]]; then
+		cd "$SRC_DIR"
+		git clone https://github.com/Kitware/CMake.git
+		cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+		cd "$SRC_DIR/CMake" 
+		bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl3 -DOPENSSL_LIBRARIES=/usr/local/src/openssl3/lib
+		make -j$(nproc)
+		make -j$(nproc) install
+		hash -r
+	fi
 
 cd "$SRC_DIR/ngx_brotli"
 cd deps/brotli

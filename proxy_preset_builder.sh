@@ -17,7 +17,7 @@ OOC="\033[38;5;214m"
 BBC="\033[1;34m"
 
 # show script version
-self_current_version="1.1.26"
+self_current_version="1.1.27"
 printf "\n${YC}Hello${NC}, this is proxy_preset_builder.sh - ${YC}$self_current_version\n${NC}"
 
 # check privileges
@@ -522,7 +522,7 @@ backup_etc_func () {
 			for backup_item in "${DIR_LIST[@]}"
 			do
 				if [[ -d "$backup_item" ]]; then
-					backup_item_size=$(\du -sm "${backup_item}" &>/dev/null | awk '{print $1}')
+					backup_item_size=$(\du -sm "${backup_item}" 2>/dev/null | awk '{print $1}')
 
 					if [[ "${backup_item_size}" -lt 2000 ]]; then
 						printf "Processing ${GC}backup${NC} ${BACKUP_DIR}${backup_item}"
@@ -1384,24 +1384,29 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 		printf "\nEnable PHP cURL extension not needed or was ${GC}already done${NC}\n"
 	fi
 
-	local SED_CMD='/^[[:space:]]*#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{[[:space:]]*(rewrite[[:space:]].*permanent;|return[[:space:]]+301[[:space:]].*;)[[:space:]]*\}[[:space:]]*$/{s@^([[:space:]]*)#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{[[:space:]]*(rewrite[[:space:]].*permanent;|return[[:space:]]+301[[:space:]].*;)[[:space:]]*\}[[:space:]]*$@\1set $do_https_redirect "NO";\n\1if (-f /home/bitrix/www/.htsecure) { set $do_https_redirect "YES"; }\n\1if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php\.*) { set $do_https_redirect "NO"; }\n\1if ($do_https_redirect = "YES") { return 301 https://$host$request_uri; }@}; /^[[:space:]]*#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{$/{:a;N;/\n[[:space:]]*\}/!ba;s@^([[:space:]]*).*@\1@;s@^(.*)$@\1set $do_https_redirect "NO";\n\1if (-f /home/bitrix/www/.htsecure) { set $do_https_redirect "YES"; }\n\1if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php\.*) { set $do_https_redirect "NO"; }\n\1if ($do_https_redirect = "YES") { return 301 https://$host$request_uri; }@}'
+	local SED_CMD='/^[[:space:]]*#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{[[:space:]]*(rewrite[[:space:]].*permanent;|return[[:space:]]+301[[:space:]].*;)[[:space:]]*\}[[:space:]]*$/{s@^([[:space:]]*)#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{[[:space:]]*(rewrite[[:space:]].*permanent;|return[[:space:]]+301[[:space:]].*;)[[:space:]]*\}[[:space:]]*$@\1set $do_https_redirect "NO";\n\1if (-f /etc/nginx/.htsecure) { set $do_https_redirect "YES"; }\n\1if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php\.*) { set $do_https_redirect "NO"; }\n\1if ($do_https_redirect = "YES") { return 301 https://$host$request_uri; }@}; /^[[:space:]]*#?[[:space:]]*if[[:space:]]*\(-f[[:space:]].*\.htsecure\)[[:space:]]*\{$/{:a;N;/\n[[:space:]]*\}/!ba;s@^([[:space:]]*).*@\1@;s@^(.*)$@\1set $do_https_redirect "NO";\n\1if (-f /etc/nginx/.htsecure) { set $do_https_redirect "YES"; }\n\1if ($request_uri ~ ^/bitrix/admin/1c_exchange(_custom)?\\.php\.*) { set $do_https_redirect "NO"; }\n\1if ($do_https_redirect = "YES") { return 301 https://$host$request_uri; }@}'
 
-	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
-	for f in $(grep -riIl "\.htsecure" /etc/ansible/roles/web/templates/nginx/* 2>/dev/null | grep -E 'http_' 2>/dev/null); do
-		grep -q "1c_exchange" "$f" && continue
-		sed -E -i "$SED_CMD" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
-		# validating
-		if command -v ansible-playbook >/dev/null 2>&1; then
-			out=$(ansible-playbook /etc/ansible/web.yml --syntax-check 2>&1) || (printf "\n${RC}Errors found${NC} while ansible-playbook /etc/ansible/web.yml --syntax-check\n Backup dir - $BACKUP_DIR" && echo && echo $out)
-		fi
-	done
-	
-	# excluding 1c_exchange(_custom)?.php from https redirect in /etc/nginx/*
-	for f in $(grep -riIl "\.htsecure" /etc/nginx/* 2>/dev/null); do
-		grep -q "1c_exchange" "$f" && continue
-		sed -E -i "$SED_CMD" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
-	done
-	nginx_conf_sanity_check_fast || (printf "\n${RC}Errors found${NC} while nginx -t. Backup dir - $BACKUP_DIR" && exit 1)
+	if touch /etc/nginx/.htsecure &>/dev/null; then
+
+		# excluding 1c_exchange(_custom)?.php from https redirect in /etc/ansible/roles/web/templates/nginx/*
+		for f in $(grep -riIl "\.htsecure" /etc/ansible/roles/web/templates/nginx/* 2>/dev/null | grep -E 'http_' 2>/dev/null); do
+			grep -q "1c_exchange" "$f" && continue
+			sed -E -i "$SED_CMD" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
+			# validating
+			if command -v ansible-playbook >/dev/null 2>&1; then
+				out=$(ansible-playbook /etc/ansible/web.yml --syntax-check 2>&1) || (printf "\n${RC}Errors found${NC} while ansible-playbook /etc/ansible/web.yml --syntax-check\n Backup dir - $BACKUP_DIR" && echo && echo $out)
+			fi
+		done
+		
+		# excluding 1c_exchange(_custom)?.php from https redirect in /etc/nginx/*
+		for f in $(grep -riIl "\.htsecure" /etc/nginx/* 2>/dev/null); do
+			grep -q "1c_exchange" "$f" && continue
+			sed -E -i "$SED_CMD" "$f" && printf "\n$f - excluded ${GC}1c_exchange.php${NC} and ${GC}1c_exchange_custom.php${NC} from https redirect"
+		done
+		nginx_conf_sanity_check_fast || (printf "\n${RC}Errors found${NC} while nginx -t. Backup dir - $BACKUP_DIR" && exit 1)
+	else
+		printf "\nCannot exclude 1c_exchange_custom.php from https redirect, touch /etc/nginx/.htsecure - ${RC}FAILED${NC}\n"
+	fi
 else
 	# not bitrix env or user chosen not to fix Bitrix env
 	printf "\nSkipping Bitrix environment tweaks, ${GC}not detected${NC} or skipped\n"
@@ -1421,15 +1426,29 @@ idn2 "$1"
 
 # tweak sites settings need or not function
 ispmanager_enable_sites_tweaks_need_func() {
-
 for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}' | sort); do
 	# converting to idn
-	site=$(puny_converter ${site})
+	site=$(puny_converter "${site}")
 
 	# check tweaks needed or not
-	if $MGR_CTL site.edit elid=${site} | grep -i "site_ddosshield=on"  || ! $MGR_CTL site.edit elid=${site} | grep -i "site_gzip_level=5" || ! $MGR_CTL site.edit elid=${site} | grep -i "site_expire_times=expire_times_max" || $MGR_CTL site.edit elid=${site} | grep -i "site_srv_cache=off" || $MGR_CTL site.edit elid=${site} | grep -i "site_ssi=on"; then
+	cfg="$($MGR_CTL site.edit elid=${site})"
+
+	if grep -i "site_ddosshield=on" <<< "$cfg" \
+		|| ! grep -i "site_gzip_level=5" <<< "$cfg" \
+		|| ! grep -i "site_expire_times=expire_times_max" <<< "$cfg" \
+		|| grep -i "site_srv_cache=off" <<< "$cfg" \
+		|| grep -i "site_ssi=on" <<< "$cfg"
+	then
 		# check for dupes in array
-		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
+		found=0
+		for s in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
+			if [[ "$s" == "$site" ]]; then
+				found=1
+				break
+			fi
+		done
+
+		if (( !found )); then
 			SITES_TWEAKS_NEEDED="YES"
 			SITES_TWEAKS_NEEDED_SITES+=("${site}")
 		fi
@@ -1439,11 +1458,19 @@ done
 # enable HSTS http header for the site if tls is on
 for site in $($MGR_CTL webdomain | grep "secure=on" | awk -F'name=' '{print $2}' | awk '{print $1}'); do
 	# converting to idn
-	site=$(puny_converter ${site})
+	site=$(puny_converter "${site}")
 
 	if $MGR_CTL site.edit elid=${site} | grep "site_hsts=off" > /dev/null 2>&1; then
 		# check for dupes in array
-		if [[ ! " ${SITES_TWEAKS_NEEDED_SITES[@]} " =~ " ${site} " ]]; then
+		found=0
+		for s in "${SITES_TWEAKS_NEEDED_SITES[@]}"; do
+			if [[ "$s" == "$site" ]]; then
+				found=1
+				break
+			fi
+		done
+
+		if (( !found )); then
 			SITES_TWEAKS_NEEDED="YES"
 			SITES_TWEAKS_NEEDED_SITES+=("${site}")
 		fi
@@ -1521,23 +1548,37 @@ fi
 # installing ispmanager-pkg-php
 isp_mod_php_install() {
 
-if ! $MGR_CTL feature | grep "name=web" | grep "PHP module"; then
-	$MGR_CTL feature.edit elid=web package_php=on sok=ok
-fi
+	if ! $MGR_CTL feature | grep "name=web" | grep "PHP module"; then
+		$MGR_CTL feature.edit elid=web package_php=on sok=ok
+	fi
 
 } > /dev/null 2>&1
 
 
 isp_no_mod_php_check() {
 
-# check no mod-php php versions
-NO_MOD_PHP=()
-for php_version in $($MGR_CTL feature | grep PHP | grep "active=on" | grep -E 'name=altphp' |  grep -v "Apache module" | awk -F'name=' '{print $2}' | awk '{print $1}' | grep -Eo [[:digit:]]+); do
-	# check for dupes in array
-	if [[ ! " ${NO_MOD_PHP[@]} " =~ " ${php_version} " ]]; then
-		NO_MOD_PHP+=("${php_version}")
-	fi
-done
+	declare -A seen=()
+	NO_MOD_PHP=()
+
+	while IFS= read -r php_version; do
+		# skip empty
+		[[ -z "$php_version" ]] && continue
+
+		# dedupe via associative array
+		if [[ -z "${seen[$php_version]}" ]]; then
+			seen["$php_version"]=1
+			NO_MOD_PHP+=("$php_version")
+		fi
+	done < <(
+		$MGR_CTL feature \
+		| grep PHP \
+		| grep "active=on" \
+		| grep -E 'name=altphp' \
+		| grep -v "Apache module" \
+		| awk -F'name=' '{print $2}' \
+		| awk '{print $1}' \
+		| grep -Eo '[[:digit:]]+'
+	)
 
 } > /dev/null 2>&1
 
@@ -1566,7 +1607,7 @@ if [[ -f $MGR_BIN ]]; then
 			if [[ ! -z "${NO_MOD_PHP+x}" ]]; then
 	
 				printf "Running mod-php installation"
-				for no_mod_php in ${NO_MOD_PHP[@]}; do
+				for no_mod_php in "${NO_MOD_PHP[@]}"; do
 					$MGR_CTL feature.edit elid=altphp${no_mod_php} package_ispphp${no_mod_php}_fpm=on package_ispphp${no_mod_php}_mod_apache=on packagegroup_altphp${no_mod_php}gr=ispphp${no_mod_php} sok=ok > /dev/null 2>&1
 				done
 		
@@ -2994,7 +3035,7 @@ then
 	if 
 
 	{
-	if [[ -z BITRIX_FPM_STATUS_SET ]]
+	if [[ -z $BITRIX_FPM_STATUS_SET ]]
 	then
 		printf "\nlocation ^~ /nginx-status-$RANDOM_N { stub_status on; allow all; }\n" > "$NGX_STATUS_PAGE_FILE"
 		printf "\nlocation ~* /apache-(status|info)-$RANDOM_N { allow all; proxy_pass http://127.0.0.1:8080; }\n" > "$APACHE_STATUS_PAGE_FILE"
