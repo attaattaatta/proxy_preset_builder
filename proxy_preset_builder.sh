@@ -16,9 +16,11 @@ PPC="\033[1;35m"
 OOC="\033[38;5;214m"
 BBC="\033[1;34m"
 
+printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
+
 # show script version
-self_current_version="1.1.27"
-printf "\n${YC}Hello${NC}, this is proxy_preset_builder.sh - ${YC}$self_current_version\n${NC}"
+self_current_version="1.1.28"
+printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
 # check privileges
 if [[ $EUID -ne 0 ]]; then
@@ -563,6 +565,9 @@ backup_etc_func () {
 
 # run all tweaks
 run_all_tweaks() {
+
+printf "   _____                    _             \n  |_   _|_      _____  __ _| | _____ _ __ \n    | | \\ \\ /\\ / / _ \\/ _\\ | |/ / _ \\ '__|\n    | |  \\ V  V /  __/ (_| |   <  __/ |   \n    |_|   \\_/\\_/ \\___|\\__,_|_|\\_\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
+printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
 echo
 read -p "Skip all tweaks ? [Y/n]" -n 1 -r
