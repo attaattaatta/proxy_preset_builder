@@ -87,7 +87,7 @@ NGINX_CONF_FILE="$NGINX_CONF_DIR/nginx.conf"
 NGINX_TWEAKS_INCLUDE_FILE="$NGINX_CONF_DIR/custom.conf"
 NGINX_TWEAKS_SUCCESS_ADDED=()
 NGINX_BAD_ROBOT_FILE_URL=""
-SHARED_BASH_FUNCTIONS_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/bash_shared_functions.sh"
+SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # allowed script actions
 ALLOWED_ACTIONS="(^add$|^del$|^reset$|^tweak$|^recompile$|^setstatus$|^-?-?help$)"
@@ -107,12 +107,12 @@ RANDOM_N=$RANDOM
 PROXY_PREFIX="proxy_to_"
 
 # GIT repo
-SCRIPT_GIT_REPO="https://github.com/attaattaatta/proxy_preset_builder"
-SCRIPT_GIT_BACKUP_REPO="https://gitlab.hoztnode.net/admins/scripts"
+SCRIPT_GIT_REPO="https://gitlab.hoztnode.net/admins/scripts"
+SCRIPT_GIT_BACKUP_REPO="https://github.com/attaattaatta/proxy_preset_builder"
 
 # GIT script raw path to proxy_preset_builder.sh folder
-SCRIPT_GIT_PATH="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/master"
-SCRIPT_GIT_BACKUP_PATH="https://gitlab.hoztnode.net/admins/scripts/-/raw/master"
+SCRIPT_GIT_PATH="https://gitlab.hoztnode.net/admins/scripts/-/raw/master"
+SCRIPT_GIT_BACKUP_PATH="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/master"
 
 # extract domain names of GIT urls
 GIT_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
