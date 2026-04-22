@@ -19,7 +19,7 @@ BBC="\033[1;34m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # show script version
-self_current_version="1.1.28"
+self_current_version="1.1.29"
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
 # check privileges
@@ -655,7 +655,7 @@ if [[ "$zram_active" -ne 0 ]]; then
 
 if swapon | grep -q zram; then
 	echo "ZRAM already enabled"
-	exit 1
+	exit 0
 fi
 
 # cleaning all zram config if exists
