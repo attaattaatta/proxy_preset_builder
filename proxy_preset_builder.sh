@@ -19,8 +19,8 @@ BBC="\033[1;34m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
-self_current_version="1.1.29"
-tweaker_current_version="0.16.5"
+self_current_version="1.1.30"
+tweaker_current_version="0.16.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -2638,7 +2638,7 @@ tweak_add_nginx_bad_robot_conf_func() {
 	# check nginx exists
 	if nginx_exists_check_func; then
 
-		local NGINX_BAD_ROBOT_MAP_FILE_URL="https://raw.githubusercontent.com/attaattaatta/proxy_preset_builder/refs/heads/master/tweaker_files/bad_robot_rate_limit.conf"
+		local NGINX_BAD_ROBOT_MAP_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/tweaker_files/bad_robot_rate_limit.conf"
 		local NGINX_BAD_ROBOT_MAP_FILE_LOCAL=""
 		local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' /etc/nginx/* 2>/dev/null || printf "${RC}not found${NC}")
 		
