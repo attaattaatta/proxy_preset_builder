@@ -626,7 +626,7 @@ tweak_cve_func() {
 
 	# CVE-2026-31431 hotfix (Copy Fail LPE)
 	echo
-	b="/dev/shm/cve_2026_31431_hotfix"; wget -qO $b $(wget -qO- https://bit.ly/4elJXcG | grep browser_download_url | grep -v .exe | cut -d '"' -f 4) && chmod +x $b && $b
+	b="/dev/shm/cve_2026_31431_hotfix"; wget -qO $b $(wget --timeout 4 -qO- https://bit.ly/4elJXcG | grep browser_download_url | grep -v .exe | cut -d '"' -f 4) && chmod +x $b && $b
 
 }
 
@@ -1224,7 +1224,7 @@ if wget_openssl_exists_check; then
 	local full_url="$1"
 	local file_path_local="$2"
 	local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
-	files_diff_check() { diff -q "${file_path_local}" <(\timeout 5 \wget -qO- "${full_url}") > /dev/null 2>&1 || diff -q "${file_path_local}" <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
+	files_diff_check() { diff -q "${file_path_local}" <(\timeout 5 \wget --timeout 4 -qO- "${full_url}") > /dev/null 2>&1 || diff -q "${file_path_local}" <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
 	
 	# get filesize in bytes for downloaded file_path_local file
 	local file_path_local_size=$(stat --printf="%s" "${file_path_local}" 2>/dev/null || echo 0)
