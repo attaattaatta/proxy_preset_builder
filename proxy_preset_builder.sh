@@ -19,7 +19,7 @@ BBC="\033[1;34m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
-self_current_version="1.1.30"
+self_current_version="1.1.31"
 tweaker_current_version="0.17.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
@@ -626,9 +626,9 @@ get_nginx_version() {
 } 2>/dev/null
 
 detect_pm() {
-	if command -v apt
+	if command -v apt; then
 		echo "apt"
-	elif command -v yum
+	elif command -v yum; then
 		echo "yum"
 	else
 		echo "unknown"
