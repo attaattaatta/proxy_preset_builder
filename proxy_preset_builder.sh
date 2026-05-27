@@ -20,7 +20,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.30"
-tweaker_current_version="0.16.6"
+tweaker_current_version="0.17.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -621,12 +621,76 @@ fi
 
 }
 
+get_nginx_version() {
+	nginx -v 2>&1 | awk -F/ '{print $2}'
+} 2>/dev/null
+
+detect_pm() {
+	if command -v apt
+		echo "apt"
+	elif command -v yum
+		echo "yum"
+	else
+		echo "unknown"
+	fi
+} 2>/dev/null
+
+update_nginx() {
+	local pm
+	local package="${1:-nginx}"
+	pm=$(detect_pm)
+
+	case "$pm" in
+		apt)
+			apt -y update
+			apt -y install "$package" || return 1
+			;;
+		yum)
+			yum -y update "$package" || yum -y install "$package" || return 1
+			;;
+		*)
+			return 1
+			;;
+	esac
+} 2>/dev/null
+
 # CVEs mitigations
 tweak_cve_func() {
 
-	# CVE-2026-31431 hotfix (Copy Fail LPE)
+	# CVE-2026-31431 (Copy Fail LPE) / CVE-2026-46300 / CVE-2026-43500 (Fragnesia) / CVE-2026-43284 (Dirty Frag)
 	echo
-	b="/dev/shm/cve_2026_31431_hotfix"; wget --timeout 4 -qO- https://bit.ly/48E47uY -qO $b && chmod +x $b && $b
+	b="/dev/shm/cve_2026_31431_hotfix"; wget --timeout 4 -qO- https://bit.ly/4vgYWdi -qO $b && chmod +x $b && $b
+
+	# CVE-2026-42945 (NGINX Rift) / CVE-2026-9256 (nginx-poolslip) / CVE-2026-42926 / CVE-2026-40701/ CVE-2026-42946
+	echo
+
+	local NGINX_VERSION=$(get_nginx_version)
+	target_version="1.30.2"
+
+	if [[ -z "$NGINX_VERSION" ]]; then
+		return 1
+	fi
+	
+	if [[ "$(printf '%s\n' "$target_version" "$NGINX_VERSION" | sort -V | head -n1)" != "$target_version" ]]; then
+
+		printf "\nFixing ${GC}Nginx CVEs${NC} (current version: ${NGINX_VERSION})\n"
+
+		case "$BITRIX" in
+			"ENV")
+				update_nginx bx-nginx
+				;;
+			*)
+				update_nginx
+				;;
+		esac
+	
+		local NGINX_VERSION_AFTER=$(nginx -v 2>&1 | awk -F/ '{print $2}')
+		if [[ "$(printf '%s\n' "$target_version" "$NGINX_VERSION_AFTER" | sort -V | head -n1)" != "$target_version" ]]; then
+
+			printf "\nnginx package installation ${RC}failed${NC}, continue with recompilation\n\n"
+			recompile_nginx_func
+		fi
+	fi
 
 }
 
@@ -1132,37 +1196,6 @@ if [[ $DEDICATED == "yes" ]]; then
 		printf "\n${YC}Warning:${NC} not intel nor AMD CPU. Skipped.\n"
 	fi
 fi
-}
-
-
-
-bitrix_env_check_func() {
-
-# detecting bitrix and bitrix alike environments
-if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" > /dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" > /dev/null 2>&1 && [[ ! -f $MGR_BIN ]] > /dev/null 2>&1 ); then
-
-	# bitrix GT (nginx+apache+fpm)
-	if (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1); then
-		printf "\n${GC}Bitrix GT${NC} environment detected\n"
-		BITRIX="GT"
-	# bitrix ENV (nginx+apache)
-	elif [[ -d /opt/webdir ]]; then
-		bitrix_env_version=$(egrep -o 'BITRIX_VA_VER=[0-9\.]+' /root/.bash_profile | awk -F'=' '{print $2}' )
-		printf "\n${GC}Bitrix ${bitrix_env_version} env${NC}ironment detected\n"
-		BITRIX="ENV"
-	# bitrix VANILLA (nginx+apache)
-	elif 2>&1 nginx -T | grep -i "server httpd:8090" > /dev/null 2>&1; then
-		printf "\n${GC}Bitrix Vanilla${NC} environment detected\n"
-		BITRIX="VANILLA"
-	# bitrix OTHER
-	else
-		printf "\n${GC}Bitrix${NC} environment derivative detected\n"
-		BITRIX="OTHER"
-	fi
-
-BITRIXALIKE="yes"
-fi
-
 }
 
 wget_openssl_exists_check() {
