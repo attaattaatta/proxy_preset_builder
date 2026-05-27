@@ -12,7 +12,7 @@ YCV="\033[01;33m"
 NCV="\033[0m"
 
 # Show script version
-self_current_version="1.0.7"
+self_current_version="1.0.8"
 printf "\n${YCV}Hello${NCV}, my version is ${YCV}$self_current_version\n\n${NCV}"
 
 # check privileges
@@ -71,7 +71,7 @@ done
 
 # global vars
 EXIT_STATUS=0
-NGX_MENU_VARIANTS="\n${GCV}Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 3 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream${NCV}\n"
+NGX_MENU_VARIANTS="\n${GCV}Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 4 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream${NCV}\n"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.$RANDOM.log"
 GLIBC_CUSTOM=0
 SRC_DIR="/usr/local/src"
@@ -236,6 +236,10 @@ ngx_configure_make_install_func() {
 #fi
 # todo end
 
+echo "############################################" >> $NGX_RECOMPILE_LOG_FILE
+echo "CONFIGURING NGINX" >> $NGX_RECOMPILE_LOG_FILE
+echo "############################################" >> $NGX_RECOMPILE_LOG_FILE
+
 # nginx configure
 printf "$nginx_configure_string" | bash  >> $NGX_RECOMPILE_LOG_FILE 2>&1
 if [[ $distr == "rhel" ]]
@@ -248,6 +252,10 @@ then
 	apt-mark unhold nginx* >> $NGX_RECOMPILE_LOG_FILE 2>&1
 fi
 
+echo "############################################" >> $NGX_RECOMPILE_LOG_FILE
+echo "BUILDING NGINX" >> $NGX_RECOMPILE_LOG_FILE
+echo "############################################" >> $NGX_RECOMPILE_LOG_FILE
+
 # nginx making
 make -j$(nproc) >> $NGX_RECOMPILE_LOG_FILE 2>&1
 
@@ -257,8 +265,16 @@ if [[ $? -eq 0 ]]; then
 	nginx_obj_sanity_check
 
 	{
+	echo "############################################"
+	echo "INSTALLING NGINX"
+	echo "############################################"
+	
 	# nginx install
 	make install
+	
+	echo "############################################"
+	echo "CLEANING UP BUILD FILES"
+	echo "############################################"
 	
 	# make cleanup
 	make clean
@@ -266,19 +282,35 @@ if [[ $? -eq 0 ]]; then
 	
 	nginx_conf_sanity_check
 	nginx_compilcation_args_func
-	
+
+	printf "\n${GCV}Restarting nginx${NCV}"
+	if nginx_restart_output=$({ nginx -t; } 2>&1)
+	then
+		printf " - ${GCV}OK${NCV}\n"
+	else
+		printf " - ${LRV}FAIL${NCV}\n\n$nginx_restart_output\n"
+		if [[ -f $NGX_RECOMPILE_LOG_FILE ]]
+			then printf "\nLogfile - $NGX_RECOMPILE_LOG_FILE"
+		fi
+		EXIT_STATUS=1
+		check_exit_code
+	fi
+
 	{
-	
-	service nginx restart
-	
 	if [[ $distr == "rhel" ]]
 	then
+		echo "############################################"
+		echo "LOCKING NGINX VERSION (RHEL)"
+		echo "############################################"
 		yum versionlock add nginx*
 		yum versionlock status
 	fi
 	
 	if [[ $distr == "debian" ]]
 	then
+		echo "############################################"
+		echo "LOCKING NGINX VERSION (DEBIAN)"
+		echo "############################################"
 		apt-mark hold nginx*
 	fi
 	
@@ -289,12 +321,54 @@ if [[ $? -eq 0 ]]; then
 
 else
 	printf "\n${LRV}Compilation failed${NCV}\nLog - $NGX_RECOMPILE_LOG_FILE\n"
+	echo
+	echo
+	tail -n50 $NGX_RECOMPILE_LOG_FILE
 	exit 1
 fi
 
 }
 
+build_brotli_func() {
+echo "############################################"
+echo "BUILDING BROTLI"
+echo "############################################"
+
+	CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
+
+	if [[ $(printf '%s\n' "3.15" "$CMAKE_VERSION" | sort -V | head -n1) != "3.15" ]]; then
+		echo "############################################"
+		echo "BUILDING CMAKE (VERSION TOO OLD)"
+		echo "############################################"
+		cd "$SRC_DIR"
+		git clone https://github.com/Kitware/CMake.git
+		cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+		cd "$SRC_DIR/CMake" 
+		bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl3 -DOPENSSL_LIBRARIES=/usr/local/src/openssl3/lib
+		make -j$(nproc)
+		make -j$(nproc) install
+		hash -r
+	fi
+
+echo "############################################"
+echo "CONFIGURING BROTLI WITH CMAKE"
+echo "############################################"
+
+cd "$SRC_DIR/ngx_brotli"
+git submodule update --init --recursive
+cd deps/brotli
+\rm -Rf out
+mkdir out
+cd out && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF ..
+cmake --build . -j$(nproc)
+
+cd "$SRC_DIR/${latest_nginx//.tar*}"
+
+} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+
 ngx_compilation_default_func() {
+
+build_brotli_func
 
 cd "$SRC_DIR/${latest_nginx//.tar*}"
 make clean &> /dev/null
@@ -327,30 +401,7 @@ elif [[ "$nginx_module" =~ "brotli" ]]
 then
 	brotli_configure_string="--add-module=$SRC_DIR\/ngx_brotli"
 	printf "\n${NCV}Running silently with logging to the ${GCV}$NGX_RECOMPILE_LOG_FILE${NCV}\nPlease wait\n"
-{
-	CMAKE_VERSION=$(cmake --version | grep -o -P '\d+\.?\d+\.?\d+')
-
-	if [[ $(printf '%s\n' "3.15" "$CMAKE_VERSION" | sort -V | head -n1) != "3.15" ]]; then
-		cd "$SRC_DIR"
-		git clone https://github.com/Kitware/CMake.git
-		cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
-		cd "$SRC_DIR/CMake" 
-		bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl3 -DOPENSSL_LIBRARIES=/usr/local/src/openssl3/lib
-		make -j$(nproc)
-		make -j$(nproc) install
-		hash -r
-	fi
-
-cd "$SRC_DIR/ngx_brotli"
-cd deps/brotli
-\rm -Rf out
-mkdir out
-cd out && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
-cmake --build . --config Release --target brotlienc
-
-cd "$SRC_DIR/${latest_nginx//.tar*}"
-
-} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+	build_brotli_func
 
 elif [[ "$nginx_module" =~ "pagespeed" ]]
 then
@@ -410,10 +461,25 @@ install_other_staff_func() {
 
 cd "$SRC_DIR"
 
+{
+echo "############################################"
+echo "DOWNLOADING NGINX SOURCE"
+echo "############################################"
 wget -nc --no-check-certificate "https://nginx.org/download/${latest_nginx}"
+
+echo "############################################"
+echo "DOWNLOADING LIBRESSL SOURCE"
+echo "############################################"
 wget -nc --no-check-certificate "http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/${latest_libressl}"
+
+echo "############################################"
+echo "DOWNLOADING GLIBC SOURCE"
+echo "############################################"
 wget -nc --no-check-certificate "http://ftp.gnu.org/gnu/glibc/${latest_glibc}"
 
+echo "############################################"
+echo "EXTRACTING ARCHIVES"
+echo "############################################"
 tar -xaf "${latest_nginx}"
 tar -xaf "${latest_glibc}"
 tar -xaf "${latest_libressl}"
@@ -421,17 +487,54 @@ tar -xaf "${latest_libressl}"
 git config --global http.postBuffer 157286400
 git config --global http.version HTTP/1.1
 
+echo "############################################"
+echo "CLONING BORINGSSL"
+echo "############################################"
 git clone --recursive https://github.com/google/boringssl.git
+
+echo "############################################"
+echo "CLONING OPENSSL 3"
+echo "############################################"
 git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && cd openssl3 && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) && cd ..
+
+echo "############################################"
+echo "CLONING OPENSSL 1.1.1"
+echo "############################################"
 git clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1"
+
+echo "############################################"
+echo "CLONING NGINX BROTLI MODULE"
+echo "############################################"
 git clone --recurse-submodules https://github.com/google/ngx_brotli.git
+
+echo "############################################"
+echo "CLONING NGINX PAGESPEED MODULE"
+echo "############################################"
 git clone https://github.com/apache/incubator-pagespeed-ngx.git
+
+echo "############################################"
+echo "CLONING NGINX GEOIP2 MODULE"
+echo "############################################"
 git clone https://github.com/leev/ngx_http_geoip2_module.git
+
+echo "############################################"
+echo "CLONING NGINX HEADERS MORE MODULE"
+echo "############################################"
 git clone https://github.com/openresty/headers-more-nginx-module.git
+
+echo "############################################"
+echo "CLONING NGINX PUSH STREAM MODULE"
+echo "############################################"
 git clone https://github.com/wandenberg/nginx-push-stream-module.git
 
+echo "############################################"
+echo "INITIALIZING BROTLI SUBMODULES"
+echo "############################################"
 cd "$SRC_DIR/ngx_brotli" && git submodule update --init
 
+echo "############################################"
+echo "DOWNLOADING PAGESPEED PSOL LIBRARY"
+echo "############################################"
 cd "$SRC_DIR/incubator-pagespeed-ngx"
 
 # new PSOL need GLIBC => 2.40
@@ -442,48 +545,88 @@ cd "$SRC_DIR/incubator-pagespeed-ngx"
 wget -nc --no-check-certificate "https://dl.google.com/dl/page-speed/psol/1.13.35.2-x64.tar.gz"
 tar -xf "1.13.35.2-x64.tar.gz"
 
+echo "############################################"
+echo "SETTING OWNERSHIP"
+echo "############################################"
 chown -R root:root "$SRC_DIR"
 cd "$SRC_DIR"
+
+} >> $NGX_RECOMPILE_LOG_FILE 2>&1
 }
 
 install_rhel_dependencies_func() {
+
+{
+echo "############################################"
+echo "INSTALLING RHEL DEPENDENCIES"
+echo "############################################"
 
 # centos 7 eol repo fix
 REL=$(cat /etc/*release* | head -n 1)
 if echo $REL | grep -i centos | grep -i 7
 then
+	echo "############################################"
+	echo "FIXING CENTOS 7 REPOSITORIES"
+	echo "############################################"
 	sed -i "s/^mirrorlist=/#mirrorlist=/g" /etc/yum.repos.d/CentOS-*
 	sed -i "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*
 	yum --enablerepo=updates clean metadata
 fi
+
+echo "############################################"
+echo "INSTALLING EPEL AND DEVELOPMENT TOOLS"
+echo "############################################"
 # install rhel dependencies
 yum -y install epel-release
 yum -y groupinstall 'Development Tools'
+
+echo "############################################"
+echo "INSTALLING REQUIRED PACKAGES"
+echo "############################################"
 for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake perl-IPC-Cmd libcurl-devel perl-devel
 do
 yum -y install $package
 done
 #
 
+echo "############################################"
+echo "RHEL DEPENDENCIES INSTALLED"
+echo "############################################"
+} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+
 # install other staff
 install_other_staff_func
 
-} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+}
 
 install_debian_dependencies_func() {
 
+{
+echo "############################################"
+echo "INSTALLING DEBIAN DEPENDENCIES"
+echo "############################################"
+
 # install debian dependencies
 apt-get update
+
+echo "############################################"
+echo "INSTALLING REQUIRED PACKAGES"
+echo "############################################"
 for package in build-essential wget curl git gcc unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake
 do
 apt-get -y install $package
 done
 #
 
+echo "############################################"
+echo "DEBIAN DEPENDENCIES INSTALLED"
+echo "############################################"
+} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+
 # install other staff
 install_other_staff_func
 
-} >> $NGX_RECOMPILE_LOG_FILE 2>&1
+}
 
 # RHEL / DEBIAN
 main_func () {
