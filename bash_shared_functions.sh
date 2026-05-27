@@ -9,7 +9,7 @@
 #pipefail | verbose
 
 # show script version
-bash_shared_func_version="1.0.3"
+bash_shared_func_version="1.1.0"
 
 # check OS
 check_os_func() {
@@ -43,6 +43,35 @@ fi
 }
 
 BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null)
+
+bitrix_env_check_func() {
+
+# detecting bitrix and bitrix alike environments
+if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" > /dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" > /dev/null 2>&1 && [[ ! -f $MGR_BIN ]] > /dev/null 2>&1 ); then
+
+	# bitrix ENV (nginx+apache)
+	if [[ -d /opt/webdir ]]; then
+		bitrix_env_version=$(egrep -o 'BITRIX_VA_VER=[0-9\.]+' /etc/profile | awk -F'=' '{print $2}' )
+		printf "\n${GC}Bitrix ${bitrix_env_version} env${NC}ironment detected\n"
+		BITRIX="ENV"
+	# bitrix GT (nginx+apache+fpm)
+	elif (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1); then
+		printf "\n${GC}Bitrix GT${NC} environment detected\n"
+		BITRIX="GT"
+	# bitrix VANILLA (nginx+apache)
+	elif 2>&1 nginx -T | grep -i "server httpd:8090" > /dev/null 2>&1; then
+		printf "\n${GC}Bitrix Vanilla${NC} environment detected\n"
+		BITRIX="VANILLA"
+	# bitrix OTHER
+	else
+		printf "\n${GC}Bitrix${NC} environment derivative detected\n"
+		BITRIX="OTHER"
+	fi
+
+BITRIXALIKE="yes"
+fi
+
+}
 
 # RPAF or not RPAF
 # 0 - detected correct version
