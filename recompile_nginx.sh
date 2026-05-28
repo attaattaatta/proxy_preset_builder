@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.11"
+self_current_version="1.0.12"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -621,7 +621,7 @@ ngx_compilation_custom_func() {
                 openssl_configure_string="--with-openssl=$SRC_DIR/openssl_latest"
                 ;;
             *openssl3*)
-                openssl_configure_string="--with-openssl=$SRC_DIR/openssl3 --with-openssl-opt='-DOPENSSL_TLS_SECURITY_LEVEL=1'"
+                openssl_configure_string="--with-openssl=$SRC_DIR/openssl3 --with-openssl-opt='enable-tls1_3 -DOPENSSL_TLS_SECURITY_LEVEL=1'"
                 ;;
             *openssl1*)
                 openssl_configure_string="--with-openssl=$SRC_DIR/openssl1"
