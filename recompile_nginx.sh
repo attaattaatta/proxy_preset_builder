@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.9"
+self_current_version="1.0.10"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -100,7 +100,7 @@ fi
 EXIT_STATUS=0
 GLIBC_CUSTOM=0
 SRC_DIR="/usr/local/src"
-NGX_MENU_VARIANTS="\n${GC}Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 4 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream${NC}\n"
+NGX_MENU_VARIANTS="Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 4 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
 
 # Global version variables
@@ -278,6 +278,8 @@ ngx_configure_make_install_func() {
     } >> "$NGX_RECOMPILE_LOG_FILE"
     
     # Run nginx configure
+    nginx_configure_string=$(echo "$nginx_configure_string" | sed "s/ -Wl,-z,[^ ]*//g" | sed "s/ -L\/usr\/local\/modsecurity[^ ]*//g" | sed "s/ -L\/usr\/lib64//g" | sed "s/ -lmodsecurity//g" | sed "s/ -lpcre2-8//g" | sed "s/ -lstdc++//g" | sed "s/ -lxml2//g" | sed "s/ -lcurl//g" | sed "s/ -lGeoIP//g" | sed "s/ -llua5\.3//g" | sed "s/ -lyajl'//g" | sed "s/  */ /g")
+    echo "Configure string after cleanup: $nginx_configure_string" >> "$NGX_RECOMPILE_LOG_FILE"
     printf "%s" "$nginx_configure_string" | bash >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
     
     # Remove version lock if exists
@@ -384,7 +386,7 @@ build_brotli_func() {
         git clone https://github.com/Kitware/CMake.git >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         cd "$SRC_DIR/CMake" || return 1
-        bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl3 -DOPENSSL_LIBRARIES=/usr/local/src/openssl3/lib >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+        bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl4 -DOPENSSL_LIBRARIES=/usr/local/src/openssl4/lib >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         make -j$(nproc) >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         make -j$(nproc) install >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         hash -r
@@ -443,9 +445,9 @@ install_other_staff_func() {
         git clone --recursive https://github.com/google/boringssl.git
         
         echo "############################################"
-        echo "CLONING OPENSSL 3"
+        echo "CLONING OPENSSL 4"
         echo "############################################"
-        git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && cd openssl3 && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) && cd ..
+        git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl4" && cd openssl4 && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) && cd ..
         
         echo "############################################"
         echo "CLONING OPENSSL 1.1.1"
@@ -569,14 +571,14 @@ ngx_compilation_default_func() {
     cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
     make clean &> /dev/null
     
-    local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl3 --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl4 --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
     
     ngx_configure_make_install_func "$nginx_configure_string"
 }
 
 # Custom nginx compilation
 ngx_compilation_custom_func() {
-    printf "\n${GC}List:${NC}\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
+    printf "\n${GC}List:${NC}\nopenssl4\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
     read -a nginx_modules_array
     
     local openssl_configure_string=""
@@ -592,8 +594,8 @@ ngx_compilation_custom_func() {
     
     for nginx_module in "${nginx_modules_array[@]}"; do
         case "$nginx_module" in
-            *openssl3*)
-                openssl_configure_string="--with-openssl=$SRC_DIR/openssl3"
+            *openssl4*)
+                openssl_configure_string="--with-openssl=$SRC_DIR/openssl4"
                 ;;
             *openssl1*)
                 openssl_configure_string="--with-openssl=$SRC_DIR/openssl1"
@@ -638,9 +640,9 @@ ngx_compilation_custom_func() {
     
     # If SSL module is selected, remove existing --with-openssl if present
     if [[ -n $custom_configure_string_with ]] || [[ -n $openssl_configure_string ]] || [[ -n $libressl_configure_string ]] || [[ -n $boringssl_configure_string ]]; then
-        nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-dynamic-module.*@@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+        nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-dynamic-module.*@@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
     else
-        nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+       nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
     fi
     
     echo "$nginx_configure_string" | sed 's@ @\n@gi'
@@ -844,7 +846,7 @@ recompile_nginx_main_func() {
                 ;;
             9)
                 # Bitrix 9 - use RPM build method
-                recompile_nginx_bitrix9_func
+                recompile_nginx_bitrix9_func || exit 1
                 return
                 ;;
             *)
