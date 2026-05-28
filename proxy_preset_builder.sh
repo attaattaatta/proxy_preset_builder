@@ -19,7 +19,7 @@ BBC="\033[1;34m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
-self_current_version="1.1.31"
+self_current_version="1.1.32"
 tweaker_current_version="0.17.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
@@ -452,7 +452,7 @@ git_check() {
 		GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_REPO"
 		GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_PATH"
 		GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
-		GIT_THE_CHOSEN_ONE_REQ_URI="${SCRIPT_GIT_PATH#https://*/}"
+		GIT_THE_CHOSEN_ONE_REQ_URI="/${SCRIPT_GIT_PATH#https://*/}"
 		
 		printf "$GIT_THE_CHOSEN_ONE_REPO will be used\n"
 	else
@@ -460,7 +460,7 @@ git_check() {
 			GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_BACKUP_REPO"
 			GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_BACKUP_PATH"
 			GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
-			GIT_THE_CHOSEN_ONE_REQ_URI="${SCRIPT_GIT_BACKUP_PATH#https://*/}"
+			GIT_THE_CHOSEN_ONE_REQ_URI="/${SCRIPT_GIT_BACKUP_PATH#https://*/}"
 			
 			printf "$GIT_THE_CHOSEN_ONE_REPO will be used\n"
 		else
@@ -623,17 +623,17 @@ fi
 
 get_nginx_version() {
 	nginx -v 2>&1 | awk -F/ '{print $2}'
-} 2>/dev/null
+}
 
 detect_pm() {
-	if command -v apt; then
+	if command -v apt >/dev/null 2>&1; then
 		echo "apt"
-	elif command -v yum; then
+	elif command -v yum >/dev/null 2>&1; then
 		echo "yum"
 	else
 		echo "unknown"
 	fi
-} 2>/dev/null
+}
 
 update_nginx() {
 	local pm
@@ -646,13 +646,13 @@ update_nginx() {
 			apt -y install "$package" || return 1
 			;;
 		yum)
-			yum -y update "$package" || yum -y install "$package" || return 1
+			yes N | yum -y update "$package" || yum -y install "$package" || return 1
 			;;
 		*)
 			return 1
 			;;
 	esac
-} 2>/dev/null
+}
 
 # CVEs mitigations
 tweak_cve_func() {
@@ -687,7 +687,7 @@ tweak_cve_func() {
 		local NGINX_VERSION_AFTER=$(nginx -v 2>&1 | awk -F/ '{print $2}')
 		if [[ "$(printf '%s\n' "$target_version" "$NGINX_VERSION_AFTER" | sort -V | head -n1)" != "$target_version" ]]; then
 
-			printf "\nnginx package installation ${RC}failed${NC}, continue with recompilation\n\n"
+			printf "\nnginx package installation ${RC}failed${NC}(current version: ${NGINX_VERSION}), continue with recompilation\n"
 			recompile_nginx_func
 		fi
 	fi
