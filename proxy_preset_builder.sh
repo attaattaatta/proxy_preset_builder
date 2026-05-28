@@ -665,7 +665,7 @@ tweak_cve_func() {
 	echo
 
 	local NGINX_VERSION=$(get_nginx_version)
-	target_version="1.30.2"
+	target_version="1.30.1"
 
 	if [[ -z "$NGINX_VERSION" ]]; then
 		return 1
