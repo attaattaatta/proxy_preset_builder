@@ -15,17 +15,16 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.10"
+self_current_version="1.0.11"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
-if [[ $EUID -ne 0 ]]
-then
+if [[ $EUID -ne 0 ]]; then
     printf "\n${RC}ERROR - This script must be run as root.${NC}"
     exit 1
 fi
 
-# One instance run lock
+# one instance run lock
 LOCKFILE=/tmp/recompile_nginx.lock
 exec 9>$LOCKFILE
 
@@ -100,7 +99,7 @@ fi
 EXIT_STATUS=0
 GLIBC_CUSTOM=0
 SRC_DIR="/usr/local/src"
-NGX_MENU_VARIANTS="Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl 4 (latest stable) / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream"
+NGX_MENU_VARIANTS="Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
 
 # Global version variables
@@ -190,7 +189,6 @@ get_latest_versions_func() {
     
     printf " - ${GC}OK${NC}\n"
     printf "nginx: %s\n" "$latest_nginx"
-    printf "libressl: %s\n" "$latest_libressl"
     printf "glibc: %s\n" "$latest_glibc"
 }
 
@@ -221,14 +219,14 @@ nginx_obj_sanity_check() {
         check_exit_code
     fi
     
-    mv /usr/share/nginx/modules /usr/share/nginx/modules_ >/dev/null 2>&1
+    mv /usr/share/nginx/modules /usr/share/nginx/modules_ &>/dev/null
     
     local nginx_test_output_objs
     if nginx_test_output_objs=$("$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t 2>&1); then
         printf " - ${GC}OK${NC}\n"
-        mv /usr/share/nginx/modules_ /usr/share/nginx/modules 2>&1
+        mv /usr/share/nginx/modules_ /usr/share/nginx/modules &>/dev/null
     else
-        mv /usr/share/nginx/modules_ /usr/share/nginx/modules 2>&1
+        mv /usr/share/nginx/modules_ /usr/share/nginx/modules &>/dev/null
         printf " - ${RC}FAIL${NC}\n%s\n" "$nginx_test_output_objs"
         printf "Check %s\n" "$NGX_RECOMPILE_LOG_FILE"
         
@@ -244,8 +242,15 @@ nginx_obj_sanity_check() {
 # Show current nginx compilation arguments
 nginx_compilation_args_func() {
     printf "\n${GC}Current nginx compilation args:${NC}\n"
-    local nginx_compilation_pre=$(2>&1 nginx -V | sed 's|^configure arguments.*||gi')
-    local nginx_compilation_args=$(2>&1 nginx -V | grep -i 'configure arguments:' | sed -E 's|^configure arguments:(.*)|\1|gi' | sed 's@ @\n@gi')
+    
+    # Use newly compiled nginx if available, otherwise system nginx
+    local nginx_bin="nginx"
+    if [[ -f "$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" ]]; then
+        nginx_bin="$SRC_DIR/${latest_nginx//.tar*}/objs/nginx"
+    fi
+    
+    local nginx_compilation_pre=$(2>&1 $nginx_bin -V | sed 's|^configure arguments.*||gi')
+    local nginx_compilation_args=$(2>&1 $nginx_bin -V | grep -i 'configure arguments:' | sed -E 's|^configure arguments:(.*)|\1|gi' | sed 's@ @\n@gi')
     printf "\n%s" "$nginx_compilation_pre"
     printf "\n%s\n\n" "$nginx_compilation_args"
 }
@@ -386,7 +391,7 @@ build_brotli_func() {
         git clone https://github.com/Kitware/CMake.git >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         cd CMake && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         cd "$SRC_DIR/CMake" || return 1
-        bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl4 -DOPENSSL_LIBRARIES=/usr/local/src/openssl4/lib >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+        bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl_latest -DOPENSSL_LIBRARIES=/usr/local/src/openssl_latest/lib >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         make -j$(nproc) >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         make -j$(nproc) install >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
         hash -r
@@ -445,15 +450,33 @@ install_other_staff_func() {
         git clone --recursive https://github.com/google/boringssl.git
         
         echo "############################################"
-        echo "CLONING OPENSSL 4"
+        echo "CLONING LASTEST OPENSSL"
         echo "############################################"
-        git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl4" && cd openssl4 && git checkout $(git describe --tags $(git rev-list --tags --max-count=1)) && cd ..
+        git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl_latest" && cd openssl_latest && git checkout $(git tag | grep -E '^openssl-[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1) && cd ..
+
+        echo "############################################"
+        echo "CLONING LASTEST OPENSSL 3"
+        echo "############################################"
+        git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && cd openssl3 && git checkout $(git tag | grep -E '^openssl-3\.[0-9]+\.[0-9]+$' | sort -V | tail -n1) && cd ..
         
         echo "############################################"
         echo "CLONING OPENSSL 1.1.1"
         echo "############################################"
         git clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1"
-        
+
+        echo "############################################"
+	echo "CHOOSING DEFAULT OPENSSL BASED ON GCC VERSION"
+        echo "############################################"
+	gcc_major=$(gcc -dumpversion | cut -d. -f1)
+	if [[ $gcc_major -lt 5 ]]; then
+		export CC=gcc
+		export CFLAGS="-std=gnu99"
+		rm -rf "$SRC_DIR/openssl_latest"
+		OPENSSL_OPT="--with-openssl-opt='enable-tls1_3 -DOPENSSL_TLS_SECURITY_LEVEL=1'"
+		cp -r "$SRC_DIR/openssl3" "$SRC_DIR/openssl_latest"
+		echo "gcc $gcc_major (< 5.0), using OpenSSL 3 as default"
+	fi
+	        
         echo "############################################"
         echo "CLONING NGINX BROTLI MODULE"
         echo "############################################"
@@ -528,7 +551,7 @@ install_rhel_dependencies_func() {
         echo "############################################"
         echo "INSTALLING REQUIRED PACKAGES"
         echo "############################################"
-        for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake perl-IPC-Cmd libcurl-devel perl-devel; do
+        for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece; do
             yum -y install $package
         done
         
@@ -552,7 +575,7 @@ install_debian_dependencies_func() {
         echo "############################################"
         echo "INSTALLING REQUIRED PACKAGES"
         echo "############################################"
-        for package in build-essential wget curl git gcc unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake; do
+        for package in build-essential wget curl git gcc libpcre2-dev unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl; do
             apt-get -y install $package
         done
         
@@ -571,14 +594,14 @@ ngx_compilation_default_func() {
     cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
     make clean &> /dev/null
     
-   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl4 --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
     
     ngx_configure_make_install_func "$nginx_configure_string"
 }
 
 # Custom nginx compilation
 ngx_compilation_custom_func() {
-    printf "\n${GC}List:${NC}\nopenssl4\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
+    printf "\n${GC}List:${NC}\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
     read -a nginx_modules_array
     
     local openssl_configure_string=""
@@ -594,8 +617,11 @@ ngx_compilation_custom_func() {
     
     for nginx_module in "${nginx_modules_array[@]}"; do
         case "$nginx_module" in
-            *openssl4*)
-                openssl_configure_string="--with-openssl=$SRC_DIR/openssl4"
+            *openssl_latest*)
+                openssl_configure_string="--with-openssl=$SRC_DIR/openssl_latest"
+                ;;
+            *openssl3*)
+                openssl_configure_string="--with-openssl=$SRC_DIR/openssl3 --with-openssl-opt='-DOPENSSL_TLS_SECURITY_LEVEL=1'"
                 ;;
             *openssl1*)
                 openssl_configure_string="--with-openssl=$SRC_DIR/openssl1"
