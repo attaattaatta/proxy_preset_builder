@@ -19,7 +19,7 @@ BBC="\033[1;34m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
-self_current_version="1.1.32"
+self_current_version="1.1.33"
 tweaker_current_version="0.17.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
@@ -582,13 +582,13 @@ if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 else
 	backup_etc_func
 	tweak_dns_func
+	bitrix_env_check_func
 	tweak_cve_func
 	tweak_ssh_client_func
 	tweak_swapfile_func
 	tweak_openfiles_func
 	tweak_tuned_func
 	tweak_dedic_func
-	bitrix_env_check_func
 	bitrix_fixes_func
 	bitrix_install_update_admin_sh_func
 	ispmanager_enable_features_func

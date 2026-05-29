@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.13"
+self_current_version="1.0.14"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -85,6 +85,9 @@ if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}" > /dev/null 2>&1;
     printf "\n${RC}Error${NC} from load_shared_functions_func. Check internet access and name resolution.\n"
     exit 1
 fi
+
+# Detect Bitrix environment
+bitrix_env_check_func
 
 # Install curl if needed
 if ! command -v curl >/dev/null 2>&1; then 
@@ -243,14 +246,8 @@ nginx_obj_sanity_check() {
 nginx_compilation_args_func() {
     printf "\n${GC}Current nginx compilation args:${NC}\n"
     
-    # Use newly compiled nginx if available, otherwise system nginx
-    local nginx_bin="nginx"
-    if [[ -f "$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" ]]; then
-        nginx_bin="$SRC_DIR/${latest_nginx//.tar*}/objs/nginx"
-    fi
-    
-    local nginx_compilation_pre=$(2>&1 $nginx_bin -V | sed 's|^configure arguments.*||gi')
-    local nginx_compilation_args=$(2>&1 $nginx_bin -V | grep -i 'configure arguments:' | sed -E 's|^configure arguments:(.*)|\1|gi' | sed 's@ @\n@gi')
+    local nginx_compilation_pre=$(2>&1 nginx -V | sed 's|^configure arguments.*||gi')
+    local nginx_compilation_args=$(2>&1 nginx -V | grep -i 'configure arguments:' | sed -E 's|^configure arguments:(.*)|\1|gi' | sed 's@ --@\n--@gi')
     printf "\n%s" "$nginx_compilation_pre"
     printf "\n%s\n\n" "$nginx_compilation_args"
 }
@@ -265,11 +262,15 @@ check_exit_code() {
 
 # Disable dynamic modules before compilation
 ngx_check_dynamic_modules_func() {
-    local NGX_ETC_PATH="/etc/nginx"
+    local NGX_PATHS=("/etc/nginx" "/usr/share/nginx/modules")
     
-    if grep -RiIvl "#load_module" "$NGX_ETC_PATH" | xargs grep -RiIl 'load_module' | xargs sed -i 's@load_module@#load_module@gi' >> "$NGX_RECOMPILE_LOG_FILE" 2>&1; then
-        printf "\n${GC}Dynamic modules was found and disabled${NC}\n"
-    fi
+    for ngx_path in "${NGX_PATHS[@]}"; do
+        if [[ -d "$ngx_path" ]]; then
+            if grep -RiIvl "#load_module" "$ngx_path" --include="*.conf" | xargs grep -RiIl 'load_module' --include="*.conf" | xargs sed -i 's@load_module@#load_module@gi' >> "$NGX_RECOMPILE_LOG_FILE" 2>&1; then
+                printf "\n${GC}Dynamic modules was found and disabled in %s${NC}\n" "$ngx_path"
+            fi
+        fi
+    done
 }
 
 # Main compilation and installation function
@@ -285,7 +286,7 @@ ngx_configure_make_install_func() {
     # Run nginx configure
     nginx_configure_string=$(echo "$nginx_configure_string" | sed "s/ -Wl,-z,[^ ]*//g" | sed "s/ -L\/usr\/local\/modsecurity[^ ]*//g" | sed "s/ -L\/usr\/lib64//g" | sed "s/ -lmodsecurity//g" | sed "s/ -lpcre2-8//g" | sed "s/ -lstdc++//g" | sed "s/ -lxml2//g" | sed "s/ -lcurl//g" | sed "s/ -lGeoIP//g" | sed "s/ -llua5\.3//g" | sed "s/ -lyajl'//g" | sed "s/  */ /g")
     echo "Configure string after cleanup: $nginx_configure_string" >> "$NGX_RECOMPILE_LOG_FILE"
-    printf "%s" "$nginx_configure_string" | bash >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+    printf "$nginx_configure_string" | bash >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
     
     # Remove version lock if exists
     if [[ $distr == "rhel" ]]; then
@@ -306,7 +307,40 @@ ngx_configure_make_install_func() {
     # Check if build was successful
     if [[ $? -eq 0 ]]; then
         ngx_check_dynamic_modules_func
+
+	# Backup and update Perl module if perl is compiled
+	if 2>&1 nginx -V | grep -qi "http_perl_module"; then
+	    perl_npm_path="/usr/lib64/perl5/vendor_perl"
+	    perl_nso_path="$perl_npm_path/auto/nginx"
+	    
+	    # Backup old
+	    [[ -f "$perl_nso_path/nginx.so" ]] && mv "$perl_nso_path/nginx.so" "$perl_nso_path/nginx.so.old"
+	    [[ -f "$perl_npm_path/nginx.pm" ]] && mv "$perl_npm_path/nginx.pm" "$perl_npm_path/nginx.pm.old"
+	    
+	    # Copy new
+	    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1)
+	    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1)
+	    
+	    [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so"
+	    [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm"
+
+	    perl_updated=true
+	else
+	    perl_updated=false
+	fi
+
         nginx_obj_sanity_check
+
+	# Restore old Perl modules and uncomment load_module if check failed
+	if [[ $? -ne 0 ]]; then
+	    if $perl_updated; then
+	        [[ -f "$perl_nso_path/nginx.so.old" ]] && mv "$perl_nso_path/nginx.so.old" "$perl_nso_path/nginx.so"
+	        [[ -f "$perl_npm_path/nginx.pm.old" ]] && mv "$perl_npm_path/nginx.pm.old" "$perl_npm_path/nginx.pm"
+	    fi
+	    
+	    # Uncomment only what was commented earlier
+	    grep -RiIl "#load_module" /etc/nginx/ /usr/share/nginx/modules/ | xargs sed -i 's@#load_module@load_module@gi'
+	fi
         
         {
             echo "############################################"
@@ -315,7 +349,11 @@ ngx_configure_make_install_func() {
         } >> "$NGX_RECOMPILE_LOG_FILE"
         
         # Install nginx
-        make install >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+	make install >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || {
+	    printf "\n${RC}make install failed${NC}\n"
+	    EXIT_STATUS=1
+	    check_exit_code
+	}
 	unset OPENSSL_OPT CFLAGS CC
         
         {
@@ -597,7 +635,7 @@ ngx_compilation_default_func() {
     cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
     make clean &> /dev/null
     
-   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ @\n@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed 's@--add-dynamic-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
     
     ngx_configure_make_install_func "$nginx_configure_string"
 }
@@ -669,12 +707,12 @@ ngx_compilation_custom_func() {
     
     # If SSL module is selected, remove existing --with-openssl if present
     if [[ -n $custom_configure_string_with ]] || [[ -n $openssl_configure_string ]] || [[ -n $libressl_configure_string ]] || [[ -n $boringssl_configure_string ]]; then
-        nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--add-dynamic-module.*@@gi' | sed 's@--with-openssl.*@@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+        nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
     else
-       nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ @\n@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@--with-ld-opt.*@@gi' | sed 's@--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi' | sed 's@ @\n@gi' | awk '!seen[$0]++' | tr '\n' ' ')
+       nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
     fi
     
-    echo "$nginx_configure_string" | sed 's@ @\n@gi'
+    echo "$nginx_configure_string" | sed 's@ --@\n--@gi'
     echo
     printf "${GC}"
     read -p "Proceed ? [Y/n]" -n 1 -r
@@ -689,8 +727,8 @@ ngx_compilation_custom_func() {
 
 # BitrixEnv 9 specific compilation
 recompile_nginx_bitrix9_func() {
-    printf "\n${GC}Detected BitrixEnv 9 - using RPM build method${NC}\n"
-    
+    printf "\n${GC}Detected BitrixEnv 9 - using RPM build method${NC}\n\nRunning silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
+
     {
         echo "############################################"
         echo "STARTING BITRIXENV 9 RPM BUILD"
@@ -782,6 +820,8 @@ EOF
         echo "############################################"
     } >> "$NGX_RECOMPILE_LOG_FILE"
     
+
+    dnf builddep -y bx-nginx.spec >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
     rpmbuild -ba bx-nginx.spec >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || {
         printf "\n${RC}Failed to build bx-nginx RPM${NC}\n"
         echo "ERROR: Failed to build bx-nginx RPM" >> "$NGX_RECOMPILE_LOG_FILE"
@@ -802,7 +842,7 @@ EOF
         echo "############################################"
     } >> "$NGX_RECOMPILE_LOG_FILE"
     
-    rpm -Uvh ./bx-nginx-*.rpm --exclude='*debug*' >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || {
+    rpm -Uvh $(ls ./bx-nginx-*.rpm | grep -v debug) >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || {
         printf "\n${RC}Failed to install bx-nginx RPM${NC}\n"
         echo "ERROR: Failed to install bx-nginx RPM" >> "$NGX_RECOMPILE_LOG_FILE"
         printf "\n${RC}Check log file for details: %s${NC}\n" "$NGX_RECOMPILE_LOG_FILE"
@@ -811,11 +851,6 @@ EOF
     }
     
     {
-        echo "############################################"
-        echo "CHECKING NGINX VERSION"
-        echo "############################################"
-        nginx -V
-        
         echo "############################################"
         echo "TESTING NGINX CONFIGURATION"
         echo "############################################"
@@ -861,6 +896,7 @@ EOF
 
 # Main function that handles both Bitrix and regular compilation
 recompile_nginx_main_func() {
+
     local is_bitrix=false
     
     # Check if this is BitrixEnv

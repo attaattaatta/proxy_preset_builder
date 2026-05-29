@@ -48,9 +48,9 @@ fi
 
 }
 
-export BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null)
-
 bitrix_env_check_func() {
+
+export BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null)
 
 # detecting bitrix and bitrix alike environments
 if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" > /dev/null 2>&1 || ( 2>&1 nginx -T | \grep -iI "bitrix_general.conf" > /dev/null 2>&1 && [[ ! -f $MGR_BIN ]] > /dev/null 2>&1 ); then
