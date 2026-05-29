@@ -9,7 +9,13 @@
 #pipefail | verbose
 
 # show script version
-bash_shared_func_version="1.1.0"
+bash_shared_func_version="1.1.1"
+
+# isp vars
+MGR_PATH="/usr/local/mgr5"
+MGR_BIN="$MGR_PATH/sbin/mgrctl"
+MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
+MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
 
 # check OS
 check_os_func() {

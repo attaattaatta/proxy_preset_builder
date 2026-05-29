@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.12"
+self_current_version="1.0.13"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -99,7 +99,7 @@ fi
 EXIT_STATUS=0
 GLIBC_CUSTOM=0
 SRC_DIR="/usr/local/src"
-NGX_MENU_VARIANTS="Default variant will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\nCustom variant will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 1.1.1 stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream"
+NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
 
 # Global version variables
@@ -316,6 +316,7 @@ ngx_configure_make_install_func() {
         
         # Install nginx
         make install >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+	unset OPENSSL_OPT CFLAGS CC
         
         {
             echo "############################################"
@@ -472,9 +473,11 @@ install_other_staff_func() {
 		export CC=gcc
 		export CFLAGS="-std=gnu99"
 		rm -rf "$SRC_DIR/openssl_latest"
-		OPENSSL_OPT="--with-openssl-opt='enable-tls1_3 -DOPENSSL_TLS_SECURITY_LEVEL=1'"
+		export OPENSSL_OPT="--with-openssl-opt='enable-tls1_3 -DOPENSSL_TLS_SECURITY_LEVEL=1'"
 		cp -r "$SRC_DIR/openssl3" "$SRC_DIR/openssl_latest"
 		echo "gcc $gcc_major (< 5.0), using OpenSSL 3 as default"
+	else
+		export OPENSSL_OPT=""
 	fi
 	        
         echo "############################################"
@@ -551,7 +554,7 @@ install_rhel_dependencies_func() {
         echo "############################################"
         echo "INSTALLING REQUIRED PACKAGES"
         echo "############################################"
-        for package in wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock pcre-devel cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece; do
+        for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core pcre-devel cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece; do
             yum -y install $package
         done
         
@@ -892,31 +895,32 @@ recompile_nginx_main_func() {
     cd "$SRC_DIR" || exit 1
     
     # Show compilation variant menu
-    printf "%s" "$NGX_MENU_VARIANTS"
-    printf "${GC}"
-    echo
-    PS3='Choose variant:'
-    local compilation_var_options=(default custom exit)
-    select compilation_variant in "${compilation_var_options[@]}"; do
-        if [[ $compilation_variant == "exit" ]]; then
-            exit 0
-        fi
-        
-        printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
-        
-        if [[ $distr == "rhel" ]]; then
-            install_rhel_dependencies_func
-        elif [[ $distr == "debian" ]]; then
-            install_debian_dependencies_func
-        fi
-        
-        if [[ $compilation_variant == "default" ]]; then
-            ngx_compilation_default_func
-        elif [[ $compilation_variant == "custom" ]]; then
-            ngx_compilation_custom_func
-        fi
-        break
-    done
+	while true; do
+	    printf "$NGX_MENU_VARIANTS"
+	    printf "\n\n${GC}1) default  \n2) custom  \n3) exit${NC}\n\n"
+	    read -p "Choose variant: " -n 1 -r compilation_choice
+	    echo
+	    case "$compilation_choice" in
+	        1) compilation_variant="default"; break;;
+	        2) compilation_variant="custom"; break;;
+	        3) exit 0;;
+	        *) printf "\n${RC}Invalid choice. \nEnter 1, 2, or 3.${NC}\n\n";;
+		    esac
+	    done
+	    
+	    printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
+	    
+	    if [[ $distr == "rhel" ]]; then
+	        install_rhel_dependencies_func
+	    elif [[ $distr == "debian" ]]; then
+	        install_debian_dependencies_func
+	    fi
+	    
+	    if [[ $compilation_variant == "default" ]]; then
+	        ngx_compilation_default_func
+	    elif [[ $compilation_variant == "custom" ]]; then
+	        ngx_compilation_custom_func
+	    fi
 }
 
 # Start execution
