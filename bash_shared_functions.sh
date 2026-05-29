@@ -9,18 +9,18 @@
 #pipefail | verbose
 
 # show script version
-bash_shared_func_version="1.1.1"
+bash_shared_func_version="1.1.2"
 
 # isp vars
-MGR_PATH="/usr/local/mgr5"
-MGR_BIN="$MGR_PATH/sbin/mgrctl"
-MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
-MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
+export MGR_PATH="/usr/local/mgr5"
+export MGR_BIN="$MGR_PATH/sbin/mgrctl"
+export MGR_CTL="$MGR_PATH/sbin/mgrctl -m ispmgr"
+export MGR_MAIN_CONF_FILE="$MGR_PATH/etc/ispmgr.conf"
 
 # check OS
 check_os_func() {
 shopt -s nocasematch
-REL=$(cat /etc/*release* | head -n 1)
+export REL=$(cat /etc/*release* | head -n 1)
 case "$REL" in
 	*cent*) DISTR="rhel";;
 	*alma*) DISTR="rhel";;
@@ -48,7 +48,7 @@ fi
 
 }
 
-BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null)
+export BITRIX_MAJOR_VER=$(grep -oP '(?<=BITRIX_VA_VER=)[0-9]+' /etc/profile 2>/dev/null)
 
 bitrix_env_check_func() {
 
@@ -59,22 +59,22 @@ if grep -RiIl BITRIX_VA_VER /etc/*/bx/* --include="*.conf" > /dev/null 2>&1 || (
 	if [[ -d /opt/webdir ]]; then
 		bitrix_env_version=$(egrep -o 'BITRIX_VA_VER=[0-9\.]+' /etc/profile | awk -F'=' '{print $2}' )
 		printf "\n${GC}Bitrix ${bitrix_env_version} env${NC}ironment detected\n"
-		BITRIX="ENV"
+		export BITRIX="ENV"
 	# bitrix GT (nginx+apache+fpm)
 	elif (grep -riI "^LoadModule proxy_fcgi" /etc/apache2/*enabled*/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1) || ( grep -riI "^LoadModule proxy_fcgi" /etc/httpd/* > /dev/null 2>&1 && systemctl | grep -i fpm > /dev/null 2>&1); then
 		printf "\n${GC}Bitrix GT${NC} environment detected\n"
-		BITRIX="GT"
+		export BITRIX="GT"
 	# bitrix VANILLA (nginx+apache)
 	elif 2>&1 nginx -T | grep -i "server httpd:8090" > /dev/null 2>&1; then
 		printf "\n${GC}Bitrix Vanilla${NC} environment detected\n"
-		BITRIX="VANILLA"
+		export BITRIX="VANILLA"
 	# bitrix OTHER
 	else
 		printf "\n${GC}Bitrix${NC} environment derivative detected\n"
-		BITRIX="OTHER"
+		export BITRIX="OTHER"
 	fi
 
-BITRIXALIKE="yes"
+export BITRIXALIKE="yes"
 fi
 
 }
