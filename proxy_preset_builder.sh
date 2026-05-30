@@ -19,7 +19,7 @@ BBC="\033[1;34m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
-self_current_version="1.1.33"
+self_current_version="1.1.34"
 tweaker_current_version="0.17.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
@@ -642,11 +642,12 @@ update_nginx() {
 
 	case "$pm" in
 		apt)
+			rm -f /etc/apt/sources.list.d/Bullseye-backports.sources &>/dev/null
 			apt -y update
-			apt -y install "$package" || return 1
+			echo N | apt -y install --only-upgrade "$package" || return 1
 			;;
 		yum)
-			yes N | yum -y update "$package" || yum -y install "$package" || return 1
+			echo N | yum -y update "$package" || yum -y install "$package" || return 1
 			;;
 		*)
 			return 1
