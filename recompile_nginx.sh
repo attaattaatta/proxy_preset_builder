@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.1.15"
+self_current_version="1.2.15"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -660,12 +660,18 @@ ngx_compilation_default_func() {
         subs_filter_configure="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
     fi
 
+    # Check if geoip2 module is needed
+    local geoip2_configure=""
+    if 2>&1 nginx -V | grep -qi "geoip2"; then
+        geoip2_configure="--add-module=$SRC_DIR/ngx_http_geoip2_module"
+    fi
+
     build_brotli_func
     
     cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
     make clean &> /dev/null
     
-   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
+   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${geoip2_configure} --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
     
     ngx_configure_make_install_func "$nginx_configure_string"
 }
