@@ -263,12 +263,26 @@ check_exit_code() {
 # Disable dynamic modules before compilation
 ngx_check_dynamic_modules_func() {
     local NGX_PATHS=("/etc/nginx" "/usr/share/nginx/modules")
+    COMMENTED_FILES=()
     
     for ngx_path in "${NGX_PATHS[@]}"; do
         if [[ -d "$ngx_path" ]]; then
-            if grep -RiIvl "#load_module" "$ngx_path" --include="*.conf" | xargs grep -RiIl 'load_module' --include="*.conf" | xargs sed -i 's@load_module@#load_module@gi' >> "$NGX_RECOMPILE_LOG_FILE" 2>&1; then
+            local files=$(grep -RiIl 'load_module' "$ngx_path" --include="*.conf" 2>/dev/null | grep -v '#load_module')
+            if [[ -n "$files" ]]; then
+                echo "$files" | xargs sed -i 's@load_module@#load_module@gi' >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+                COMMENTED_FILES+=($files)
                 printf "\n${GC}Dynamic modules was found and disabled in %s${NC}\n" "$ngx_path"
             fi
+        fi
+    done
+}
+
+# Re-enable only previously commented dynamic modules after bad compilation
+ngx_uncheck_dynamic_modules_func() {
+    for file in "${COMMENTED_FILES[@]}"; do
+        if [[ -f "$file" ]]; then
+            sed -i 's@#load_module@load_module@gi' "$file" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+            printf "\n${GC}Dynamic modules was re-enabled in %s${NC}\n" "$file"
         fi
     done
 }
@@ -338,8 +352,8 @@ ngx_configure_make_install_func() {
 	        [[ -f "$perl_npm_path/nginx.pm.old" ]] && mv "$perl_npm_path/nginx.pm.old" "$perl_npm_path/nginx.pm"
 	    fi
 	    
-	    # Uncomment only what was commented earlier
-	    grep -RiIl "#load_module" /etc/nginx/ /usr/share/nginx/modules/ | xargs sed -i 's@#load_module@load_module@gi'
+	    # Re-enable only what was commented earlier
+	    ngx_uncheck_dynamic_modules_func
 	fi
         
         {
