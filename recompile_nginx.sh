@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.2.15"
+self_current_version="1.2.16"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -415,8 +415,16 @@ ngx_configure_make_install_func() {
                 apt-mark hold nginx*
             fi
         } >> "$NGX_RECOMPILE_LOG_FILE"
+
+        {
+            echo "############################################"
+            echo "NEW NGINX VERSION"
+            echo "############################################"
+            nginx -V 2>&1 | sed 's@ --@\n--@gi'
+        } >> "$NGX_RECOMPILE_LOG_FILE"
         
-        printf "\n${GC}Completed${NC}\nLog - %s\n" "$NGX_RECOMPILE_LOG_FILE"
+	local nginx_new_version=$(nginx -v 2>&1 | grep -oP 'nginx/\K[0-9.]+')
+        printf "\n${GC}Successfully installed nginx %s${NC}\nLog - %s\n" "$nginx_new_version" "$NGX_RECOMPILE_LOG_FILE"
         exit 0
     else
         printf "\n${RC}Compilation failed${NC}\nLog - %s\n" "$NGX_RECOMPILE_LOG_FILE"
