@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.14"
+self_current_version="1.0.15"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -256,7 +256,7 @@ nginx_compilation_args_func() {
 check_exit_code() {
     if test $EXIT_STATUS -ne 0; then
         printf "\n\n${RC}ERROR - last command not succeeded${NC}\n"
-        exit 1
+        return 1
     fi
 }
 
@@ -328,15 +328,15 @@ ngx_configure_make_install_func() {
 	    perl_nso_path="$perl_npm_path/auto/nginx"
 	    
 	    # Backup old
-	    [[ -f "$perl_nso_path/nginx.so" ]] && mv "$perl_nso_path/nginx.so" "$perl_nso_path/nginx.so.old"
-	    [[ -f "$perl_npm_path/nginx.pm" ]] && mv "$perl_npm_path/nginx.pm" "$perl_npm_path/nginx.pm.old"
+	    [[ -f "$perl_nso_path/nginx.so" ]] && mv "$perl_nso_path/nginx.so" "$perl_nso_path/nginx.so.old" >> "$NGX_RECOMPILE_LOG_FILE"
+	    [[ -f "$perl_npm_path/nginx.pm" ]] && mv "$perl_npm_path/nginx.pm" "$perl_npm_path/nginx.pm.old" >> "$NGX_RECOMPILE_LOG_FILE"
 	    
 	    # Copy new
-	    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1)
-	    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1)
+	    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1) >> "$NGX_RECOMPILE_LOG_FILE"
+	    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1) >> "$NGX_RECOMPILE_LOG_FILE"
 	    
-	    [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so"
-	    [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm"
+	    [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so" >> "$NGX_RECOMPILE_LOG_FILE"
+	    [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm" >> "$NGX_RECOMPILE_LOG_FILE"
 
 	    perl_updated=true
 	else
@@ -348,12 +348,13 @@ ngx_configure_make_install_func() {
 	# Restore old Perl modules and uncomment load_module if check failed
 	if [[ $? -ne 0 ]]; then
 	    if $perl_updated; then
-	        [[ -f "$perl_nso_path/nginx.so.old" ]] && mv "$perl_nso_path/nginx.so.old" "$perl_nso_path/nginx.so"
-	        [[ -f "$perl_npm_path/nginx.pm.old" ]] && mv "$perl_npm_path/nginx.pm.old" "$perl_npm_path/nginx.pm"
+	        [[ -f "$perl_nso_path/nginx.so.old" ]] && mv "$perl_nso_path/nginx.so.old" "$perl_nso_path/nginx.so" >> "$NGX_RECOMPILE_LOG_FILE"
+	        [[ -f "$perl_npm_path/nginx.pm.old" ]] && mv "$perl_npm_path/nginx.pm.old" "$perl_npm_path/nginx.pm" >> "$NGX_RECOMPILE_LOG_FILE"
 	    fi
 	    
 	    # Re-enable only what was commented earlier
 	    ngx_uncheck_dynamic_modules_func
+            exit 1
 	fi
         
         {

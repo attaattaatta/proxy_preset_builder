@@ -20,7 +20,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.34"
-tweaker_current_version="0.17.7"
+tweaker_current_version="0.17.8"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -644,6 +644,8 @@ update_nginx() {
 		apt)
 			rm -f /etc/apt/sources.list.d/Bullseye-backports.sources &>/dev/null
 			apt -y update
+			echo
+			echo
 			yes N | apt -y install --only-upgrade "$package" || return 1
 			;;
 		yum)
@@ -688,7 +690,7 @@ tweak_cve_func() {
 		local NGINX_VERSION_AFTER=$(nginx -v 2>&1 | awk -F/ '{print $2}')
 		if [[ "$(printf '%s\n' "$target_version" "$NGINX_VERSION_AFTER" | sort -V | head -n1)" != "$target_version" ]]; then
 
-			printf "\nnginx package installation ${RC}failed${NC}(current version: ${NGINX_VERSION}), continue with recompilation\n"
+			printf "\nnginx package installation ${RC}failed${NC} (current version: ${NGINX_VERSION}), continue with recompilation\n"
 			recompile_nginx_func
 		fi
 	fi
