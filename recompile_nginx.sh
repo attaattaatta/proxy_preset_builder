@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.0.15"
+self_current_version="1.1.15"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -102,7 +102,7 @@ fi
 EXIT_STATUS=0
 GLIBC_CUSTOM=0
 SRC_DIR="/usr/local/src"
-NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream"
+NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream / substitutions_filter"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
 
 # Global version variables
@@ -225,7 +225,9 @@ nginx_obj_sanity_check() {
     mv /usr/share/nginx/modules /usr/share/nginx/modules_ &>/dev/null
     
     local nginx_test_output_objs
-    if nginx_test_output_objs=$("$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t 2>&1); then
+    nginx_test_output_objs=$("$SRC_DIR/${latest_nginx//.tar*}/objs/nginx" -t 2>&1)
+    echo "$nginx_test_output_objs" >> "$NGX_RECOMPILE_LOG_FILE"
+    if [[ $? -eq 0 ]]; then
         printf " - ${GC}OK${NC}\n"
         mv /usr/share/nginx/modules_ /usr/share/nginx/modules &>/dev/null
     else
@@ -324,19 +326,20 @@ ngx_configure_make_install_func() {
 
 	# Backup and update Perl module if perl is compiled
 	if 2>&1 nginx -V | grep -qi "http_perl_module"; then
-	    perl_npm_path="/usr/lib64/perl5/vendor_perl"
-	    perl_nso_path="$perl_npm_path/auto/nginx"
+	    perl_npm_path=$(perl -e 'use Config; print $Config{vendorlibexp}')
+	    perl_nso_path=$(perl -e 'use Config; print $Config{vendorarchexp}')/auto/nginx
+	    mkdir -p "$perl_nso_path"
 	    
 	    # Backup old
-	    [[ -f "$perl_nso_path/nginx.so" ]] && mv "$perl_nso_path/nginx.so" "$perl_nso_path/nginx.so.old" >> "$NGX_RECOMPILE_LOG_FILE"
-	    [[ -f "$perl_npm_path/nginx.pm" ]] && mv "$perl_npm_path/nginx.pm" "$perl_npm_path/nginx.pm.old" >> "$NGX_RECOMPILE_LOG_FILE"
+	    [[ -f "$perl_nso_path/nginx.so" ]] && mv "$perl_nso_path/nginx.so" "$perl_nso_path/nginx.so.old" &>> "$NGX_RECOMPILE_LOG_FILE"
+	    [[ -f "$perl_npm_path/nginx.pm" ]] && mv "$perl_npm_path/nginx.pm" "$perl_npm_path/nginx.pm.old" &>> "$NGX_RECOMPILE_LOG_FILE"
 	    
 	    # Copy new
-	    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1) >> "$NGX_RECOMPILE_LOG_FILE"
-	    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1) >> "$NGX_RECOMPILE_LOG_FILE"
+	    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1) &>> "$NGX_RECOMPILE_LOG_FILE"
+	    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1) &>> "$NGX_RECOMPILE_LOG_FILE"
 	    
-	    [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so" >> "$NGX_RECOMPILE_LOG_FILE"
-	    [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm" >> "$NGX_RECOMPILE_LOG_FILE"
+	    [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so" &>> "$NGX_RECOMPILE_LOG_FILE"
+	    [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm" &>> "$NGX_RECOMPILE_LOG_FILE"
 
 	    perl_updated=true
 	else
@@ -497,6 +500,11 @@ install_other_staff_func() {
         
         git config --global http.postBuffer 157286400
         git config --global http.version HTTP/1.1
+
+        echo "############################################"
+	echo "CLONING NGINX SUBSTITUTIONS FILTER MODULE"
+        echo "############################################"
+	git clone https://github.com/yaoweibin/ngx_http_substitutions_filter_module.git "$SRC_DIR/ngx_http_substitutions_filter_module"
         
         echo "############################################"
         echo "CLONING BORINGSSL"
@@ -525,9 +533,9 @@ install_other_staff_func() {
 	if [[ $gcc_major -lt 5 ]]; then
 		export CC=gcc
 		export CFLAGS="-std=gnu99"
-		rm -rf "$SRC_DIR/openssl_latest"
+		rm -rf "$SRC_DIR/openssl_latest" &>> "$NGX_RECOMPILE_LOG_FILE"
 		export OPENSSL_OPT="--with-openssl-opt='enable-tls1_3 -DOPENSSL_TLS_SECURITY_LEVEL=1'"
-		cp -r "$SRC_DIR/openssl3" "$SRC_DIR/openssl_latest"
+		cp -r "$SRC_DIR/openssl3" "$SRC_DIR/openssl_latest" &>> "$NGX_RECOMPILE_LOG_FILE"
 		echo "gcc $gcc_major (< 5.0), using OpenSSL 3 as default"
 	else
 		export OPENSSL_OPT=""
@@ -645,19 +653,26 @@ install_debian_dependencies_func() {
 
 # Default nginx compilation
 ngx_compilation_default_func() {
+
+    # Check if substitutions filter module is needed
+    local subs_filter_configure=""
+    if nginx -T 2>&1 | grep -qi "subs_filter"; then
+        subs_filter_configure="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
+    fi
+
     build_brotli_func
     
     cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
     make clean &> /dev/null
     
-   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
+   local nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
     
     ngx_configure_make_install_func "$nginx_configure_string"
 }
 
 # Custom nginx compilation
 ngx_compilation_custom_func() {
-    printf "\n${GC}List:${NC}\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
+    printf "\n${GC}List:${NC}\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\npagespeed\ngeoip2\nheaders_more\npush_stream\nsubstitutions_filter\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
     read -a nginx_modules_array
     
     local openssl_configure_string=""
@@ -670,6 +685,8 @@ ngx_compilation_custom_func() {
     local push_stream_configure_string=""
     local custom_configure_string=""
     local custom_configure_string_with=""
+    local subs_filter_configure_string=""
+    local subs_filter_configure_string_with=""
     
     for nginx_module in "${nginx_modules_array[@]}"; do
         case "$nginx_module" in
@@ -705,6 +722,9 @@ ngx_compilation_custom_func() {
             *push_stream*)
                 push_stream_configure_string="--add-module=$SRC_DIR/nginx-push-stream-module"
                 ;;
+           *substitutions_filter*)
+               subs_filter_configure_string="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
+               ;;
             */*)
                 custom_configure_string="$custom_configure_string --add-module=$nginx_module"
                 ;;
