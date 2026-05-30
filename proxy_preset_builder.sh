@@ -20,7 +20,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.34"
-tweaker_current_version="0.17.6"
+tweaker_current_version="0.17.7"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -644,10 +644,10 @@ update_nginx() {
 		apt)
 			rm -f /etc/apt/sources.list.d/Bullseye-backports.sources &>/dev/null
 			apt -y update
-			echo N | apt -y install --only-upgrade "$package" || return 1
+			yes N | apt -y install --only-upgrade "$package" || return 1
 			;;
 		yum)
-			echo N | yum -y update "$package" || yum -y install "$package" || return 1
+			yes N | yum -y update "$package" || yes N | yum -y install "$package" || return 1
 			;;
 		*)
 			return 1
