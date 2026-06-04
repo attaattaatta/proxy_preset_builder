@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.2.17"
+self_current_version="1.2.18"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -104,6 +104,7 @@ EXIT_STATUS=0
 SRC_DIR="/usr/local/src"
 NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream / substitutions_filter"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
+PERL_UPDATED=false
 
 # Global version variables
 latest_nginx=""
@@ -351,23 +352,23 @@ ngx_configure_make_install_func() {
 		[[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so" &>> "$NGX_RECOMPILE_LOG_FILE"
 		[[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm" &>> "$NGX_RECOMPILE_LOG_FILE"
 
-		perl_updated=true
+		PERL_UPDATED=true
 	else
-		perl_updated=false
+		PERL_UPDATED=false
 	fi
 
 		nginx_obj_sanity_check
 
 	# Restore old Perl modules and uncomment load_module if check failed
 	if [[ $? -ne 0 ]]; then
-		if $perl_updated; then
+		if $PERL_UPDATED; then
 			[[ -f "$perl_nso_path/nginx.so.old" ]] && mv "$perl_nso_path/nginx.so.old" "$perl_nso_path/nginx.so" >> "$NGX_RECOMPILE_LOG_FILE"
 			[[ -f "$perl_npm_path/nginx.pm.old" ]] && mv "$perl_npm_path/nginx.pm.old" "$perl_npm_path/nginx.pm" >> "$NGX_RECOMPILE_LOG_FILE"
 		fi
 		
 		# Re-enable only what was commented earlier
 		ngx_uncheck_dynamic_modules_func
-			exit 1
+		exit 1
 	fi
 		
 		{
@@ -465,7 +466,7 @@ build_brotli_func() {
 			echo "############################################"
 		} >> "$NGX_RECOMPILE_LOG_FILE"
 		
-		cd "$SRC_DIR" || return 1
+		cd "$SRC_DIR" || exit 1
 		git clone https://github.com/Kitware/CMake.git >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 		cd CMake && git checkout "$(git describe --tags "$(git rev-list --tags --max-count=1)")" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 		cd "$SRC_DIR/CMake" || return 1
@@ -506,13 +507,13 @@ install_other_staff_func() {
 
 		if [[ -z "$latest_nginx" ]]; then
 			echo "ERROR: latest_nginx is empty" >> "$NGX_RECOMPILE_LOG_FILE"
-			return 1
+			exit 1
 		fi
 		
 		echo "Downloading: https://nginx.org/download/${latest_nginx}"
 		wget -nc --no-check-certificate "https://nginx.org/download/${latest_nginx}" || {
 			echo "ERROR: Failed to download nginx source" >> "$NGX_RECOMPILE_LOG_FILE"
-			return 1
+			exit 1
 		}
 		
 		echo "############################################"
@@ -538,11 +539,11 @@ install_other_staff_func() {
 		if [[ -f "${latest_nginx}" ]]; then
 			tar -xaf "${latest_nginx}" || {
 				echo "ERROR: Failed to extract ${latest_nginx}" >> "$NGX_RECOMPILE_LOG_FILE"
-				return 1
+				exit 1
 			}
 		else
 			echo "ERROR: ${latest_nginx} not found" >> "$NGX_RECOMPILE_LOG_FILE"
-			return 1
+			exit 1
 		fi
 		
 		if [[ -f "${latest_glibc}" ]]; then
@@ -678,8 +679,8 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "SETTING OWNERSHIP"
 		echo "############################################"
+		cd "$SRC_DIR" || return 1
 		chown -R root:root "$SRC_DIR"
-		cd "$SRC_DIR"
 
 		echo "############################################"
 		echo "ALL SOURCES DOWNLOADED AND PREPARED"
@@ -771,7 +772,7 @@ ngx_compilation_default_func() {
 		geoip2_configure="--add-module=$SRC_DIR/ngx_http_geoip2_module"
 	fi
 
-	build_brotli_func
+	build_brotli_func || exit 1
 	
 	cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
 	make clean &> /dev/null
@@ -819,7 +820,7 @@ ngx_compilation_custom_func() {
 			*brotli*)
 				brotli_configure_string="--add-module=$SRC_DIR/ngx_brotli"
 				printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
-				build_brotli_func
+				build_brotli_func || exit 1
 				;;
 			*pagespeed*)
 				pagespeed_configure_string="--add-module=$SRC_DIR/incubator-pagespeed-ngx"
