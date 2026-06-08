@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.2.18"
+self_current_version="1.2.19"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -157,7 +157,7 @@ check_free_space_func() {
 	printf "\n${GC}Checking free space${NC}"
 	local current_free_space
 	current_free_space=$(df -Pm --sync / | awk '{print $4}' | tail -n 1)
-	local space_need_megabytes="2000"
+	local space_need_megabytes="7000"
 	
 	if [[ $current_free_space -le $space_need_megabytes ]]; then
 		printf " - ${RC}FAIL${NC}"
