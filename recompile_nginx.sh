@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.2.19"
+self_current_version="1.2.20"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -310,7 +310,7 @@ ngx_configure_make_install_func() {
 	} >> "$NGX_RECOMPILE_LOG_FILE"
 	
 	# Run nginx configure
-	nginx_configure_string=$(echo "$nginx_configure_string" | sed "s/ -Wl,-z,[^ ]*//g" | sed "s/ -L\/usr\/local\/modsecurity[^ ]*//g" | sed "s/ -L\/usr\/lib64//g" | sed "s/ -lmodsecurity//g" | sed "s/ -lpcre2-8//g" | sed "s/ -lstdc++//g" | sed "s/ -lxml2//g" | sed "s/ -lcurl//g" | sed "s/ -lGeoIP//g" | sed "s/ -llua5\.3//g" | sed "s/ -lyajl'//g" | sed "s/  */ /g")
+	nginx_configure_string=$(echo "$nginx_configure_string" | sed "s/ -Wl,-z,[^ ]*//g" | sed "s/ -L\/usr\/local\/modsecurity[^ ]*//g" | sed "s/ -L\/usr\/lib64//g" | sed "s/ -lmodsecurity//g" | sed "s/ -lpcre2-8//g" | sed "s/ -lstdc++//g" | sed "s/ -lxml2//g" | sed "s/ -lcurl//g" | sed "s/ -lGeoIP//g" | sed "s/ -llua5\.3//g" | sed "s/ -lyajl//g" | sed "s/  */ /g")
 	echo "Configure string after cleanup: $nginx_configure_string" >> "$NGX_RECOMPILE_LOG_FILE"
 	printf "$nginx_configure_string" | bash >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 	
