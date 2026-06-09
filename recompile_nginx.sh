@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.2.21"
+self_current_version="1.3.0"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -105,6 +105,7 @@ SRC_DIR="/usr/local/src"
 NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream / substitutions_filter"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
 PERL_UPDATED=false
+export HTTP3_CONFIGURE_STRING="--with-http_v3_module"
 
 # Global version variables
 latest_nginx=""
@@ -775,14 +776,20 @@ ngx_compilation_default_func() {
 		geoip2_configure="--add-module=$SRC_DIR/ngx_http_geoip2_module"
 	fi
 
+	# Check if sbin-path already set
+	local sbin_path_configure=""
+	if ! 2>&1 nginx -V | grep -qi "\-\-sbin-path"; then
+		sbin_path_configure="--sbin-path=/usr/sbin/nginx"
+	fi
+
 	build_brotli_func || exit 1
 	
 	cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
 	make clean &> /dev/null
 	
-   local nginx_configure_string
-   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${geoip2_configure} --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
-	
+	local nginx_configure_string
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} ${HTTP3_CONFIGURE_STRING} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${geoip2_configure} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+
 	ngx_configure_make_install_func "$nginx_configure_string"
 }
 
@@ -802,6 +809,7 @@ ngx_compilation_custom_func() {
 	local custom_configure_string=""
 	local subs_filter_configure_string=""
 	local custom_configure_string_with=""
+	local sbin_path_configure=""
 	
 	for nginx_module in "${nginx_modules_array[@]}"; do
 		case "$nginx_module" in
@@ -813,6 +821,7 @@ ngx_compilation_custom_func() {
 				;;
 			*openssl1*)
 				openssl_configure_string="--with-openssl=$SRC_DIR/openssl1"
+				export HTTP3_CONFIGURE_STRING=""
 				;;
 			*libressl*)
 				libressl_configure_string="--with-openssl=$SRC_DIR/${latest_libressl//.tar*}"
@@ -854,12 +863,17 @@ ngx_compilation_custom_func() {
 	make clean &> /dev/null
 	
 	local nginx_configure_string
-	
+
+	# Check if sbin-path already set
+	if ! echo "$(2>&1 nginx -V)" | grep -qi "\-\-sbin-path"; then
+	    sbin_path_configure="--sbin-path=/usr/sbin/nginx"
+	fi
+
 	# If SSL module is selected, remove existing --with-openssl if present
 	if [[ -n $custom_configure_string_with ]] || [[ -n $openssl_configure_string ]] || [[ -n $libressl_configure_string ]] || [[ -n $boringssl_configure_string ]]; then
-		nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
+		nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string ${HTTP3_CONFIGURE_STRING} $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string $custom_configure_string_with ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 	else
-	   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string $custom_configure_string_with --sbin-path=/usr/sbin/nginx \1@" | sed 's@  *@ @gi')
+	   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string ${HTTP3_CONFIGURE_STRING} $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string $custom_configure_string_with ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 	fi
 	
 	echo "$nginx_configure_string" | sed 's@ --@\n--@gi'
@@ -1108,7 +1122,7 @@ recompile_nginx_main_func() {
 		done
 		
 		printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
-		
+
 		if [[ $distr == "rhel" ]]; then
 			install_rhel_dependencies_func
 		elif [[ $distr == "debian" ]]; then
