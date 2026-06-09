@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.2.20"
+self_current_version="1.2.21"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -171,24 +171,27 @@ check_free_space_func() {
 get_latest_versions_func() {
 	printf "\n${GC}Getting latest versions...${NC}"
 	
-	latest_nginx=$(curl -skL http://nginx.org/en/download.html | grep -E -o "nginx-[0-9.]+\.tar[.a-z]*" | head -n 1)
+	latest_nginx_url="http://nginx.org/en/download.html"
+	latest_nginx=$(curl -skL $latest_nginx_url | grep -E -o "nginx-[0-9.]+\.tar[.a-z]*" | head -n 1)
 	if [[ -z "$latest_nginx" ]]; then
 		printf " - ${RC}FAIL${NC}\n"
-		printf "${RC}Failed to get latest nginx version${NC}\n"
+		printf "${RC}Failed${NC} to get latest nginx version ( $latest_nginx_url )\n"
 		exit 1
 	fi
 	
-	latest_libressl=$(curl -skL http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/ | grep -E -o "libressl-[0-9.]+\.tar\.gz" | tail -n 1)
+	latest_libressl_url="http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/"
+	latest_libressl=$(curl -skL $latest_libressl_url | grep -E -o "libressl-[0-9.]+\.tar\.gz" | tail -n 1)
 	if [[ -z "$latest_libressl" ]]; then
 		printf " - ${RC}FAIL${NC}\n"
-		printf "${RC}Failed to get latest libressl version${NC}\n"
-		exit 1
+		printf "${RC}Failed${NC} to get latest libressl version ( $latest_libressl_url )\n"
+		return 1
 	fi
-	
-	latest_glibc=$(curl -skL "http://ftp.gnu.org/gnu/glibc/" | grep -E -o "glibc-[0-9.]+\.tar\.gz*" | tail -n 1)
+
+	latest_glibc_url="http://ftp.gnu.org/gnu/glibc/"
+	latest_glibc=$(curl -skL $latest_glibc_url | grep -E -o "glibc-[0-9.]+\.tar\.gz*" | tail -n 1)
 	if [[ -z "$latest_glibc" ]]; then
 		printf " - ${RC}FAIL${NC}\n"
-		printf "${RC}Failed to get latest glibc version${NC}\n"
+		printf "${RC}Failed${NC} to get latest glibc version ( $latest_glibc_url )\n"
 		exit 1
 	fi
 	
@@ -519,7 +522,7 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "DOWNLOADING LIBRESSL SOURCE"
 		echo "############################################"
-		wget -nc --no-check-certificate "http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/${latest_libressl}" || {
+		wget -nc --no-check-certificate "${latest_libressl_url}${latest_libressl}" || {
 			echo "ERROR: Failed to download libressl source" >> "$NGX_RECOMPILE_LOG_FILE"
 			return 1
 		}
@@ -527,7 +530,7 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "DOWNLOADING GLIBC SOURCE"
 		echo "############################################"
-		wget -nc --no-check-certificate "http://ftp.gnu.org/gnu/glibc/${latest_glibc}" || {
+		wget -nc --no-check-certificate "${latest_glibc_url}${latest_glibc}" || {
 			echo "ERROR: Failed to download glibc source" >> "$NGX_RECOMPILE_LOG_FILE"
 			return 1
 		}
