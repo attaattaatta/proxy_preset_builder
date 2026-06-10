@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.4.0"
+self_current_version="1.4.1"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -583,7 +583,15 @@ install_other_staff_func() {
 		git clone https://github.com/openresty/lua-nginx-module.git "$SRC_DIR/ngx_http_lua_module" || {
 			echo "ERROR: Failed to clone lua module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
-		
+
+		git clone https://github.com/openresty/lua-resty-core.git "$SRC_DIR/lua-resty-core" || {
+			echo "ERROR: Failed to clone resty core module" >> "$NGX_RECOMPILE_LOG_FILE"
+		}
+
+		git clone https://github.com/openresty/lua-resty-lrucache.git "$SRC_DIR/lua-resty-lrucache" || {
+			echo "ERROR: Failed to clone resty lrucache module" >> "$NGX_RECOMPILE_LOG_FILE"
+		}
+
 		echo "############################################"
 		echo "CLONING BORINGSSL"
 		echo "############################################"
@@ -789,6 +797,10 @@ ngx_compilation_default_func() {
 	# Check if lua module is needed
 	local lua_configure=""
 	if nginx -T 2>&1 | grep -qi "_lua"; then
+		cd "$SRC_DIR/lua-resty-core" 
+		make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> "$NGX_RECOMPILE_LOG_FILE"
+		cd "$SRC_DIR/lua-resty-lrucache" 
+		make install LUA_LIB_DIR=/usr/local/share/lua/5.1  &>> "$NGX_RECOMPILE_LOG_FILE"
 		lua_configure="--add-module=$SRC_DIR/ngx_lua_devel_kit --add-module=$SRC_DIR/ngx_http_lua_module"
 	fi
 
@@ -873,6 +885,10 @@ ngx_compilation_custom_func() {
 				subs_filter_configure_string="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
 			   ;;
 		   *lua_filter*)
+				cd "$SRC_DIR/lua-resty-core"
+				make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> "$NGX_RECOMPILE_LOG_FILE"
+				cd "$SRC_DIR/lua-resty-lrucache"
+				make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> "$NGX_RECOMPILE_LOG_FILE" 
 				lua_filter_configure_string="--add-module=$SRC_DIR/ngx_lua_devel_kit --add-module=$SRC_DIR/ngx_http_lua_module"
 			   ;;
 			*/*)
