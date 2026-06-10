@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.4.1"
+self_current_version="1.4.2"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -796,7 +796,7 @@ ngx_compilation_default_func() {
 
 	# Check if lua module is needed
 	local lua_configure=""
-	if nginx -T 2>&1 | grep -qi "_lua"; then
+	if nginx -T 2>&1 | grep -qi "_by_lua"; then
 		cd "$SRC_DIR/lua-resty-core" || {
 		echo "ERROR: Failed to cd to $SRC_DIR/lua-resty-core" >> $NGX_RECOMPILE_LOG_FILE
 		exit 1
