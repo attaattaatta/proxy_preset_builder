@@ -797,9 +797,15 @@ ngx_compilation_default_func() {
 	# Check if lua module is needed
 	local lua_configure=""
 	if nginx -T 2>&1 | grep -qi "_lua"; then
-		cd "$SRC_DIR/lua-resty-core" 
-		make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> "$NGX_RECOMPILE_LOG_FILE"
-		cd "$SRC_DIR/lua-resty-lrucache" 
+		cd "$SRC_DIR/lua-resty-core" || {
+		echo "ERROR: Failed to cd to $SRC_DIR/lua-resty-core" >> $NGX_RECOMPILE_LOG_FILE
+		exit 1
+	}
+		make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> $NGX_RECOMPILE_LOG_FILE
+		cd "$SRC_DIR/lua-resty-lrucache" || {
+		echo "ERROR: Failed to cd to $SRC_DIR/lua-resty-lrucache" >> $NGX_RECOMPILE_LOG_FILE
+		exit 1
+	}
 		make install LUA_LIB_DIR=/usr/local/share/lua/5.1  &>> "$NGX_RECOMPILE_LOG_FILE"
 		lua_configure="--add-module=$SRC_DIR/ngx_lua_devel_kit --add-module=$SRC_DIR/ngx_http_lua_module"
 	fi
@@ -885,10 +891,16 @@ ngx_compilation_custom_func() {
 				subs_filter_configure_string="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
 			   ;;
 		   *lua_filter*)
-				cd "$SRC_DIR/lua-resty-core"
-				make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> "$NGX_RECOMPILE_LOG_FILE"
-				cd "$SRC_DIR/lua-resty-lrucache"
-				make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> "$NGX_RECOMPILE_LOG_FILE" 
+				cd "$SRC_DIR/lua-resty-core" || {
+				echo "ERROR: Failed to cd to $SRC_DIR/lua-resty-core" >> $NGX_RECOMPILE_LOG_FILE
+				exit 1
+			}
+				make install LUA_LIB_DIR=/usr/local/share/lua/5.1 &>> $NGX_RECOMPILE_LOG_FILE
+				cd "$SRC_DIR/lua-resty-lrucache" || {
+				echo "ERROR: Failed to cd to $SRC_DIR/lua-resty-lrucache" >> $NGX_RECOMPILE_LOG_FILE
+				exit 1
+			}
+				make install LUA_LIB_DIR=/usr/local/share/lua/5.1  &>> "$NGX_RECOMPILE_LOG_FILE"
 				lua_filter_configure_string="--add-module=$SRC_DIR/ngx_lua_devel_kit --add-module=$SRC_DIR/ngx_http_lua_module"
 			   ;;
 			*/*)
