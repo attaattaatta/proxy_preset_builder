@@ -746,7 +746,7 @@ install_rhel_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core pcre-devel cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel; do
+		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core pcre-devel cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel; do
 			yum -y install $package
 		done
 
@@ -775,7 +775,7 @@ install_debian_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in build-essential wget curl git gcc libpcre2-dev luajit2 libluajit-5.1-dev luajit unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl; do
+		for package in build-essential wget curl git gcc libpcre2-dev luajit2 libluajit-5.1-dev luajit unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl libzstd-dev; do
 			apt-get -y install $package
 		done
 
