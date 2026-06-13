@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.4.2"
+self_current_version="1.5.0"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -102,7 +102,7 @@ fi
 # Global variables
 EXIT_STATUS=0
 SRC_DIR="/usr/local/src"
-NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / brotli / pagespeed / geoip2 / headers_more / push_stream / substitutions_filter / lua_filter"
+NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / zstd /brotli / pagespeed / geoip2 / headers_more / push_stream / substitutions_filter / lua_filter"
 NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
 PERL_UPDATED=false
 export HTTP3_CONFIGURE_STRING="--with-http_v3_module"
@@ -160,7 +160,7 @@ check_free_space_func() {
 	current_free_space=$(df -Pm --sync / | awk '{print $4}' | tail -n 1)
 	local space_need_megabytes="7000"
 	
-	if [[ $current_free_space -le $space_need_megabytes ]]; then
+	if [[ $current_free_space -lt $space_need_megabytes ]]; then
 		printf " - ${RC}FAIL${NC}"
 		exit 1
 	else
@@ -269,7 +269,7 @@ nginx_compilation_args_func() {
 # Check exit code and exit if error
 check_exit_code() {
 	if test $EXIT_STATUS -ne 0; then
-		printf "\n\n${RC}ERROR - last command not succeeded${NC}\n"
+		printf "\n\n${RC}ERROR - last command not succeeded ( check $NGX_RECOMPILE_LOG_FILE )${NC}\n"
 		exit 1
 	fi
 }
@@ -593,6 +593,13 @@ install_other_staff_func() {
 		}
 
 		echo "############################################"
+		echo "CLONING NGINX ZSTD MODULE"
+		echo "############################################"
+		git clone https://github.com/tokers/zstd-nginx-module.git "$SRC_DIR/ngx_http_zstd_module" || {
+			echo "ERROR: Failed to clone zstd module" >> "$NGX_RECOMPILE_LOG_FILE"
+		}
+
+		echo "############################################"
 		echo "CLONING BORINGSSL"
 		echo "############################################"
 		git clone --recursive https://github.com/google/boringssl.git || {
@@ -810,6 +817,13 @@ ngx_compilation_default_func() {
 		lua_configure="--add-module=$SRC_DIR/ngx_lua_devel_kit --add-module=$SRC_DIR/ngx_http_lua_module"
 	fi
 
+	# Check if zstd module is needed
+	local zstd_configure=""
+	if nginx -T 2>&1 | grep -qi "zstd"; then
+		zstd_configure="--add-module=$SRC_DIR/ngx_http_zstd_module"
+	fi
+
+
 	# Check if geoip2 module is needed
 	local geoip2_configure=""
 	if 2>&1 nginx -V | grep -qi "geoip2"; then
@@ -828,14 +842,14 @@ ngx_compilation_default_func() {
 	make clean &> /dev/null
 	
 	local nginx_configure_string
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} ${HTTP3_CONFIGURE_STRING} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${geoip2_configure} ${lua_configure} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} ${HTTP3_CONFIGURE_STRING} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${zstd_configure} ${geoip2_configure} ${lua_configure} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 
 	ngx_configure_make_install_func "$nginx_configure_string"
 }
 
 # Custom nginx compilation
 ngx_compilation_custom_func() {
-	printf "\n${GC}List:${NC}\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\nlua_filter\npagespeed\ngeoip2\nheaders_more\npush_stream\nsubstitutions_filter\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
+	printf "\n${GC}List:${NC}\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\nzstd\nlua_filter\npagespeed\ngeoip2\nheaders_more\npush_stream\nsubstitutions_filter\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
 	read -a nginx_modules_array
 	
 	local openssl_configure_string=""
@@ -851,6 +865,7 @@ ngx_compilation_custom_func() {
 	local custom_configure_string_with=""
 	local lua_filter_configure_string=""
 	local sbin_path_configure=""
+	local zstd_module_configure_string=""
 	
 	for nginx_module in "${nginx_modules_array[@]}"; do
 		case "$nginx_module" in
@@ -887,10 +902,13 @@ ngx_compilation_custom_func() {
 			*push_stream*)
 				push_stream_configure_string="--add-module=$SRC_DIR/nginx-push-stream-module"
 				;;
-		   *substitutions_filter*)
+			*substitutions_filter*)
 				subs_filter_configure_string="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
-			   ;;
-		   *lua_filter*)
+				;;
+			*zstd*)
+				zstd_module_configure_string="--add-module=$SRC_DIR/ngx_http_zstd_module"
+				;;
+			*lua_filter*)
 				cd "$SRC_DIR/lua-resty-core" || {
 				echo "ERROR: Failed to cd to $SRC_DIR/lua-resty-core" >> $NGX_RECOMPILE_LOG_FILE
 				exit 1
@@ -925,9 +943,9 @@ ngx_compilation_custom_func() {
 
 	# If SSL module is selected, remove existing --with-openssl if present
 	if [[ -n $custom_configure_string_with ]] || [[ -n $openssl_configure_string ]] || [[ -n $libressl_configure_string ]] || [[ -n $boringssl_configure_string ]]; then
-		nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string ${HTTP3_CONFIGURE_STRING} $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string $custom_configure_string_with ${lua_filter_configure_string} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+		nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string ${HTTP3_CONFIGURE_STRING} $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string ${zstd_module_configure_string} $custom_configure_string_with ${lua_filter_configure_string} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 	else
-	   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string ${HTTP3_CONFIGURE_STRING} $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string $custom_configure_string_with ${lua_filter_configure_string} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+	   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string ${HTTP3_CONFIGURE_STRING} $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string ${zstd_module_configure_string} $custom_configure_string_with ${lua_filter_configure_string} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 	fi
 	
 	echo "$nginx_configure_string" | sed 's@ --@\n--@gi'
