@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.5.2"
+self_current_version="1.6.0"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -1159,9 +1159,30 @@ recompile_nginx_main_func() {
 				# Bitrix 7 - use regular compilation
 				;;
 			9)
-				# Bitrix 9 - use RPM build method
-				recompile_nginx_bitrix9_func || exit 1
-				return
+				printf "\n${GC}Detected BitrixEnv 9${NC}\n"
+			
+				while true; do
+					printf "\nSelect build method:\n1) RPM build (from 1C-Bitrix)\n2) Regular re-build\n3) Exit\n\n"
+			
+					read -p "Choose option: " -n 1 -r r
+					echo
+			
+					case "$r" in
+						1)
+							recompile_nginx_bitrix9_func || exit 1
+							return
+							;;
+						2)	
+							break
+							;;
+						3)
+							exit 0
+							;;
+						*)
+							printf "\n${RC}Invalid choice. Enter 1, 2 or 3.${NC}\n"
+							;;
+					esac
+				done
 				;;
 			*)
 				# Unknown Bitrix version - use regular compilation
@@ -1191,7 +1212,7 @@ recompile_nginx_main_func() {
 			3) exit 0;;
 			*) printf "\n${RC}Invalid choice. \nEnter 1, 2, or 3.${NC}\n\n";;
 			esac
-		done
+	done
 		
 		printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
 
