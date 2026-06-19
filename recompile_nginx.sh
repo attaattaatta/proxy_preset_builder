@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x -v
+#set -x -v
 #set -e -o pipefail | verbose
 
 # Fixing PATH
