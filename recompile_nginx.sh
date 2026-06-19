@@ -338,120 +338,127 @@ ngx_configure_make_install_func() {
 	if [[ $? -eq 0 ]]; then
 		ngx_check_dynamic_modules_func
 
-	# Backup and update Perl module if perl is compiled
-	if 2>&1 nginx -V | grep -qi "http_perl_module"; then
-	    # Get all Perl module paths from @INC
-	    PERL_MODULE_PATHS=()
-	    while IFS= read -r path; do
-	        PERL_MODULE_PATHS+=("$path")
-	    done < <(perl -e 'print join("\n", @INC)')
-	    
-	    # Arrays to store found files
-	    FOUND_SO=()
-	    FOUND_PM=()
-	    
-	    # Search for all nginx.so and nginx.pm files in all Perl paths
-	    for perl_path in "${PERL_MODULE_PATHS[@]}"; do
-	        if [[ -d "$perl_path" ]]; then
-	            # Search for nginx.so
-	            while IFS= read -r file; do
-	                if [[ -n "$file" ]]; then
-	                    FOUND_SO+=("$file")
-	                fi
-	            done < <(find "$perl_path" -path "*/nginx.so" -type f 2>/dev/null)
-	            
-	            # Search for nginx.pm
-	            while IFS= read -r file; do
-	                if [[ -n "$file" ]]; then
-	                    FOUND_PM+=("$file")
-	                fi
-	            done < <(find "$perl_path" -name "nginx.pm" -type f 2>/dev/null)
-	        fi
-	    done
-	    
-	    # Backup all found files
-	    for so_file in "${FOUND_SO[@]}"; do
-	        if [[ -f "$so_file" ]]; then
-	            mv "$so_file" "${so_file}.old" &>> "$NGX_RECOMPILE_LOG_FILE"
-	            echo "Backed up: $so_file -> ${so_file}.old" >> "$NGX_RECOMPILE_LOG_FILE"
-	        fi
-	    done
-	    
-	    for pm_file in "${FOUND_PM[@]}"; do
-	        if [[ -f "$pm_file" ]]; then
-	            mv "$pm_file" "${pm_file}.old" &>> "$NGX_RECOMPILE_LOG_FILE"
-	            echo "Backed up: $pm_file -> ${pm_file}.old" >> "$NGX_RECOMPILE_LOG_FILE"
-	        fi
-	    done
-	    
-	    # Find new files from the build
-	    local new_so new_pm
-	    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1) &>> "$NGX_RECOMPILE_LOG_FILE"
-	    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1) &>> "$NGX_RECOMPILE_LOG_FILE"
-	    
-	    # Copy new files to all found locations
-	    if [[ -n "$new_so" ]]; then
-	        for so_path in "${FOUND_SO[@]}"; do
-	            so_dir=$(dirname "$so_path")
-	            mkdir -p "$so_dir"
-	            cp -f "$new_so" "$so_path" &>> "$NGX_RECOMPILE_LOG_FILE"
-	            echo "Copied new nginx.so to: $so_path" >> "$NGX_RECOMPILE_LOG_FILE"
-	        done
-	    fi
-	    
-	    if [[ -n "$new_pm" ]]; then
-	        for pm_path in "${FOUND_PM[@]}"; do
-	            pm_dir=$(dirname "$pm_path")
-	            mkdir -p "$pm_dir"
-	            cp -f "$new_pm" "$pm_path" &>> "$NGX_RECOMPILE_LOG_FILE"
-	            echo "Copied new nginx.pm to: $pm_path" >> "$NGX_RECOMPILE_LOG_FILE"
-	        done
-	    fi
-	    
-	    # Fallback: if no old files were found, copy to standard Config paths
-	    if [[ ${#FOUND_SO[@]} -eq 0 ]]; then
-	        perl_nso_path=$(perl -e 'use Config; print $Config{vendorarchexp}')
-	        mkdir -p "$perl_nso_path/auto/nginx"
-	        [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so" &>> "$NGX_RECOMPILE_LOG_FILE"
-	        echo "Copied new nginx.so to default path: $perl_nso_path/nginx.so" >> "$NGX_RECOMPILE_LOG_FILE"
-	    fi
-	    
-	    if [[ ${#FOUND_PM[@]} -eq 0 ]]; then
-	        perl_npm_path=$(perl -e 'use Config; print $Config{vendorlibexp}')
-	        mkdir -p "$perl_npm_path"
-	        [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm" &>> "$NGX_RECOMPILE_LOG_FILE"
-	        echo "Copied new nginx.pm to default path: $perl_npm_path/nginx.pm" >> "$NGX_RECOMPILE_LOG_FILE"
-	    fi
-	
-	    PERL_UPDATED=true
-	else
-	    PERL_UPDATED=false
-	fi
-	
-	nginx_obj_sanity_check
-	
-	# Restore old Perl modules and uncomment load_module if check failed
-	if [[ $? -ne 0 ]]; then
-	    if $PERL_UPDATED; then
-	        # Restore all backups
-	        for so_file in "${FOUND_SO[@]}"; do
-	            if [[ -f "${so_file}.old" ]]; then
-	                mv "${so_file}.old" "$so_file" >> "$NGX_RECOMPILE_LOG_FILE"
-	                echo "Restored: ${so_file}.old -> $so_file" >> "$NGX_RECOMPILE_LOG_FILE"
-	            fi
-	        done
-	        
-	        for pm_file in "${FOUND_PM[@]}"; do
-	            if [[ -f "${pm_file}.old" ]]; then
-	                mv "${pm_file}.old" "$pm_file" >> "$NGX_RECOMPILE_LOG_FILE"
-	                echo "Restored: ${pm_file}.old -> $pm_file" >> "$NGX_RECOMPILE_LOG_FILE"
-	            fi
-	        done
-	    fi
-	    
-	    # Re-enable only what was commented earlier
-	    ngx_uncheck_dynamic_modules_func
-	    exit 1
+		# Backup and update Perl module if perl is compiled
+		if 2>&1 nginx -V | grep -qi "http_perl_module"; then
+		    # Get all Perl module paths from @INC
+		    PERL_MODULE_PATHS=()
+		    while IFS= read -r path; do
+		        PERL_MODULE_PATHS+=("$path")
+		    done < <(perl -e 'print join("\n", @INC)')
+		    
+		    # Add common paths if they're not in @INC
+		    for path in "/usr/local/lib/x86_64-linux-gnu/perl/5.36.0" "/usr/lib/x86_64-linux-gnu/perl5/5.36" "/usr/share/perl5"; do
+		        if [[ -d "$path" ]] && ! [[ " ${PERL_MODULE_PATHS[@]} " =~ " ${path} " ]]; then
+		            PERL_MODULE_PATHS+=("$path")
+		        fi
+		    done
+		    
+		    # Arrays to store found files
+		    FOUND_SO=()
+		    FOUND_PM=()
+		    
+		    # Search for all nginx.so and nginx.pm files in all Perl paths
+		    for perl_path in "${PERL_MODULE_PATHS[@]}"; do
+		        if [[ -d "$perl_path" ]]; then
+		            # Search for nginx.so
+		            while IFS= read -r file; do
+		                if [[ -n "$file" ]]; then
+		                    FOUND_SO+=("$file")
+		                fi
+		            done < <(find "$perl_path" -path "*/nginx.so" -type f 2>/dev/null)
+		            
+		            # Search for nginx.pm
+		            while IFS= read -r file; do
+		                if [[ -n "$file" ]]; then
+		                    FOUND_PM+=("$file")
+		                fi
+		            done < <(find "$perl_path" -name "nginx.pm" -type f 2>/dev/null)
+		        fi
+		    done
+		    
+		    # Backup all found files
+		    for so_file in "${FOUND_SO[@]}"; do
+		        if [[ -f "$so_file" ]]; then
+		            mv "$so_file" "${so_file}.old" &>> "$NGX_RECOMPILE_LOG_FILE"
+		            echo "Backed up: $so_file -> ${so_file}.old" >> "$NGX_RECOMPILE_LOG_FILE"
+		        fi
+		    done
+		    
+		    for pm_file in "${FOUND_PM[@]}"; do
+		        if [[ -f "$pm_file" ]]; then
+		            mv "$pm_file" "${pm_file}.old" &>> "$NGX_RECOMPILE_LOG_FILE"
+		            echo "Backed up: $pm_file -> ${pm_file}.old" >> "$NGX_RECOMPILE_LOG_FILE"
+		        fi
+		    done
+		    
+		    # Find new files from the build
+		    local new_so new_pm
+		    new_so=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.so" -path "*/perl/*" | head -n1) &>> "$NGX_RECOMPILE_LOG_FILE"
+		    new_pm=$(find "$SRC_DIR/${latest_nginx//.tar*}/objs" -name "nginx.pm" | head -n1) &>> "$NGX_RECOMPILE_LOG_FILE"
+		    
+		    # Copy new files to all found locations
+		    if [[ -n "$new_so" ]]; then
+		        for so_path in "${FOUND_SO[@]}"; do
+		            so_dir=$(dirname "$so_path")
+		            mkdir -p "$so_dir"
+		            cp -f "$new_so" "$so_path" &>> "$NGX_RECOMPILE_LOG_FILE"
+		            echo "Copied new nginx.so to: $so_path" >> "$NGX_RECOMPILE_LOG_FILE"
+		        done
+		    fi
+		    
+		    if [[ -n "$new_pm" ]]; then
+		        for pm_path in "${FOUND_PM[@]}"; do
+		            pm_dir=$(dirname "$pm_path")
+		            mkdir -p "$pm_dir"
+		            cp -f "$new_pm" "$pm_path" &>> "$NGX_RECOMPILE_LOG_FILE"
+		            echo "Copied new nginx.pm to: $pm_path" >> "$NGX_RECOMPILE_LOG_FILE"
+		        done
+		    fi
+		    
+		    # Fallback: if no old files were found, copy to standard Config paths
+		    if [[ ${#FOUND_SO[@]} -eq 0 ]]; then
+		        perl_nso_path=$(perl -e 'use Config; print $Config{vendorarchexp}')
+		        mkdir -p "$perl_nso_path/auto/nginx"
+		        [[ -n "$new_so" ]] && cp -f "$new_so" "$perl_nso_path/nginx.so" &>> "$NGX_RECOMPILE_LOG_FILE"
+		        echo "Copied new nginx.so to default path: $perl_nso_path/nginx.so" >> "$NGX_RECOMPILE_LOG_FILE"
+		    fi
+		    
+		    if [[ ${#FOUND_PM[@]} -eq 0 ]]; then
+		        perl_npm_path=$(perl -e 'use Config; print $Config{vendorlibexp}')
+		        mkdir -p "$perl_npm_path"
+		        [[ -n "$new_pm" ]] && cp -f "$new_pm" "$perl_npm_path/nginx.pm" &>> "$NGX_RECOMPILE_LOG_FILE"
+		        echo "Copied new nginx.pm to default path: $perl_npm_path/nginx.pm" >> "$NGX_RECOMPILE_LOG_FILE"
+		    fi
+		
+		    PERL_UPDATED=true
+		else
+		    PERL_UPDATED=false
+		fi
+		
+		nginx_obj_sanity_check
+		
+		# Restore old Perl modules and uncomment load_module if check failed
+		if [[ $? -ne 0 ]]; then
+		    if $PERL_UPDATED; then
+		        # Restore all backups
+		        for so_file in "${FOUND_SO[@]}"; do
+		            if [[ -f "${so_file}.old" ]]; then
+		                mv "${so_file}.old" "$so_file" >> "$NGX_RECOMPILE_LOG_FILE"
+		                echo "Restored: ${so_file}.old -> $so_file" >> "$NGX_RECOMPILE_LOG_FILE"
+		            fi
+		        done
+		        
+		        for pm_file in "${FOUND_PM[@]}"; do
+		            if [[ -f "${pm_file}.old" ]]; then
+		                mv "${pm_file}.old" "$pm_file" >> "$NGX_RECOMPILE_LOG_FILE"
+		                echo "Restored: ${pm_file}.old -> $pm_file" >> "$NGX_RECOMPILE_LOG_FILE"
+		            fi
+		        done
+		    fi
+		    
+		    # Re-enable only what was commented earlier
+		    ngx_uncheck_dynamic_modules_func
+		    exit 1
 	fi
 		
 		{
