@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.6.2"
+self_current_version="1.7.0"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -87,6 +87,49 @@ if ! load_shared_functions_func "${SHARED_BASH_FUNCTIONS_URL}" > /dev/null 2>&1;
 	exit 1
 fi
 
+# Global variables
+COMMENTED_FILES=()
+EXIT_STATUS=0
+SRC_DIR="/usr/local/src"
+NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / zstd / brotli / geoip2 / headers_more / push_stream / substitutions_filter / lua_filter / modsecurity"
+NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
+PERL_UPDATED=false
+export HTTP3_CONFIGURE_STRING="--with-http_v3_module"
+
+# Global version variables
+latest_nginx=""
+latest_libressl=""
+latest_glibc=""
+
+# Parse arguments
+KEEP_SOURCES="false"
+SCRIPT_NAME="$(basename "$0")"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -k|--keep-sources)
+            KEEP_SOURCES="true"
+            shift
+            ;;
+        -v|--version)
+            #printf "%s\n"" "$self_current_version"
+            exit 0
+            ;;
+        -h|--help)
+            printf "Usage: %s [-k|--keep-sources] [-v|--version] [-h|--help]\n" "$SCRIPT_NAME"
+            printf "  -k, --keep-sources    Keep all sources after compilation\n"
+            printf "  -v, --version         Show script version\n"
+            printf "  -h, --help            Show this help message\n"
+            exit 0
+            ;;
+        *)
+            printf "\n${RC}ERROR: Unknown option: $1${NC}\n"
+            printf "Use -h for help\n"
+            exit 1
+            ;;
+    esac
+done
+
 # Detect Bitrix environment
 bitrix_env_check_func
 
@@ -97,25 +140,6 @@ if ! command -v curl >/dev/null 2>&1; then
 	elif command -v yum >/dev/null 2>&1; then
 		yum -y install curl
 	fi
-fi
-
-# Global variables
-EXIT_STATUS=0
-SRC_DIR="/usr/local/src"
-NGX_MENU_VARIANTS="${GC}Default variant${NC} will try to auto compile latest nginx + latest openssl + brotli + headers_more + push_stream + all that already have\n\n${GC}Custom variant${NC} will allow you set custom path (or|and) to choose from: openssl latest stable / openssl 3.x latest stable / openssl 1.x latest stable / boringssl / libressl / zstd / brotli / pagespeed / geoip2 / headers_more / push_stream / substitutions_filter / lua_filter"
-NGX_RECOMPILE_LOG_FILE="/tmp/ngx_recompilation.${RANDOM}.log"
-PERL_UPDATED=false
-export HTTP3_CONFIGURE_STRING="--with-http_v3_module"
-
-# Global version variables
-latest_nginx=""
-latest_libressl=""
-latest_glibc=""
-
-# Validate arguments
-if [[ $# -ne 0 ]]; then
-	printf "\n\n${RC}ERROR - No arguments allowed${NC}\n"
-	exit 1
 fi
 
 # Detect OS
@@ -137,7 +161,11 @@ if [[ $distr == "unknown" ]]; then
 	exit 1
 fi
 
-printf "\n${GC}Looks like this is some %s OS${NC}\n" "$distr"
+if [[ "$KEEP_SOURCES" != "true" ]]; then
+    printf "\nTip: use ${GC}-k${NC} flag to keep sources after compilation\n"
+fi
+
+printf "\nLooks like this is some ${GC}%s${NC} OS\n" "$distr"
 
 # Check required tools
 check_tools_func() {
@@ -155,7 +183,7 @@ check_tools_func
 
 # Check free space
 check_free_space_func() {
-	printf "\n${GC}Checking free space${NC}"
+	printf "\nChecking free space"
 	local current_free_space
 	current_free_space=$(df -Pm --sync / | awk '{print $4}' | tail -n 1)
 	local space_need_megabytes="7000"
@@ -168,9 +196,95 @@ check_free_space_func() {
 	fi
 }
 
+# Cleanup function to remove source directories
+cleanup_sources_func() {
+    local keep_sources="${1:-false}"
+    
+    # Check if we should keep sources
+    if [[ "$keep_sources" == "true" ]]; then
+        printf "\n${YC}Keeping source${NC} directories as requested\n" >> "$NGX_RECOMPILE_LOG_FILE"
+        return 0
+    fi
+    
+    printf "\n${GC}Cleaning up${NC} source directories..." >> "$NGX_RECOMPILE_LOG_FILE"
+    
+    # List of directories to clean
+    local clean_dirs=(
+        "$SRC_DIR/openssl_latest"
+        "$SRC_DIR/openssl3"
+        "$SRC_DIR/openssl1"
+        "$SRC_DIR/boringssl"
+        "$SRC_DIR/ngx_brotli"
+        "$SRC_DIR/ngx_http_substitutions_filter_module"
+        "$SRC_DIR/ngx_lua_devel_kit"
+        "$SRC_DIR/ngx_http_lua_module"
+        "$SRC_DIR/lua-resty-core"
+        "$SRC_DIR/lua-resty-lrucache"
+        "$SRC_DIR/ngx_http_zstd_module"
+        "$SRC_DIR/ngx_http_geoip2_module"
+        "$SRC_DIR/headers-more-nginx-module"
+        "$SRC_DIR/nginx-push-stream-module"
+        "$SRC_DIR/CMake"
+        "$SRC_DIR/ModSecurity"
+        "$SRC_DIR/ModSecurity-nginx"
+    )
+    
+    # Remove directories
+    local removed_count=0
+    for dir in "${clean_dirs[@]}"; do
+        if [[ -d "$dir" ]]; then
+            rm -rf "$dir" &>> "$NGX_RECOMPILE_LOG_FILE"
+            if [[ $? -eq 0 ]]; then
+                ((removed_count++))
+                echo "Removed: $dir" >> "$NGX_RECOMPILE_LOG_FILE"
+            else
+                echo "Failed to remove: $dir" >> "$NGX_RECOMPILE_LOG_FILE"
+            fi
+        fi
+    done
+
+    if [[ -n "${latest_nginx}" ]]; then
+        rm -rf "$SRC_DIR/${latest_nginx:?%.tar*}" &>> "$NGX_RECOMPILE_LOG_FILE"
+        if [[ $? -eq 0 ]]; then
+            ((removed_count++))
+            echo "Removed: $SRC_DIR/${latest_nginx%.tar*}" >> "$NGX_RECOMPILE_LOG_FILE"
+        fi
+    fi
+    if [[ -n "${latest_libressl}" ]]; then
+        rm -rf "$SRC_DIR/${latest_libressl:?%.tar*}" &>> "$NGX_RECOMPILE_LOG_FILE"
+        if [[ $? -eq 0 ]]; then
+            ((removed_count++))
+            echo "Removed: $SRC_DIR/${latest_libressl%.tar*}" >> "$NGX_RECOMPILE_LOG_FILE"
+        fi
+    fi
+    if [[ -n "${latest_glibc}" ]]; then
+        rm -rf "$SRC_DIR/${latest_glibc:?%.tar*}" &>> "$NGX_RECOMPILE_LOG_FILE"
+        if [[ $? -eq 0 ]]; then
+            ((removed_count++))
+            echo "Removed: $SRC_DIR/${latest_glibc%.tar*}" >> "$NGX_RECOMPILE_LOG_FILE"
+        fi
+    fi
+
+    # Remove downloaded archives
+    local clean_archives=(
+        "$SRC_DIR/${latest_nginx}"
+        "$SRC_DIR/${latest_libressl}"
+        "$SRC_DIR/${latest_glibc}"
+    )
+    
+    for archive in "${clean_archives[@]}"; do
+        if [[ -f "$archive" ]]; then
+            rm -f "$archive" &>> "$NGX_RECOMPILE_LOG_FILE"
+            echo "Removed archive: $archive" >> "$NGX_RECOMPILE_LOG_FILE"
+        fi
+    done
+    
+    printf " ${GC}OK${NC} (removed %d directories)\n" "$removed_count" >> "$NGX_RECOMPILE_LOG_FILE"
+}
+
 # Get latest versions
 get_latest_versions_func() {
-	printf "\n${GC}Getting latest versions...${NC}"
+	printf "\nGetting latest versions..."
 	
 	latest_nginx_url="http://nginx.org/en/download.html"
 	latest_nginx=$(curl -skL $latest_nginx_url | grep -E -o "nginx-[0-9.]+\.tar[.a-z]*" | head -n 1)
@@ -196,14 +310,14 @@ get_latest_versions_func() {
 		exit 1
 	fi
 	
-	printf " - ${GC}OK${NC}\n"
+	printf " - ${GC}OK${NC}\n\n"
 	printf "nginx: %s\n" "$latest_nginx"
 	printf "glibc: %s\n" "$latest_glibc"
 }
 
 # Nginx configuration test
 nginx_conf_sanity_check() {
-	printf "\n${GC}Making nginx configuration check${NC}"
+	printf "\nMaking nginx configuration check"
 	local nginx_test_output
 	if nginx_test_output=$(nginx -t 2>&1); then
 		printf " - ${GC}OK${NC}\n"
@@ -347,10 +461,19 @@ ngx_configure_make_install_func() {
 		    done < <(perl -e 'print join("\n", @INC)')
 		    
 		    # Add common paths if they're not in @INC
-		    for path in "/usr/local/lib/x86_64-linux-gnu/perl/5.36.0" "/usr/lib/x86_64-linux-gnu/perl5/5.36" "/usr/share/perl5"; do
-		        if [[ -d "$path" ]] && ! [[ " ${PERL_MODULE_PATHS[@]} " =~ " ${path} " ]]; then
-		            PERL_MODULE_PATHS+=("$path")
-		        fi
+		    for path in "/usr/local/lib/x86_64-linux-gnu/perl" "/usr/lib/x86_64-linux-gnu/perl5" "/usr/share/perl5" "/usr/share/perl"; do
+			if [[ -d "$path" ]]; then
+			    local found=false
+			    for existing_path in "${PERL_MODULE_PATHS[@]}"; do
+			        if [[ "$existing_path" == "$path" ]]; then
+			            found=true
+			            break
+			        fi
+			    done
+			    if ! $found; then
+			        PERL_MODULE_PATHS+=("$path")
+			    fi
+			fi
 		    done
 		    
 		    # Arrays to store found files
@@ -528,6 +651,10 @@ ngx_configure_make_install_func() {
 	local nginx_new_version
 	nginx_new_version=$(nginx -v 2>&1 | grep -oP 'nginx/\K[0-9.]+')
 		printf "\n${GC}Successfully installed nginx %s${NC}\nLog - %s\n" "$nginx_new_version" "$NGX_RECOMPILE_LOG_FILE"
+		
+		# Clean up source files if not keeping them
+		cleanup_sources_func "$KEEP_SOURCES"
+		
 		exit 0
 	else
 		printf "\n${RC}Compilation failed${NC}\nLog - %s\n" "$NGX_RECOMPILE_LOG_FILE"
@@ -744,13 +871,6 @@ install_other_staff_func() {
 		}
 		
 		echo "############################################"
-		echo "CLONING NGINX PAGESPEED MODULE"
-		echo "############################################"
-		git clone https://github.com/apache/incubator-pagespeed-ngx.git || {
-			echo "ERROR: Failed to clone pagespeed" >> "$NGX_RECOMPILE_LOG_FILE"
-		}
-		
-		echo "############################################"
 		echo "CLONING NGINX GEOIP2 MODULE"
 		echo "############################################"
 		git clone https://github.com/leev/ngx_http_geoip2_module.git || {
@@ -778,19 +898,7 @@ install_other_staff_func() {
 			echo "ERROR: Failed to init brotli submodules" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 		
-		echo "############################################"
-		echo "DOWNLOADING PAGESPEED PSOL LIBRARY"
-		echo "############################################"
-		cd "$SRC_DIR/incubator-pagespeed-ngx" || {
-			echo "ERROR: Failed to cd to pagespeed dir" >> "$NGX_RECOMPILE_LOG_FILE"
-		}
-		
-		# Old PSOL (compatible with older GLIBC)
-		wget -nc --no-check-certificate "https://dl.google.com/dl/page-speed/psol/1.13.35.2-x64.tar.gz" && \
-		tar -xf "1.13.35.2-x64.tar.gz" || {
-			echo "ERROR: Failed to download/extract PSOL" >> "$NGX_RECOMPILE_LOG_FILE"
-		}
-		
+
 		echo "############################################"
 		echo "SETTING OWNERSHIP"
 		echo "############################################"
@@ -800,6 +908,49 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "ALL SOURCES DOWNLOADED AND PREPARED"
 		echo "############################################"
+		
+		return 0
+	} >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+}
+
+# Build modsecurity library
+build_modsecurity_func() {
+	{
+
+		echo "############################################"
+		echo "CLONING NGINX MOD SECURITY MODULE"
+		echo "############################################"
+		git clone https://github.com/owasp-modsecurity/ModSecurity-nginx.git "$SRC_DIR/ModSecurity-nginx" || {
+			echo "ERROR: Failed to clone ModSecurity-nginx connector module" >> "$NGX_RECOMPILE_LOG_FILE"
+		}
+
+		echo "############################################"
+		echo "CLONING MODSECURITY"
+		echo "############################################"
+		git clone https://github.com/owasp-modsecurity/ModSecurity.git "$SRC_DIR/ModSecurity" || {
+			echo "ERROR: Failed to clone ModSecurity" >> "$NGX_RECOMPILE_LOG_FILE"
+		}
+
+		echo "############################################"
+		echo "BUILDING MODSECURITY LIBRARY"
+		echo "############################################"
+		
+		cd "$SRC_DIR/ModSecurity" || {
+			echo "ERROR: Failed to cd to ModSecurity directory" >> "$NGX_RECOMPILE_LOG_FILE"
+			return 1
+		}
+		
+		# Build ModSecurity
+		git submodule update --init --recursive
+		./build.sh >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+		./configure --with-lmdb >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+		make -j"$(nproc)" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+		make install >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+		
+		# Update library cache
+		ldconfig
+		
+		echo "ModSecurity library built and installed" >> "$NGX_RECOMPILE_LOG_FILE"
 		
 		return 0
 	} >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
@@ -832,7 +983,7 @@ install_rhel_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core pcre-devel cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel; do
+		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel yajl-devel lmdb-devel ssdeep-devel libxml2-devel autoconf automake libtool; do
 			yum -y install $package
 		done
 
@@ -861,7 +1012,7 @@ install_debian_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in build-essential wget curl git gcc libpcre2-dev luajit2 libluajit-5.1-dev luajit unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl libzstd-dev; do
+		for package in build-essential wget curl git gcc libpcre2-dev luajit2 libluajit-5.1-dev luajit unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl libzstd-dev libyajl-dev liblmdb-dev libfuzzy-dev libxml2-dev autoconf automake libtool; do
 			apt-get -y install $package
 		done
 
@@ -881,10 +1032,24 @@ install_debian_dependencies_func() {
 # Default nginx compilation
 ngx_compilation_default_func() {
 
+	printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
+	if [[ $distr == "rhel" ]]; then
+		install_rhel_dependencies_func
+	elif [[ $distr == "debian" ]]; then
+		install_debian_dependencies_func
+	fi
+		
 	# Check if substitutions filter module is needed
 	local subs_filter_configure=""
 	if nginx -T 2>&1 | grep -qi "subs_filter"; then
 		subs_filter_configure="--add-module=$SRC_DIR/ngx_http_substitutions_filter_module"
+	fi
+
+	# Check if nginx modsecurity connector module is needed
+	local modsecurity_configure=""
+	if nginx -T 2>&1 | grep -qi "modsecurity_"; then
+		build_modsecurity_func
+		modsecurity_configure="--add-module=$SRC_DIR/ModSecurity-nginx"
 	fi
 
 	# Check if lua module is needed
@@ -928,21 +1093,28 @@ ngx_compilation_default_func() {
 	make clean &> /dev/null
 	
 	local nginx_configure_string
-	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} ${HTTP3_CONFIGURE_STRING} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${zstd_configure} ${geoip2_configure} ${lua_configure} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+	nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure --with-openssl=$SRC_DIR\/openssl_latest ${OPENSSL_OPT} ${HTTP3_CONFIGURE_STRING} --add-module=$SRC_DIR\/ngx_brotli --add-module=$SRC_DIR\/headers-more-nginx-module --add-module=$SRC_DIR\/nginx-push-stream-module ${subs_filter_configure} ${zstd_configure} ${geoip2_configure} ${lua_configure} ${modsecurity_configure} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 
 	ngx_configure_make_install_func "$nginx_configure_string"
 }
 
 # Custom nginx compilation
 ngx_compilation_custom_func() {
-	printf "\n${GC}List:${NC}\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\nzstd\nlua_filter\npagespeed\ngeoip2\nheaders_more\npush_stream\nsubstitutions_filter\n\n${GC}Type names above (or|and) enter full path to nginx module to compile, separated by space, and also strings like http_image_filter_module are good:${NC}"
+
+printf "\n${GC}Modules ready to compile:${NC}\n\nopenssl_latest\nopenssl3\nopenssl1\nboringssl\nlibressl\nbrotli\nzstd\nlua_filter\nmodsecurity\ngeoip2\nheaders_more\npush_stream\nsubstitutions_filter\n\n${GC}Enter names${NC} above separated by ${GC}space${NC} ( or/and custom path like /usr/local/src/http_image_filter_module ):\n"
 	read -a nginx_modules_array
+
+	printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
+	if [[ $distr == "rhel" ]]; then
+		install_rhel_dependencies_func
+	elif [[ $distr == "debian" ]]; then
+		install_debian_dependencies_func
+	fi
 	
 	local openssl_configure_string=""
 	local libressl_configure_string=""
 	local boringssl_configure_string=""
 	local brotli_configure_string=""
-	local pagespeed_configure_string=""
 	local geoip2_configure_string=""
 	local headers_more_configure_string=""
 	local push_stream_configure_string=""
@@ -952,6 +1124,7 @@ ngx_compilation_custom_func() {
 	local lua_filter_configure_string=""
 	local sbin_path_configure=""
 	local zstd_module_configure_string=""
+	local modsecurity_configure_string=""
 	
 	for nginx_module in "${nginx_modules_array[@]}"; do
 		case "$nginx_module" in
@@ -973,11 +1146,11 @@ ngx_compilation_custom_func() {
 				;;
 			*brotli*)
 				brotli_configure_string="--add-module=$SRC_DIR/ngx_brotli"
-				printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
 				build_brotli_func || exit 1
 				;;
-			*pagespeed*)
-				pagespeed_configure_string="--add-module=$SRC_DIR/incubator-pagespeed-ngx"
+			*modsecurity*)
+				modsecurity_configure_string="--add-module=$SRC_DIR/ModSecurity-nginx"
+				build_modsecurity_func
 				;;
 			*geoip2*)
 				geoip2_configure_string="--add-module=$SRC_DIR/ngx_http_geoip2_module"
@@ -1029,11 +1202,13 @@ ngx_compilation_custom_func() {
 
 	# If SSL module is selected, remove existing --with-openssl if present
 	if [[ -n $custom_configure_string_with ]] || [[ -n $openssl_configure_string ]] || [[ -n $libressl_configure_string ]] || [[ -n $boringssl_configure_string ]]; then
-		nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string ${HTTP3_CONFIGURE_STRING} $boringssl_configure_string $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string ${zstd_module_configure_string} $custom_configure_string_with ${lua_filter_configure_string} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+		nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@ --@\n--@gi' | sed 's@^--add-dynamic-module.*@@gi' | sed 's@=dynamic@@gi' | sed 's@^--with-openssl.*@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string ${HTTP3_CONFIGURE_STRING} $boringssl_configure_string $brotli_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string ${zstd_module_configure_string} ${lua_filter_configure_string} ${modsecurity_configure_string} $custom_configure_string_with ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 	else
-	   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string ${HTTP3_CONFIGURE_STRING} $brotli_configure_string $pagespeed_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string ${zstd_module_configure_string} $custom_configure_string_with ${lua_filter_configure_string} ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
+	   nginx_configure_string=$(2>&1 nginx -V | grep 'configure arguments:' | sed 's@--add-dynamic-module.*@@gi' | sed 's@ --@\n--@gi' | sed 's@--with-stream=dynamic@--with-stream@gi' | sed 's@=dynamic@@gi'  | sed 's@^--add-module.*@@gi' | sed '/^[[:space:]]*$/d' | awk '!seen[$0]++' | tr '\n' ' ' | sed "s@^.*arguments:\(.*\)@\.\/configure $custom_configure_string $openssl_configure_string $libressl_configure_string $boringssl_configure_string ${HTTP3_CONFIGURE_STRING} $brotli_configure_string $geoip2_configure_string $headers_more_configure_string $push_stream_configure_string $subs_filter_configure_string ${zstd_module_configure_string} ${lua_filter_configure_string} ${modsecurity_configure_string} $custom_configure_string_with ${sbin_path_configure} \1@" | sed 's@  *@ @gi')
 	fi
-	
+
+	printf "\n${GC}Nginx will be compiled with these options and modules:${NC}\n" 
+	echo
 	echo "$nginx_configure_string" | sed 's@ --@\n--@gi'
 	echo
 	printf "${GC}"
@@ -1299,15 +1474,7 @@ recompile_nginx_main_func() {
 			*) printf "\n${RC}Invalid choice. \nEnter 1, 2, or 3.${NC}\n\n";;
 			esac
 	done
-		
-		printf "\n${NC}Running silently with logging to the ${GC}%s${NC}\nPlease wait\n" "$NGX_RECOMPILE_LOG_FILE"
 
-		if [[ $distr == "rhel" ]]; then
-			install_rhel_dependencies_func
-		elif [[ $distr == "debian" ]]; then
-			install_debian_dependencies_func
-		fi
-		
 		if [[ $compilation_variant == "default" ]]; then
 			ngx_compilation_default_func
 		elif [[ $compilation_variant == "custom" ]]; then
