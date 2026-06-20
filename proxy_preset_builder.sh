@@ -20,7 +20,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.34"
-tweaker_current_version="0.17.8"
+tweaker_current_version="0.18.0"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -2519,15 +2519,53 @@ if nginx_exists_check_func; then
 	# Checking include directive exists in main nginx conf
 	if ! grep -qF "include $NGINX_TWEAKS_INCLUDE_FILE;" "$NGINX_CONF_FILE"; then
 		echo
-		read -p "Tweak nginx parameters ? [Y/n]" -n 1 -r
+		
+		# Define arrays before displaying them to user
+		declare -A BASE_NGINX_PARAMS=(
+			["worker_processes"]="auto"
+			["worker_rlimit_nofile"]="200000"
+			["worker_connections"]="10240"
+		)
+		
+		declare -A NGINX_PARAMS=(
+			["proxy_buffers"]="16 64k"
+			["proxy_buffer_size"]="64k"
+			["proxy_max_temp_file_size"]="0"
+			["fastcgi_buffers"]="8 64k"
+			["fastcgi_buffer_size"]="64k"
+			["client_body_buffer_size"]="128k"
+			["client_header_buffer_size"]="4k"
+			["client_max_body_size"]="1024m"
+			["large_client_header_buffers"]="4 16k"
+			["etag"]="on"
+			["sendfile"]="on"
+			["sendfile_max_chunk"]="512k"
+			["tcp_nopush"]="on"
+			["tcp_nodelay"]="on"
+			["server_names_hash_bucket_size"]="512"
+			["server_names_hash_max_size"]="1024"
+		)
+		
+		# Display parameters that will be checked and optimized
+		echo "The following nginx parameters will be checked and optimized:"
+		echo
+		
+		# Display base nginx parameters
+		for param in "${!BASE_NGINX_PARAMS[@]}"; do
+			printf "  - %-35s %s\n" "$param" "(${BASE_NGINX_PARAMS[$param]})"
+		done
+		
+		# Display additional nginx parameters
+		for param in "${!NGINX_PARAMS[@]}"; do
+			printf "  - %-35s %s\n" "$param" "(${NGINX_PARAMS[$param]})"
+		done
+		
+		echo
+		read -p "Apply these optimizations? [Y/n]" -n 1 -r
 		echo
 		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 	
-			declare -A BASE_NGINX_PARAMS=(
-				["worker_processes"]="auto"
-				["worker_rlimit_nofile"]="200000"
-				["worker_connections"]="10240"
-			)
+			# Process base nginx parameters
 			for param in "${!BASE_NGINX_PARAMS[@]}"; do
 				val="${BASE_NGINX_PARAMS[$param]}"
 				cur=$(grep -Po "^\s*${param}\s+\K[^;]+" "$NGINX_CONF_FILE" | head -1)
@@ -2540,25 +2578,7 @@ if nginx_exists_check_func; then
 				fi
 			done
 
-			declare -A NGINX_PARAMS=(
-				["proxy_buffers"]="16 64k"
-				["proxy_buffer_size"]="64k"
-				["proxy_max_temp_file_size"]="0"
-				["fastcgi_buffers"]="8 64k"
-				["fastcgi_buffer_size"]="64k"
-				["client_body_buffer_size"]="128k"
-				["client_header_buffer_size"]="4k"
-				["client_max_body_size"]="1024m"
-				["large_client_header_buffers"]="4 16k"
-				["etag"]="on"
-				["sendfile"]="on"
-				["sendfile_max_chunk"]="512k"
-				["tcp_nopush"]="on"
-				["tcp_nodelay"]="on"
-				["server_names_hash_bucket_size"]="512"
-				["server_names_hash_max_size"]="1024"
-			)
-	
+			# Create custom settings file with header
 			echo "# Custom settings" > "$NGINX_TWEAKS_INCLUDE_FILE"
 			
 			# Add the include directive to the main config if it's not already there
@@ -2581,7 +2601,7 @@ if nginx_exists_check_func; then
 	
 			printf "\nRunning nginx params tweaks"
 			
-			# Sort NGINX_PARAMS param
+			# Sort NGINX_PARAMS for consistent processing order
 			sorted_params=$(for param in "${!NGINX_PARAMS[@]}"; do echo "$param"; done | sort)
 		
 			config_test_fail_msg="The configuration test failed after the change"
@@ -2666,6 +2686,15 @@ if nginx_exists_check_func; then
 else
 	return 1
 fi
+
+# check and enable http/2
+echo
+nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'http2\s+on' || { read -p "Enable HTTP/2? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { grep -riIl '^[[:space:]]*#.*http2\s\+on' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei 's/^[[:space:]]*#.*(http2\s+on)/\1/'; sed -i 's/http2\s\+off;/http2 on;/g' $NGINX_CONF_FILE 2>/dev/null; grep -qP 'http2\s+on' $NGINX_CONF_FILE 2>/dev/null || sed -i '/^http\s*{/a \    http2 on;' $NGINX_CONF_FILE 2>/dev/null; if nginx -t 2>&1 | grep -q "emerg"; then echo "http2 on; failed, trying listen ... http2"; grep -riIl 'listen\s\+[^;]*ssl' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/http2/! s/(listen\s+[^;]*ssl)(\s*;)/\1 http2\2/'; nginx -t &>/dev/null && systemctl restart nginx >/dev/null && echo "Result: OK (listen ... http2;)"; else systemctl restart nginx >/dev/null && echo "Result: OK (http2 on;)"; fi } }
+
+# check and disable tlsv1.3
+echo
+nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && { read -p "Disable TLSv1.3? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { nginx -t &>/dev/null && grep -riIl '^[[:space:]]*ssl_protocols.*TLSv1\.3' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/^[[:space:]]*#/!{/TLSv1\.3/ {h;s/^/#/;p;g;s/[[:space:]]*TLSv1\.3//g;}}' && nginx -t &>/dev/null && systemctl restart nginx >/dev/null && echo -n "Result: " && { nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && echo "FAIL (TLSv1.3 still enabled)" || echo "OK (TLSv1.3 disabled)"; }; }; }
+
 }
 
 # tweaker add nginx bad robot conf
