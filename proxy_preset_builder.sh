@@ -12,15 +12,12 @@ RC="\033[0;91m"
 GC="\033[0;92m"
 NC="\033[0m"
 YC="\033[1;33m"
-PPC="\033[1;35m"
-OOC="\033[38;5;214m"
-BBC="\033[1;34m"
 
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
 self_current_version="1.1.34"
-tweaker_current_version="0.18.1"
+tweaker_current_version="0.18.2"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -88,7 +85,6 @@ NGINX_CONF_DIR="/etc/nginx"
 NGINX_CONF_FILE="$NGINX_CONF_DIR/nginx.conf"
 NGINX_TWEAKS_INCLUDE_FILE="$NGINX_CONF_DIR/custom.conf"
 NGINX_TWEAKS_SUCCESS_ADDED=()
-NGINX_BAD_ROBOT_FILE_URL=""
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # allowed script actions
@@ -351,10 +347,7 @@ else
 	if [[ $panel_current_version -lt $panel_required_version ]]; then 
 		printf "\n${RC}ERROR - ISP Manager panel version must not be less than $panel_required_version (current version is $panel_current_version)${NC}\n${GC}You may update it to $panel_required_version\nor check out this link - https://gitlab.hoztnode.net/admins/scripts/-/blob/master/proxy_preset_builder.sh\nfor older panel release version of this script${NC}\n"
 		return 1
-	else
-		ISP_MGR_LIC_GOOD=1
 	fi
-		ISP_MGR_VER_GOOD=1
 fi
 # unset case insence for regexp
 shopt -u nocasematch
@@ -2689,11 +2682,11 @@ fi
 
 # check and enable http/2
 echo
-nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'http2\s+on' || { read -p "Enable HTTP/2? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { grep -riIl '^[[:space:]]*#.*http2\s\+on' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei 's/^[[:space:]]*#.*(http2\s+on)/\1/'; sed -i 's/http2\s\+off;/http2 on;/g' $NGINX_CONF_FILE 2>/dev/null; grep -qP 'http2\s+on' $NGINX_CONF_FILE 2>/dev/null || sed -i '/^http\s*{/a \    http2 on;' $NGINX_CONF_FILE 2>/dev/null; if nginx -t 2>&1 | grep -q "emerg"; then echo "http2 on; failed, trying listen ... http2"; grep -riIl 'listen\s\+[^;]*ssl' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/http2/! s/(listen\s+[^;]*ssl)(\s*;)/\1 http2\2/'; nginx -t &>/dev/null && systemctl restart nginx >/dev/null && echo "Result: ${GC}OK${NC} (listen ... http2;)"; else systemctl restart nginx >/dev/null && echo "Result: ${GC}OK${NC} (http2 on;)"; fi } }
+nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'http2\s+on' || { read -p "Enable HTTP/2? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { grep -riIl '^[[:space:]]*#.*http2\s\+on' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei 's/^[[:space:]]*#.*(http2\s+on)/\1/'; sed -i 's/http2\s\+off;/http2 on;/g' $NGINX_CONF_FILE 2>/dev/null; grep -qP 'http2\s+on' $NGINX_CONF_FILE 2>/dev/null || sed -i '/^http\s*{/a \    http2 on;' $NGINX_CONF_FILE 2>/dev/null; if nginx -t 2>&1 | grep -q "emerg"; then echo "http2 on; failed, trying listen ... http2"; sed -i '/^\s*http2\s\+on;/d' $NGINX_CONF_FILE; grep -riIl 'listen\s\+[^;]*ssl' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/http2/! s/(listen\s+[^;]*ssl)(\s*;)/\1 http2\2/'; nginx -t &>/dev/null && systemctl restart nginx >/dev/null && printf "Result: ${GC}OK${NC} (listen ... http2;)"; else systemctl restart nginx >/dev/null && printf "Result: ${GC}OK${NC} (http2 on;)"; fi } }
 
 # check and disable tlsv1.3
 echo
-nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && { read -p "Disable TLSv1.3? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { nginx -t &>/dev/null && grep -riIl '^[[:space:]]*ssl_protocols.*TLSv1\.3' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/^[[:space:]]*#/!{/TLSv1\.3/ {h;s/^/#/;p;g;s/[[:space:]]*TLSv1\.3//g;}}' && nginx -t &>/dev/null && systemctl restart nginx >/dev/null && echo -n "Result: " && { nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && echo "${RC}FAIL${NC} (TLSv1.3 still enabled)" || echo "${GC}OK${NC} (TLSv1.3 disabled)"; }; }; }
+nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && { read -p "Disable TLSv1.3? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { nginx -t &>/dev/null && grep -riIl '^[[:space:]]*ssl_protocols.*TLSv1\.3' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/^[[:space:]]*#/!{/TLSv1\.3/ {h;s/^/#/;p;g;s/[[:space:]]*TLSv1\.3//g;}}' && nginx -t &>/dev/null && systemctl restart nginx >/dev/null && printf "Result: " && { nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && printf "${RC}FAIL${NC} (TLSv1.3 still enabled)" || printf "${GC}OK${NC} (TLSv1.3 disabled)"; }; }; }
 
 }
 
@@ -3357,7 +3350,6 @@ do
 	if $MGR_CTL preset.edit backup=on limit_php_mode=php_mode_fcgi_nginxfpm limit_php_fpm_version=native limit_php_mode_fcgi_nginxfpm=on limit_cgi=on limit_php_cgi_enable=on limit_php_mode_cgi=on limit_php_mode_mod=on limit_shell=on limit_ssl=on name=$PROXY_PREFIX$proxy_target limit_dirindex=$limit_dirindex_var sok=ok > /dev/null 2>&1
 	then
 		printf " - ${GC}OK${NC}\n"
-		preset_raise_error="0"
 			#if wordpress_fpm in preset name create special template
 			if [[ $proxy_target = "wordpress_fpm" ]]
 			then
@@ -3768,8 +3760,7 @@ do
 	else
 		printf "\n${RC}Error on adding preset - $PROXY_PREFIX$proxy_target${NC}\n"
 		printf "${RC}Skipping template injection.${NC}\n"
-		printf "${RC}Check $MGR_PATH/var/ispmgr.log for errors${NC}\n" 
-		preset_raise_error="1"
+		printf "${RC}Check $MGR_PATH/var/ispmgr.log for errors${NC}\n"
 		continue
 	fi
 done
