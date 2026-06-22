@@ -16,8 +16,8 @@ YC="\033[1;33m"
 printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) _   _(_) | __| | ___ _ __ \n  | |_) | |_) |  _ \\| | | | | |/ _\\ |/ _ \\ '__|\n  |  __/|  __/| |_) | |_| | | | (_| |  __/ |   \n  |_|   |_|   |____/ \\__,_|_|_|\\__,_|\\___|_|   \n" | while IFS= read -r line; do printf "%s\n" "$line"; sleep 0.1; done
 
 # script version
-self_current_version="1.1.34"
-tweaker_current_version="0.18.3"
+self_current_version="1.1.35"
+tweaker_current_version="0.18.4"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -140,7 +140,8 @@ done
 
 local shared_func_url="$1"
 
-local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
+local remote_hostname
+remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
 if command -v wget > /dev/null 2>/dev/null; then 
 	if source <(timeout 4 \wget --timeout 4 --no-check-certificate -q -O- ${shared_func_url}); then 
@@ -172,13 +173,13 @@ fi
 show_help_func() {
 
 	printf "\n\n${YC}Usage help:${NC}\n"
-	printf "\n${GC}Tweak${NC} this box: $BASH_SOURCE tweak\n"
-	printf "\nExample for ${GC}1 preset:${NC} $BASH_SOURCE add wordpress_fpm OR $BASH_SOURCE add 127.0.0.1:8088\n"
-	printf "Example for ${GC}4 presets:${NC} $BASH_SOURCE add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
-	printf "\n${GC}Delete all${NC} existing %%$PROXY_PREFIX*%% presets and injects: $BASH_SOURCE del all $PROXY_PREFIX"
-	printf "\n${GC}Delete one${NC} existing preset and inject: $BASH_SOURCE del proxy_to_wordpress_fpm OR $BASH_SOURCE del proxy_to_127.0.0.1:8000"
-	printf "\n${GC}Restore${NC} default templates and ${GC}delete all presets${NC}:${NC} $BASH_SOURCE reset\n"
-	printf "\n${GC}Recompile nginx${NC} (add/remove modules | update/change SSL): $BASH_SOURCE recompile\n"
+	printf "\n${GC}Tweak${NC} this box: ${BASH_SOURCE[0]} tweak\n"
+	printf "\nExample for ${GC}1 preset:${NC} ${BASH_SOURCE[0]} add wordpress_fpm OR ${BASH_SOURCE[0]} add 127.0.0.1:8088\n"
+	printf "Example for ${GC}4 presets:${NC} ${BASH_SOURCE[0]} add wordpress_fpm 127.0.0.1:8000 1.1.1.1 /path/to/unix/socket\n"
+	printf "\n${GC}Delete all${NC} existing %%$PROXY_PREFIX*%% presets and injects: ${BASH_SOURCE[0]} del all $PROXY_PREFIX"
+	printf "\n${GC}Delete one${NC} existing preset and inject: ${BASH_SOURCE[0]} del proxy_to_wordpress_fpm OR ${BASH_SOURCE[0]} del proxy_to_127.0.0.1:8000"
+	printf "\n${GC}Restore${NC} default templates and ${GC}delete all presets${NC}:${NC} ${BASH_SOURCE[0]} reset\n"
+	printf "\n${GC}Recompile nginx${NC} (add/remove modules | update/change SSL): ${BASH_SOURCE[0]} recompile\n"
 	printf "\nCurrent special ${YC}templates list${NC}: wordpress_fpm, bitrix_fpm, opencart_fpm, moodle_fpm, webassyst_fpm, magento2_fpm, cscart_fpm\n"
 
 }
@@ -186,8 +187,8 @@ show_help_func() {
 show_help_func_noisp() {
 
 	printf "\n\n${YC}Usage help:${NC}\n"
-	printf "\n${GC}Tweak${NC} this box: $BASH_SOURCE tweak\n"
-	printf "\n${GC}Recompile nginx${NC} (add/remove modules | update/change SSL): $BASH_SOURCE recompile\n"
+	printf "\n${GC}Tweak${NC} this box: ${BASH_SOURCE[0]} tweak\n"
+	printf "\n${GC}Recompile nginx${NC} (add/remove modules | update/change SSL): ${BASH_SOURCE[0]} recompile\n"
 }
 
 check_mgrctl() {
@@ -423,27 +424,18 @@ git_check() {
 		
 		# check result and restore if error
 		printf "\nResolving $GIT_DOMAIN_NAME and $GIT_BACKUP_DOMAIN_NAME"
-		if [[ $1 == "no_check_exit" ]]; then
-			EXIT_STATUS=1
-		else
-			check_exit_and_restore_func
-		fi
+		check_exit_and_restore_func
 		printf " - ${GC}OK${NC}\n"
 	else
 		printf "\n${RC}ERROR - Variables \$GIT_DOMAIN_NAME or \$GIT_BACKUP_DOMAIN_NAME are empty\n${NC}"
 		EXIT_STATUS=1
-		if [[ $1 == "no_check_exit" ]]; then
-			exit 1
-		else
-			check_exit_and_restore_func
-		fi
+		check_exit_and_restore_func
 		exit 1
 	fi
 	
 	# choosing which git to use
 	if [[ $git_version ]]; then
 		GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_REPO"
-		GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_PATH"
 		GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_PATH" | awk -F[/:] '{print $4}')"
 		GIT_THE_CHOSEN_ONE_REQ_URI="/${SCRIPT_GIT_PATH#https://*/}"
 		
@@ -451,7 +443,6 @@ git_check() {
 	else
 		if [[ $git_backup_version ]]; then
 			GIT_THE_CHOSEN_ONE_REPO="$SCRIPT_GIT_BACKUP_REPO"
-			GIT_THE_CHOSEN_ONE_PATH="$SCRIPT_GIT_BACKUP_PATH"
 			GIT_THE_CHOSEN_ONE_DOMAIN_NAME="$(printf "$SCRIPT_GIT_BACKUP_PATH" | awk -F[/:] '{print $4}')"
 			GIT_THE_CHOSEN_ONE_REQ_URI="/${SCRIPT_GIT_BACKUP_PATH#https://*/}"
 			
@@ -459,11 +450,7 @@ git_check() {
 		else
 			printf "\n${RC}ERROR - $SCRIPT_GIT_PATH and $SCRIPT_GIT_BACKUP_PATH both not available\n${NC}"
 			EXIT_STATUS=1
-			if [[ $1 == "no_check_exit" ]]; then
-				exit 1
-			else
-				check_exit_and_restore_func
-			fi
+			check_exit_and_restore_func
 			exit 1
 		fi
 	fi
@@ -508,7 +495,9 @@ backup_etc_func () {
 
 	BACKUP_DIR="${BACKUP_ROOT_DIR}/$(date '+%d-%b-%Y-%H-%M-%Z')"
 
-	local ROOT_DF=$(df "$BACKUP_ROOT_DIR" | sed 1d | awk '{print $5}' | sed 's@%@@gi')
+	local ROOT_DF
+	ROOT_DF=$(df "$BACKUP_ROOT_DIR" | sed 1d | awk '{print $5}' | sed 's@%@@gi')
+	
 	local exec_command=""
 
 	if [[ "$ROOT_DF" -le 95 ]]; then
@@ -660,7 +649,8 @@ tweak_cve_func() {
 	# CVE-2026-42945 (NGINX Rift) / CVE-2026-9256 (nginx-poolslip) / CVE-2026-42926 / CVE-2026-40701/ CVE-2026-42946
 	echo
 
-	local NGINX_VERSION=$(get_nginx_version)
+	local NGINX_VERSION
+	NGINX_VERSION=$(get_nginx_version)
 	target_version="1.30.1"
 
 	if [[ -z "$NGINX_VERSION" ]]; then
@@ -680,7 +670,8 @@ tweak_cve_func() {
 				;;
 		esac
 	
-		local NGINX_VERSION_AFTER=$(nginx -v 2>&1 | awk -F/ '{print $2}')
+		local NGINX_VERSION_AFTER
+		NGINX_VERSION_AFTER=$(nginx -v 2>&1 | awk -F/ '{print $2}')
 		if [[ "$(printf '%s\n' "$target_version" "$NGINX_VERSION_AFTER" | sort -V | head -n1)" != "$target_version" ]]; then
 
 			printf "\nnginx package installation ${RC}failed${NC} (current version: ${NGINX_VERSION}), continue with recompilation\n"
@@ -712,11 +703,8 @@ mem_total_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 mem_total_mib=$((mem_total_kb / 1024))
 half_mem_mib=$((mem_total_mib / 2))
 zram_size_bytes=$(( (mem_total_kb / 2) * 1024 ))
-
-existing_zram_size_bytes=$(swapon --noheadings --bytes | awk '$1 ~ /zram/ {sum += $3} END {print sum}')
 existing_zram_size_kib=$((zram_size_bytes / 1024))
-existing_zram_size_mib=$((zram_size_kib / 1024))
-
+existing_zram_size_mib=$((existing_zram_size_kib / 1024))
 zram_active=$(swapon --noheadings --raw | grep -q zram; echo $?)
 
 # Checking zswap file exists and its settings
@@ -726,7 +714,7 @@ if [[ "$zram_active" -ne 0 ]]; then
 		read -p "Enable zram swap (or fix) ? [Y/n]" -n 1 -r
 		echo
 		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
-			. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && apt install linux-modules-extra-$(uname -r) &>/dev/null
+			. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && apt install "linux-modules-extra-$(uname -r)" &>/dev/null
 			cat > "$ZRAM_SCRIPT_PATH" <<'EOF'
 #!/bin/bash
 
@@ -816,10 +804,7 @@ if [[ $VIRTUAL == "yes" ]]; then
 		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 
 			# check free space
-			CURRENT_FREE_SPACE_GIGABYTES=$(df -BG --sync / | awk '{print $4}' | tail -n 1 | grep -Eo [[:digit:]]+)
-
-			VFS_CACHE_PRESSURE=$(cat /proc/sys/vm/vfs_cache_pressure)
-			SWAPPINESS=$(cat /proc/sys/vm/swappiness)
+			CURRENT_FREE_SPACE_GIGABYTES=$(df -BG --sync / | awk 'END { gsub(/[^0-9]/, "", $4); print $4 }')
 
 			# Setting tuning parameters
 			if ! grep -q '^vm.swappiness' ${SYSCTL_CONF_FILE} || ! grep -q '^vm.vfs_cache_pressure' ${SYSCTL_CONF_FILE}; then
@@ -843,13 +828,12 @@ if [[ $VIRTUAL == "yes" ]]; then
 				if [[ $swapsize_choosen_version == Skip || -z $swapsize_choosen_version ]]; then
 					break
 				else
-					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES=$(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)
-					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED=$(($(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)*2))
+					SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED=$(( ${swapsize_choosen_version//[!0-9]/} * 2 ))
 
 					if [[ $CURRENT_FREE_SPACE_GIGABYTES -ge $SWAPSIZE_CHOOSEN_VERSION_GIGABYTES_NEEDED ]]; then
 						printf "\nRunning"
 						{
-						DD_COUNT=$(($(echo $swapsize_choosen_version | grep -Eo [[:digit:]]+)*1024*1024))
+						DD_COUNT=$(( ${swapsize_choosen_version//[!0-9]/} * 1024 * 1024 ))
 						\swapoff /swapfile
 						\rm -f /swapfile
 						\dd if=/dev/zero of=/swapfile bs=1024 count=$DD_COUNT
@@ -887,17 +871,18 @@ fi
 tweak_openfiles_func() {
 
 # getting all systemd units we want to tweak file descriptors count to array
-NOFILE_TWEAK_SERVICE=($(systemctl show '*' --property=Id --no-pager | sed 's@^Id=@@gi' | grep -E '^httpd\.|^httpd-isp.*|^httpd-scale\.|^apache2\.|^apache2-isp.*|^nginx\.|^maria.*|^mysql.*'))
+mapfile -t NOFILE_TWEAK_SERVICE < <(systemctl show '*' --property=Id --no-pager | sed 's@^Id=@@gi' | grep -E '^httpd\.|^httpd-isp.*|^httpd-scale\.|^apache2\.|^apache2-isp.*|^nginx\.|^maria.*|^mysql.*')
 NOFILE_LIMIT="150000"
 TWEAKNEED=();
 
 {
 for service in "${NOFILE_TWEAK_SERVICE[@]}"
 do
-if systemctl list-units --full -all | grep -Fq "${NOFILE_TWEAK_SERVICE}" && [[ $(systemctl show "${service}" | grep -o -P '(?<=LimitNOFILE=)\d+') -lt ${NOFILE_LIMIT} ]]
-then
-	TWEAK_VALUE="${service}"
-	TWEAKNEED+=("${TWEAK_VALUE}")
+if systemctl list-units --full -all | grep -Fq "${service}"; then
+	current_limit=$(systemctl show "${service}" 2>/dev/null | grep -o -P '(?<=LimitNOFILE=)\d+')
+	if [[ -n $current_limit && $current_limit -lt $NOFILE_LIMIT ]]; then
+		TWEAKNEED+=("${service}")
+	fi
 fi
 done
 
@@ -1121,7 +1106,7 @@ if [[ $DEDICATED == "yes" ]]; then
 	elif grep -q "AuthenticAMD" /proc/cpuinfo > /dev/null 2>&1; then
 		# enable amd_pstate passive if kernel > 5.17 and amd_pstate not already passive
 		kernel_version=$(uname -r | awk -F. '{print $1 * 100 + $2}')
-		if (( kernel_version < 517 )) && grep -iq "^CONFIG_X86_AMD_PSTATE=y" /boot/config-$(uname -r); then
+		if (( kernel_version < 517 )) && grep -iq "^CONFIG_X86_AMD_PSTATE=y" "/boot/config-$(uname -r)"; then
 		    printf "\nTo enable kernel amd_pstate driver first ${RC}update the kernel${NC} to version 5.17 or higher, then run me again.\n"
 		    return 1
 		fi
@@ -1211,7 +1196,8 @@ return 0
 get_remote_file_size_bytes() {
 
 local full_url="$1"
-local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
+local remote_hostname
+remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 
 if command -v wget > /dev/null 2>&1; then
 	if ! 2>&1 \wget --timeout 4 --no-check-certificate --spider --server-response ${full_url} 2>&1 | grep "Content-Length" | grep -oE '[0-9]+'; then
@@ -1254,14 +1240,13 @@ if wget_openssl_exists_check; then
 	
 	local full_url="$1"
 	local file_path_local="$2"
-	local remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
+	local remote_hostname
+	remote_hostname=$(echo "$1" | awk -F[/:] '{print $4}')
 	files_diff_check() { diff -q "${file_path_local}" <(\timeout 5 \wget --timeout 4 -qO- "${full_url}") > /dev/null 2>&1 || diff -q "${file_path_local}" <(printf "GET ${full_url} HTTP/1.1\nHost:${remote_hostname}\nConnection:Close\n\n" | \timeout 5 \openssl 2>/dev/null s_client -crlf -connect ${remote_hostname}:443 -quiet | sed '1,/^\s$/d') > /dev/null 2>&1; } > /dev/null 2>&1
 	
-	# get filesize in bytes for downloaded file_path_local file
-	local file_path_local_size=$(stat --printf="%s" "${file_path_local}" 2>/dev/null || echo 0)
-	
 	# get filesize in bytes for full_url file
-	local full_url_size=$(get_remote_file_size_bytes "${full_url}" || printf "{RC}error{NC}")
+	local full_url_size
+	full_url_size=$(get_remote_file_size_bytes "${full_url}" || printf "{RC}error{NC}")
 	
 	# if remote file size differ from local and is greater than 30 bytes (not empty), downloading it
 	if [[ ${full_url_size} -gt 30 ]]; then
@@ -1289,8 +1274,6 @@ if wget_openssl_exists_check; then
 				return 1
 			fi
 		else
-			#printf "\nSize of ${full_url} is ${full_url_size}bytes\n"
-			#printf "Size of ${file_path_local} is ${file_path_local_size}bytes\n"
 			printf "\nSkipping download of \"${full_url}\"\nBoth remote and local \"${file_path_local}\" are the same in bytes\n"
 			return 0
 		fi
@@ -2244,7 +2227,7 @@ if [[ -f $MGR_BIN ]]; then
 	local NEW_VALUE=604800 # 1week
 	
 	if [[ -f $PHPS_CLEAN ]] && [[ $(wc -l < "$PHPS_CLEAN") -eq 165 ]]; then
-		if find /opt/php* /etc/php* -type f -name "php.ini" 2>/dev/null | xargs grep -HE -e "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" -e "^session\.gc_probability\s*=\s*0" -e "^session\.gc_divisor\s*=\s*1000" > /dev/null 2>&1; then
+		if find /opt/php* /etc/php* -type f -name "php.ini" -exec grep -HE -e "^session\.gc_maxlifetime\s*=\s*$TARGET_VALUE" -e "^session\.gc_probability\s*=\s*0" -e "^session\.gc_divisor\s*=\s*1000" {} + 2>/dev/null > /dev/null 2>&1; then
 			echo
 			echo "One day php sessions ISP manager cleanup detected in $PHPS_CLEAN"
 			read -p "Set all PHP gc_maxlifetime to one week, gc_probability=1, gc_divisor=500 ? [Y/n] " -n 1 -r
@@ -2700,7 +2683,8 @@ tweak_add_nginx_bad_robot_conf_func() {
 
 		local NGINX_BAD_ROBOT_MAP_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/tweaker_files/bad_robot_rate_limit.conf"
 		local NGINX_BAD_ROBOT_MAP_FILE_LOCAL=""
-		local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' /etc/nginx/* 2>/dev/null || printf "${RC}not found${NC}")
+		local NGINX_HTTP_UA_FILE
+		NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' /etc/nginx/* 2>/dev/null || printf "${RC}not found${NC}")
 		
 		# bad_robot.conf file path depending the environment
 		# if ISP Manager
@@ -2767,8 +2751,10 @@ tweak_add_nginx_bad_robot_conf_func() {
 		# updating bad_robot_rate_limit.conf
 		elif ( [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE 'map\s*\$http_user_agent\s*\$is_bad_robot' > /dev/null 2>&1 ); then
 
-			local remote_bad_robot_map_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_MAP_FILE_URL})
-			local local_bad_robot_map_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} 2>/dev/null || echo 0)
+			local remote_bad_robot_map_file_size_bytes
+			remote_bad_robot_map_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_MAP_FILE_URL})
+			local local_bad_robot_map_file_size_bytes
+			local_bad_robot_map_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} 2>/dev/null || echo 0)
 		
 			if [[ ${remote_bad_robot_map_file_size_bytes} -gt 30 ]] && [[ ${remote_bad_robot_map_file_size_bytes} -ne ${local_bad_robot_map_file_size_bytes} ]]; then
 				printf "\n${YC}Updating${NC} existing ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} to the latest version "
@@ -3055,7 +3041,7 @@ then
 	# del was supplied without preset
 	elif [[ ! -z "$1"  ]] && [[ -z "$2"  ]]
 		then
-			printf "\n${RC}ERROR - Preset not defined.\n\nExample: $BASH_SOURCE del $PROXY_PREFIXwordpress_fpm${NC}\n"
+			printf "\n${RC}ERROR - Preset not defined.\n\nExample: ${BASH_SOURCE[0]} del ${PROXY_PREFIX}wordpress_fpm${NC}\n"
 			exit 1
 	
 	else	
@@ -3698,7 +3684,7 @@ do
 							sed -i "s@# $PROXY_PREFIX$proxy_target\_STOP_DO_NOT_REMOVE@    include\t$BITRIX_FPM_NGINX_HTTP_INCLUDE_DIR/$file;\n&@g" $NGINX_MAIN_CONF_FILE > /dev/null 2>&1
 						else
 							# we already have bitrix_fpm $NGINX_MAIN_CONF_FILE inject
-							printf "\n${RC}ERROR - $existing $PROXY_PREFIX$proxy_target found in $NGINX_MAIN_CONF_FILE\nUse \"$BASH_SOURCE del $PROXY_PREFIX$proxy_target\" to remove it${NC}\n"
+							printf "\n${RC}ERROR - $PROXY_PREFIX$proxy_target found in $NGINX_MAIN_CONF_FILE\nUse \"${BASH_SOURCE[0]} del $PROXY_PREFIX$proxy_target\" to remove it${NC}\n"
 							EXIT_STATUS=1
 							check_exit_and_restore_func
 						fi
