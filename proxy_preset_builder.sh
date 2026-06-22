@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.34"
-tweaker_current_version="0.18.2"
+tweaker_current_version="0.18.3"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -693,11 +693,12 @@ tweak_cve_func() {
 # Ubuntu 2x add ssh-rsa for ssh client
 tweak_ssh_client_func() {
 
-	echo
-	printf "Adding ssh-rsa algorithm to ssh client\n"
-
-	. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && { grep -RiIqE 'HostKeyAlgorithms|PubkeyAcceptedKeyTypes' /etc/ssh/ssh_config* || { echo 'HostKeyAlgorithms +ssh-rsa' >> /etc/ssh/ssh_config && echo 'PubkeyAcceptedKeyTypes +ssh-rsa' >> /etc/ssh/ssh_config;} }
-
+	. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && ! grep -RiIqE '^[[:space:]]*(HostKeyAlgorithms|PubkeyAcceptedKeyTypes)\b' /etc/ssh/ssh_config* && {
+		echo
+		printf "${GC}Adding ssh-rsa${NC} algorithm to ssh client\n"
+		echo 'HostKeyAlgorithms +ssh-rsa' >> /etc/ssh/ssh_config
+		echo 'PubkeyAcceptedKeyTypes +ssh-rsa' >> /etc/ssh/ssh_config
+	}
 }
 
 # check zram and swap file exists if this is virtual server
@@ -725,6 +726,7 @@ if [[ "$zram_active" -ne 0 ]]; then
 		read -p "Enable zram swap (or fix) ? [Y/n]" -n 1 -r
 		echo
 		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
+			. /etc/os-release && [[ $NAME == Ubuntu ]] && [[ $VERSION_ID =~ ^2[4-9]\. ]] && apt install linux-modules-extra-$(uname -r) &>/dev/null
 			cat > "$ZRAM_SCRIPT_PATH" <<'EOF'
 #!/bin/bash
 
