@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.18.4"
+tweaker_current_version="0.19.4"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -1446,6 +1446,8 @@ else
 	printf "\nSkipping Bitrix environment tweaks, ${GC}not detected${NC} or skipped\n"
 fi
 
+disable_tls13_func /etc/nginx/* /etc/ansible/roles/web/templates/nginx/ssl_options.conf.j2
+
 }
 
 # punycode convert
@@ -2665,14 +2667,26 @@ else
 	return 1
 fi
 
-# check and enable http/2
-echo
-nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'http2\s+on' || { read -p "Enable HTTP/2? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { grep -riIl '^[[:space:]]*#.*http2\s\+on' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei 's/^[[:space:]]*#.*(http2\s+on)/\1/'; sed -i 's/http2\s\+off;/http2 on;/g' $NGINX_CONF_FILE 2>/dev/null; grep -qP 'http2\s+on' $NGINX_CONF_FILE 2>/dev/null || sed -i '/^http\s*{/a \    http2 on;' $NGINX_CONF_FILE 2>/dev/null; if nginx -t 2>&1 | grep -q "emerg"; then echo "http2 on; failed, trying listen ... http2"; sed -i '/^\s*http2\s\+on;/d' $NGINX_CONF_FILE; grep -riIl 'listen\s\+[^;]*ssl' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/http2/! s/(listen\s+[^;]*ssl)(\s*;)/\1 http2\2/'; nginx -t &>/dev/null && systemctl restart nginx >/dev/null && printf "Result: ${GC}OK${NC} (listen ... http2;)"; else systemctl restart nginx >/dev/null && printf "Result: ${GC}OK${NC} (http2 on;)"; fi } }
+enable_http2_func
+disable_tls13_func /etc/nginx/*
 
-# check and disable tlsv1.3
-echo
-nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && { read -p "Disable TLSv1.3? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { nginx -t &>/dev/null && grep -riIl '^[[:space:]]*ssl_protocols.*TLSv1\.3' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/^[[:space:]]*#/!{/TLSv1\.3/ {h;s/^/#/;p;g;s/[[:space:]]*TLSv1\.3//g;}}' && nginx -t &>/dev/null && systemctl restart nginx >/dev/null && printf "Result: " && { nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && printf "${RC}FAIL${NC} (TLSv1.3 still enabled)" || printf "${GC}OK${NC} (TLSv1.3 disabled)"; }; }; }
+}
 
+enable_http2_func() {
+
+	# check and enable http/2
+	echo
+	nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'http2\s+on' || { read -p "Enable HTTP/2? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { grep -riIl '^[[:space:]]*#.*http2\s\+on' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei 's/^[[:space:]]*#.*(http2\s+on)/\1/'; sed -i 's/http2\s\+off;/http2 on;/g' $NGINX_CONF_FILE 2>/dev/null; grep -qP 'http2\s+on' $NGINX_CONF_FILE 2>/dev/null || sed -i '/^http\s*{/a \    http2 on;' $NGINX_CONF_FILE 2>/dev/null; if nginx -t 2>&1 | grep -q "emerg"; then echo "http2 on; failed, trying listen ... http2"; sed -i '/^\s*http2\s\+on;/d' $NGINX_CONF_FILE; grep -riIl 'listen\s\+[^;]*ssl' /etc/nginx/* 2>/dev/null | xargs -r sed -Ei '/http2/! s/(listen\s+[^;]*ssl)(\s*;)/\1 http2\2/'; nginx -t &>/dev/null && systemctl restart nginx >/dev/null && printf "Result: ${GC}OK${NC} (listen ... http2;)"; else systemctl restart nginx >/dev/null && printf "Result: ${GC}OK${NC} (http2 on;)"; fi } }
+}
+
+disable_tls13_func() {
+
+	local search_paths=("$@")
+	[[ ${#search_paths[@]} -eq 0 ]] && search_paths=(/etc/nginx/*)
+
+	# check and disable tlsv1.3
+	echo
+	nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && { read -p "Disable TLSv1.3? [Y/n] " -n 1 -r; [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]] && { nginx -t &>/dev/null && grep -riIl '^[[:space:]]*ssl_protocols.*TLSv1\.3' "${search_paths[@]}" 2>/dev/null | xargs -r sed -Ei '/^[[:space:]]*#/!{/TLSv1\.3/ {h;s/^/#/;p;g;s/[[:space:]]*TLSv1\.3//g;}}' && nginx -t &>/dev/null && systemctl restart nginx >/dev/null && printf "Result: " && { nginx -T 2>/dev/null | grep -v '^[[:space:]]*#' | grep -qP 'ssl_protocols.*TLSv1\.3' && printf "${RC}FAIL${NC} (TLSv1.3 still enabled)" || printf "${GC}OK${NC} (TLSv1.3 disabled)"; }; }; }
 }
 
 # tweaker add nginx bad robot conf
