@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.19.4"
+tweaker_current_version="0.19.5"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -1441,12 +1441,12 @@ if [[ $BITRIXALIKE == "yes" ]]; then
 	else
 		printf "\nCannot exclude 1c_exchange_custom.php from https redirect, touch /etc/nginx/.htsecure - ${RC}FAILED${NC}\n"
 	fi
+
+	disable_tls13_func /etc/nginx/* /etc/ansible/roles/web/templates/nginx/ssl_options.conf.j2
 else
 	# not bitrix env or user chosen not to fix Bitrix env
 	printf "\nSkipping Bitrix environment tweaks, ${GC}not detected${NC} or skipped\n"
 fi
-
-disable_tls13_func /etc/nginx/* /etc/ansible/roles/web/templates/nginx/ssl_options.conf.j2
 
 }
 
