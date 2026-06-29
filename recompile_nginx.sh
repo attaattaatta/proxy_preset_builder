@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.7.0"
+self_current_version="1.7.1"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -766,14 +766,13 @@ install_other_staff_func() {
 		if [[ -f "${latest_glibc}" ]]; then
 			tar -xaf "${latest_glibc}" || {
 				echo "ERROR: Failed to extract ${latest_glibc}" >> "$NGX_RECOMPILE_LOG_FILE"
-				return 1
+				exit 1
 			}
 		fi
 		
 		if [[ -f "${latest_libressl}" ]]; then
 			tar -xaf "${latest_libressl}" || {
 				echo "ERROR: Failed to extract ${latest_libressl}" >> "$NGX_RECOMPILE_LOG_FILE"
-				return 1
 			}
 		fi
 		
@@ -827,6 +826,7 @@ install_other_staff_func() {
 		git checkout "$(git tag | grep -E '^openssl-[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)" && \
 		cd "$SRC_DIR" || {
 			echo "ERROR: Failed to clone/checkout openssl latest" >> "$NGX_RECOMPILE_LOG_FILE"
+			exit 1
 		}
 
 		echo "############################################"
@@ -837,6 +837,7 @@ install_other_staff_func() {
 		git checkout "$(git tag | grep -E '^openssl-3\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)" && \
 		cd "$SRC_DIR" || {
 			echo "ERROR: Failed to clone/checkout openssl3" >> "$NGX_RECOMPILE_LOG_FILE"
+			exit 1
 		}
 		
 		echo "############################################"
@@ -844,6 +845,7 @@ install_other_staff_func() {
 		echo "############################################"
 		git clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1" || {
 			echo "ERROR: Failed to clone openssl1" >> "$NGX_RECOMPILE_LOG_FILE"
+			exit 1
 		}
 
 		echo "############################################"
