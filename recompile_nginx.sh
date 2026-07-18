@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.7.1"
+self_current_version="1.7.2"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -704,8 +704,9 @@ build_brotli_func() {
 	cd deps/brotli || return 1
 	rm -Rf out
 	mkdir out
-	cd out && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF .. >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
-	cmake --build . -j"$(nproc)" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+	cd out
+	cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF .. >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || cmake3 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF .. >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+	cmake --build . -j"$(nproc)" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || cmake3 --build . -j"$(nproc)" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 	
 	cd "$SRC_DIR/${latest_nginx//.tar*}" || return 1
 }
@@ -821,6 +822,7 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "CLONING LASTEST OPENSSL"
 		echo "############################################"
+		rm -rf "$SRC_DIR/openssl_latest"
 		git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl_latest" && \
 		cd "$SRC_DIR/openssl_latest" && \
 		git checkout "$(git tag | grep -E '^openssl-[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)" && \
@@ -832,6 +834,7 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "CLONING LASTEST OPENSSL 3"
 		echo "############################################"
+		rm -rf "$SRC_DIR/openssl3"
 		git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && \
 		cd "$SRC_DIR/openssl3" && \
 		git checkout "$(git tag | grep -E '^openssl-3\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)" && \
@@ -843,6 +846,7 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "CLONING OPENSSL 1.1.1"
 		echo "############################################"
+		rm -rf "$SRC_DIR//openssl1"
 		git clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1" || {
 			echo "ERROR: Failed to clone openssl1" >> "$NGX_RECOMPILE_LOG_FILE"
 			exit 1
@@ -867,6 +871,7 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "CLONING NGINX BROTLI MODULE"
 		echo "############################################"
+		rm -rf "SRC_DIR/ngx_brotli"
 		git clone --recurse-submodules https://github.com/google/ngx_brotli.git || {
 			echo "ERROR: Failed to clone ngx_brotli" >> "$NGX_RECOMPILE_LOG_FILE"
 			return 1
@@ -985,7 +990,7 @@ install_rhel_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core cmake pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel yajl-devel lmdb-devel ssdeep-devel libxml2-devel autoconf automake libtool; do
+		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core cmake cmake3 pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel yajl-devel lmdb-devel ssdeep-devel libxml2-devel autoconf automake libtool; do
 			yum -y install $package
 		done
 
