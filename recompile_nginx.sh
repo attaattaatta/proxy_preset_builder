@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.7.2"
+self_current_version="1.7.3"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -685,7 +685,7 @@ build_brotli_func() {
 		
 		cd "$SRC_DIR" || exit 1
 		git clone https://github.com/Kitware/CMake.git >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
-		cd CMake && git checkout "$(git describe --tags "$(git rev-list --tags --max-count=1)")" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+		cd CMake && git checkout v3.20.6 >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 		cd "$SRC_DIR/CMake" || return 1
 		bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl_latest -DOPENSSL_LIBRARIES=/usr/local/src/openssl_latest/lib >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 		make -j"$(nproc)" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
