@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.7.3"
+self_current_version="1.7.4"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -1019,7 +1019,7 @@ install_debian_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in build-essential wget curl git gcc libpcre2-dev luajit2 libluajit-5.1-dev luajit unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl libzstd-dev libyajl-dev liblmdb-dev libfuzzy-dev libxml2-dev autoconf automake libtool; do
+		for package in build-essential wget curl git gcc libpcre2-dev luajit2 libluajit-5.1-dev luajit unzip uuid-dev libmaxminddb-dev libpcre3-dev libssl-dev zlib1g-dev gcc-mozilla libpcre3 libxslt-dev libgd-dev libgeoip-dev libperl-dev cmake libtime-piece-perl libzstd-dev libyajl-dev liblmdb-dev libfuzzy-dev libxml2-dev autoconf automake libtool libcurl4-openssl-dev; do
 			apt-get -y install $package
 		done
 
