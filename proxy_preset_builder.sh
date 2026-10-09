@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.19.5"
+tweaker_current_version="0.19.6"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -1957,7 +1957,7 @@ if [[ -f $MGR_BIN ]]; then
 			fi
 			
 			#native mysql version disable binlog if no replicas exists
-			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && mysql -e "show slave status;" -vv | grep -i "Empty set" > /dev/null 2>&1 && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* > /dev/null 2>&1; then
+			if [[ $MYSQL_CHOOSEN_VERSION_DOCKER == "not_in_docker" ]] && { mysql -e "show slave status;" -vv 2>/dev/null | grep -qi "Empty set" || mysql -p"$(awk -F= '/^[[:space:]]*password[[:space:]]*=/ {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); gsub(/^["\047]|["\047]$/, "", $2); print $2}' /root/.my.cnf)" -e "show slave status;" -vv 2>/dev/null | grep -qi "Empty set"; } && ! grep -RIiE "disable_log_bin|skip-log-bin|skip_log_bin" /etc/my* >/dev/null 2>&1; then
 				# RHEL
 				if [[ $DISTR == "rhel" ]] && [[ -f /etc/my.cnf.d/mysql-server.cnf ]]
 				then
