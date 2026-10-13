@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.19.6"
+tweaker_current_version="0.20.0"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -1473,7 +1473,8 @@ for site in $($MGR_CTL webdomain | awk -F'name=' '{print $2}' | awk '{print $1}'
 		|| ! grep -i "site_gzip_level=5" <<< "$cfg" \
 		|| ! grep -i "site_expire_times=expire_times_max" <<< "$cfg" \
 		|| grep -i "site_srv_cache=off" <<< "$cfg" \
-		|| grep -i "site_ssi=on" <<< "$cfg"
+		|| grep -i "site_ssi=on" <<< "$cfg" \
+		|| grep -i "site_basedir=on" <<< "$cfg"
 	then
 		# check for dupes in array
 		found=0
@@ -1548,7 +1549,7 @@ if [[ -f $MGR_BIN ]]; then
 	ispmanager_enable_sites_tweaks_need_func
 	
 	if [[ $SITES_TWEAKS_NEEDED == "YES" ]]; then
-		printf "\n${GC}Tweaking ISP Manager sites include:${NC}\nsite_ssi=off\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
+		printf "\n${GC}Tweaking ISP Manager sites include:${NC}\nopen_basedir=off\nsite_ssi=off\nsite_ddosshield=off\nsite_gzip_level=5\nsite_srv_cache=on (client cache)\nsite_expire_times=expire_times_max (client cache)\nhsts=on (if TLS is enabled)\n"
 		echo
 		printf "${GC}"
 		read -p "Apply above tweaks ? [Y/n]" -n 1 -r
@@ -1563,7 +1564,7 @@ if [[ -f $MGR_BIN ]]; then
 				# so getting it
 				site_ipaddrs=$($MGR_CTL site.edit elid=${site} | awk -F'site_ipaddrs=' '{print $2}' | awk '{print $1}' | grep . | tr '\n' ',' | sed 's/,$//')
 
-				$MGR_CTL site.edit elid=${site} site_ddosshield=off site_ssi=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max site_ipaddrs=${site_ipaddrs} sok=ok
+				$MGR_CTL site.edit elid=${site} site_basedir=off site_ddosshield=off site_ssi=off site_gzip_level=5 site_hsts=on site_srv_cache=on site_expire_times=expire_times_max site_ipaddrs=${site_ipaddrs} sok=ok
 			done
 		else
 			printf "\n${YC}Tweaking ISP Manager sites was skipped.${NC} \n"
