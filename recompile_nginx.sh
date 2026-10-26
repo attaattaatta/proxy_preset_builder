@@ -15,7 +15,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.7.4"
+self_current_version="1.7.5"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -874,7 +874,6 @@ install_other_staff_func() {
 		rm -rf "SRC_DIR/ngx_brotli"
 		git clone --recurse-submodules https://github.com/google/ngx_brotli.git || {
 			echo "ERROR: Failed to clone ngx_brotli" >> "$NGX_RECOMPILE_LOG_FILE"
-			return 1
 		}
 		
 		echo "############################################"
