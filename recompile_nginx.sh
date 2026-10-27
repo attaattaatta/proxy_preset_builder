@@ -2,6 +2,9 @@
 #set -x -v
 #set -e -o pipefail | verbose
 
+# PROXY USE for curl and git (thanks to RKN)
+# PROXY_TYPE="socks5h or http" PROXY_IP="171.41.151.88" PROXY_PORT="5432" PROXY_USER="usr123" PROXY_PASS="123456" bash <this_script>
+
 # Fixing PATH
 export PATH=$PATH:/usr/sbin:/usr/local/sbin
 
@@ -15,7 +18,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.7.5"
+self_current_version="1.8.0"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -282,12 +285,83 @@ cleanup_sources_func() {
     printf " ${GC}OK${NC} (removed %d directories)\n" "$removed_count" >> "$NGX_RECOMPILE_LOG_FILE"
 }
 
+# git_clone function
+git_clone() {
+	local url="" dest="" arg
+	local clone_args=()
+	local cmd=(git -c http.connectTimeout=10 clone --progress)
+
+	if [[ -n "$PROXY_IP" && -n "$PROXY_PORT" ]]; then
+		local proxy="${PROXY_TYPE:-socks5h}://${PROXY_IP}:${PROXY_PORT}"
+		[[ -n "$PROXY_USER" && -n "$PROXY_PASS" ]] && proxy="${PROXY_TYPE:-socks5h}://${PROXY_USER}:${PROXY_PASS}@${PROXY_IP}:${PROXY_PORT}"
+		cmd+=( -c "http.proxy=$proxy" )
+		git config --global http.proxy "$proxy"
+	fi
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--recursive|--recurse-submodules)
+				clone_args+=("$1")
+				shift
+				;;
+			--branch|-b)
+				[[ $# -ge 2 ]] || return 1
+				clone_args+=("$1" "$2")
+				shift 2
+				;;
+			http://*|https://*)
+				url="$1"
+				shift
+				;;
+			*)
+				dest="$1"
+				shift
+				;;
+		esac
+	done
+
+	[[ -n "$url" ]] || {
+		echo "ERROR: Missing repository URL" >> "$NGX_RECOMPILE_LOG_FILE"
+		return 1
+	}
+
+	cmd+=("${clone_args[@]}")
+
+	local log_cmd=()
+	for arg in "${cmd[@]}"; do
+		[[ -n "$PROXY_PASS" ]] && arg="${arg//"$PROXY_PASS"/<hidden>}"
+		log_cmd+=("$arg")
+	done
+
+	printf 'Running:' >> "$NGX_RECOMPILE_LOG_FILE"
+	printf ' %q' "${log_cmd[@]}" "$url" >> "$NGX_RECOMPILE_LOG_FILE"
+	[[ -n "$dest" ]] && printf ' %q' "$dest" >> "$NGX_RECOMPILE_LOG_FILE"
+	printf '\n' >> "$NGX_RECOMPILE_LOG_FILE"
+
+	local clone_cmd=("${cmd[@]}" "$url")
+	[[ -n "$dest" ]] && clone_cmd+=("$dest")
+
+	"${clone_cmd[@]}" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || \
+	"${clone_cmd[@]}" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || \
+	"${clone_cmd[@]}" >> "$NGX_RECOMPILE_LOG_FILE" 2>&1 || {
+		echo "ERROR: Failed to clone $url" >> "$NGX_RECOMPILE_LOG_FILE"
+		return 1
+	}
+}
+
 # Get latest versions
 get_latest_versions_func() {
+
+	local curl_proxy=()
+	if [[ -n "$PROXY_IP" && -n "$PROXY_PORT" ]]; then
+		local proxy="${PROXY_TYPE:-socks5h}://${PROXY_IP}:${PROXY_PORT}"
+		[[ -n "$PROXY_USER" && -n "$PROXY_PASS" ]] && proxy="${PROXY_TYPE:-socks5h}://${PROXY_USER}:${PROXY_PASS}@${PROXY_IP}:${PROXY_PORT}"
+		curl_proxy=(--proxy "$proxy")
+	fi
 	printf "\nGetting latest versions..."
 	
 	latest_nginx_url="http://nginx.org/en/download.html"
-	latest_nginx=$(curl -skL $latest_nginx_url | grep -E -o "nginx-[0-9.]+\.tar[.a-z]*" | head -n 1)
+	latest_nginx=$(curl "${curl_proxy[@]}" -skL "$latest_nginx_url" | grep -E -o "nginx-[0-9.]+\.tar[.a-z]*" | head -n 1)
 	if [[ -z "$latest_nginx" ]]; then
 		printf " - ${RC}FAIL${NC}\n"
 		printf "${RC}Failed${NC} to get latest nginx version ( $latest_nginx_url )\n"
@@ -295,7 +369,7 @@ get_latest_versions_func() {
 	fi
 	
 	latest_libressl_url="http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/"
-	latest_libressl=$(curl -skL $latest_libressl_url | grep -E -o "libressl-[0-9.]+\.tar\.gz" | tail -n 1)
+	latest_libressl=$(curl "${curl_proxy[@]}" -skL $latest_libressl_url | grep -E -o "libressl-[0-9.]+\.tar\.gz" | tail -n 1)
 	if [[ -z "$latest_libressl" ]]; then
 		printf " - ${RC}FAIL${NC}\n"
 		printf "${RC}Failed${NC} to get latest libressl version ( $latest_libressl_url )\n"
@@ -303,7 +377,7 @@ get_latest_versions_func() {
 	fi
 
 	latest_glibc_url="http://ftp.gnu.org/gnu/glibc/"
-	latest_glibc=$(curl -skL $latest_glibc_url | grep -E -o "glibc-[0-9.]+\.tar\.gz*" | tail -n 1)
+	latest_glibc=$(curl "${curl_proxy[@]}" -skL $latest_glibc_url | grep -E -o "glibc-[0-9.]+\.tar\.gz*" | tail -n 1)
 	if [[ -z "$latest_glibc" ]]; then
 		printf " - ${RC}FAIL${NC}\n"
 		printf "${RC}Failed${NC} to get latest glibc version ( $latest_glibc_url )\n"
@@ -684,7 +758,7 @@ build_brotli_func() {
 		} >> "$NGX_RECOMPILE_LOG_FILE"
 		
 		cd "$SRC_DIR" || exit 1
-		git clone https://github.com/Kitware/CMake.git >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
+		git_clone https://github.com/Kitware/CMake.git >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 		cd CMake && git checkout v3.20.6 >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
 		cd "$SRC_DIR/CMake" || return 1
 		bash bootstrap --system-curl -- -DOPENSSL_ROOT_DIR=/usr/local/src/openssl_latest -DOPENSSL_LIBRARIES=/usr/local/src/openssl_latest/lib >> "$NGX_RECOMPILE_LOG_FILE" 2>&1
@@ -717,7 +791,14 @@ install_other_staff_func() {
 		echo "ERROR: Failed to cd to $SRC_DIR" >> "$NGX_RECOMPILE_LOG_FILE"
 		exit 1
 	}
-	
+
+	local curl_proxy=()
+	if [[ -n "$PROXY_IP" && -n "$PROXY_PORT" ]]; then
+		local proxy="${PROXY_TYPE:-socks5h}://${PROXY_IP}:${PROXY_PORT}"
+		[[ -n "$PROXY_USER" && -n "$PROXY_PASS" ]] && proxy="${PROXY_TYPE:-socks5h}://${PROXY_USER}:${PROXY_PASS}@${PROXY_IP}:${PROXY_PORT}"
+		curl_proxy=(--proxy "$proxy")
+	fi
+
 	{
 		echo "############################################"
 		echo "DOWNLOADING NGINX SOURCE"
@@ -729,7 +810,7 @@ install_other_staff_func() {
 		fi
 		
 		echo "Downloading: https://nginx.org/download/${latest_nginx}"
-		wget -nc --no-check-certificate "https://nginx.org/download/${latest_nginx}" || {
+		[[ -s "${latest_nginx}" && $(stat -c %s "${latest_nginx}") -gt 1048576 ]] || curl "${curl_proxy[@]}" -kLf --retry 2 -O "https://nginx.org/download/${latest_nginx}" || {
 			echo "ERROR: Failed to download nginx source" >> "$NGX_RECOMPILE_LOG_FILE"
 			exit 1
 		}
@@ -737,7 +818,9 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "DOWNLOADING LIBRESSL SOURCE"
 		echo "############################################"
-		wget -nc --no-check-certificate "${latest_libressl_url}${latest_libressl}" || {
+		
+		echo "Downloading: http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/${latest_libressl}"
+		[[ -s "${latest_libressl}" && $(stat -c %s "${latest_libressl}") -gt 1048576 ]] || curl "${curl_proxy[@]}" -kLf --retry 2 -O "${latest_libressl_url}${latest_libressl}" || {
 			echo "ERROR: Failed to download libressl source" >> "$NGX_RECOMPILE_LOG_FILE"
 			return 1
 		}
@@ -745,7 +828,8 @@ install_other_staff_func() {
 		echo "############################################"
 		echo "DOWNLOADING GLIBC SOURCE"
 		echo "############################################"
-		wget -nc --no-check-certificate "${latest_glibc_url}${latest_glibc}" || {
+		echo "Downloading: http://ftp.gnu.org/gnu/glibc/${latest_glibc}"
+		[[ -s "${latest_glibc}" && $(stat -c %s "${latest_glibc}") -gt 1048576 ]] || curl "${curl_proxy[@]}" -kLf --retry 2 -O "${latest_glibc_url}${latest_glibc}" || {
 			echo "ERROR: Failed to download glibc source" >> "$NGX_RECOMPILE_LOG_FILE"
 			return 1
 		}
@@ -776,46 +860,43 @@ install_other_staff_func() {
 				echo "ERROR: Failed to extract ${latest_libressl}" >> "$NGX_RECOMPILE_LOG_FILE"
 			}
 		fi
-		
-		git config --global http.postBuffer 157286400
-		git config --global http.version HTTP/1.1
 
 		echo "############################################"
 		echo "CLONING NGINX SUBSTITUTIONS FILTER MODULE"
 		echo "############################################"
-		git clone https://github.com/yaoweibin/ngx_http_substitutions_filter_module.git "$SRC_DIR/ngx_http_substitutions_filter_module" || {
+		git_clone https://github.com/yaoweibin/ngx_http_substitutions_filter_module.git "$SRC_DIR/ngx_http_substitutions_filter_module" || {
 			echo "ERROR: Failed to clone substitutions filter module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
 		echo "############################################"
 		echo "CLONING NGINX LUA MODULE"
 		echo "############################################"
-		git clone https://github.com/vision5/ngx_devel_kit.git "$SRC_DIR/ngx_lua_devel_kit" || {
+		git_clone https://github.com/vision5/ngx_devel_kit.git "$SRC_DIR/ngx_lua_devel_kit" || {
 			echo "ERROR: Failed to clone lua devel kit" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
-		git clone https://github.com/openresty/lua-nginx-module.git "$SRC_DIR/ngx_http_lua_module" || {
+		git_clone https://github.com/openresty/lua-nginx-module.git "$SRC_DIR/ngx_http_lua_module" || {
 			echo "ERROR: Failed to clone lua module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
-		git clone https://github.com/openresty/lua-resty-core.git "$SRC_DIR/lua-resty-core" || {
+		git_clone https://github.com/openresty/lua-resty-core.git "$SRC_DIR/lua-resty-core" || {
 			echo "ERROR: Failed to clone resty core module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
-		git clone https://github.com/openresty/lua-resty-lrucache.git "$SRC_DIR/lua-resty-lrucache" || {
+		git_clone https://github.com/openresty/lua-resty-lrucache.git "$SRC_DIR/lua-resty-lrucache" || {
 			echo "ERROR: Failed to clone resty lrucache module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
 		echo "############################################"
 		echo "CLONING NGINX ZSTD MODULE"
 		echo "############################################"
-		git clone https://github.com/tokers/zstd-nginx-module.git "$SRC_DIR/ngx_http_zstd_module" || {
+		git_clone https://github.com/tokers/zstd-nginx-module.git "$SRC_DIR/ngx_http_zstd_module" || {
 			echo "ERROR: Failed to clone zstd module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
 		echo "############################################"
 		echo "CLONING BORINGSSL"
 		echo "############################################"
-		git clone --recursive https://github.com/google/boringssl.git || {
+		git_clone --recursive https://github.com/google/boringssl.git || {
 			echo "ERROR: Failed to clone boringssl" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 		
@@ -823,7 +904,7 @@ install_other_staff_func() {
 		echo "CLONING LASTEST OPENSSL"
 		echo "############################################"
 		rm -rf "$SRC_DIR/openssl_latest"
-		git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl_latest" && \
+		git_clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl_latest" && \
 		cd "$SRC_DIR/openssl_latest" && \
 		git checkout "$(git tag | grep -E '^openssl-[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)" && \
 		cd "$SRC_DIR" || {
@@ -835,7 +916,7 @@ install_other_staff_func() {
 		echo "CLONING LASTEST OPENSSL 3"
 		echo "############################################"
 		rm -rf "$SRC_DIR/openssl3"
-		git clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && \
+		git_clone https://github.com/openssl/openssl.git "$SRC_DIR/openssl3" && \
 		cd "$SRC_DIR/openssl3" && \
 		git checkout "$(git tag | grep -E '^openssl-3\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)" && \
 		cd "$SRC_DIR" || {
@@ -847,7 +928,7 @@ install_other_staff_func() {
 		echo "CLONING OPENSSL 1.1.1"
 		echo "############################################"
 		rm -rf "$SRC_DIR//openssl1"
-		git clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1" || {
+		git_clone --branch OpenSSL_1_1_1-stable https://github.com/openssl/openssl.git "$SRC_DIR/openssl1" || {
 			echo "ERROR: Failed to clone openssl1" >> "$NGX_RECOMPILE_LOG_FILE"
 			exit 1
 		}
@@ -872,28 +953,28 @@ install_other_staff_func() {
 		echo "CLONING NGINX BROTLI MODULE"
 		echo "############################################"
 		rm -rf "SRC_DIR/ngx_brotli"
-		git clone --recurse-submodules https://github.com/google/ngx_brotli.git || {
+		git_clone --recurse-submodules https://github.com/google/ngx_brotli.git || {
 			echo "ERROR: Failed to clone ngx_brotli" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 		
 		echo "############################################"
 		echo "CLONING NGINX GEOIP2 MODULE"
 		echo "############################################"
-		git clone https://github.com/leev/ngx_http_geoip2_module.git || {
+		git_clone https://github.com/leev/ngx_http_geoip2_module.git || {
 			echo "ERROR: Failed to clone geoip2" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 		
 		echo "############################################"
 		echo "CLONING NGINX HEADERS MORE MODULE"
 		echo "############################################"
-		git clone https://github.com/openresty/headers-more-nginx-module.git || {
+		git_clone https://github.com/openresty/headers-more-nginx-module.git || {
 			echo "ERROR: Failed to clone headers_more" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 		
 		echo "############################################"
 		echo "CLONING NGINX PUSH STREAM MODULE"
 		echo "############################################"
-		git clone https://github.com/wandenberg/nginx-push-stream-module.git || {
+		git_clone https://github.com/wandenberg/nginx-push-stream-module.git || {
 			echo "ERROR: Failed to clone push_stream" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 		
@@ -926,14 +1007,14 @@ build_modsecurity_func() {
 		echo "############################################"
 		echo "CLONING NGINX MOD SECURITY MODULE"
 		echo "############################################"
-		git clone https://github.com/owasp-modsecurity/ModSecurity-nginx.git "$SRC_DIR/ModSecurity-nginx" || {
+		git_clone https://github.com/owasp-modsecurity/ModSecurity-nginx.git "$SRC_DIR/ModSecurity-nginx" || {
 			echo "ERROR: Failed to clone ModSecurity-nginx connector module" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
 		echo "############################################"
 		echo "CLONING MODSECURITY"
 		echo "############################################"
-		git clone https://github.com/owasp-modsecurity/ModSecurity.git "$SRC_DIR/ModSecurity" || {
+		git_clone https://github.com/owasp-modsecurity/ModSecurity.git "$SRC_DIR/ModSecurity" || {
 			echo "ERROR: Failed to clone ModSecurity" >> "$NGX_RECOMPILE_LOG_FILE"
 		}
 
