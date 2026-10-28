@@ -18,7 +18,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.8.0"
+self_current_version="1.8.1"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -1070,7 +1070,7 @@ install_rhel_dependencies_func() {
 		echo "############################################"
 		echo "INSTALLING REQUIRED PACKAGES"
 		echo "############################################"
-		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core cmake cmake3 pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel yajl-devel lmdb-devel ssdeep-devel libxml2-devel autoconf automake libtool; do
+		for package in perl wget curl git gcc gcc-c++ unzip make libuuid-devel uuid-devel pcre-devel libmaxminddb-devel zlib-devel openssl-devel libunwind-devel gnupg libidn-devel libxslt-devel gd-devel GeoIP-devel yum-plugin-versionlock perl-interpreter perl-core cmake cmake3 pcre2-devel perl-IPC-Cmd libcurl-devel perl-devel perl-Time-Piece luajit-devel libzstd-devel yajl-devel lmdb-devel ssdeep-devel libxml2-devel autoconf automake libtool gperftools-devel; do
 			yum -y install $package
 		done
 
