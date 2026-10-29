@@ -18,7 +18,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.8.2"
+self_current_version="1.8.3"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -1060,13 +1060,16 @@ install_rhel_dependencies_func() {
 			echo "############################################"
 			sed -i "s/^mirrorlist=/#mirrorlist=/g" /etc/yum.repos.d/CentOS-*
 			sed -i "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*
-			yum --enablerepo=updates clean metadata
+			rm -f /etc/yum.repos.d/epel-testing.repo /etc/yum.repos.d/epel.repo /etc/yum.repos.d/mariadb.repo
+			yum clean metadata
 		fi
 		
 		echo "############################################"
 		echo "INSTALLING EPEL AND DEVELOPMENT TOOLS"
 		echo "############################################"
+		yum -y remove epel-release
 		yum -y install epel-release
+		yum -y update || { printf "\n${RC}ERROR - yum update failed, fix it and restart this script${NC}\n" | tee -a "$NGX_RECOMPILE_LOG_FILE" >&2; exit 1; }
 		yum -y groupinstall 'Development Tools'
 		
 		echo "############################################"
