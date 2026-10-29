@@ -18,7 +18,7 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.8.1"
+self_current_version="1.8.2"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
@@ -290,6 +290,8 @@ git_clone() {
 	local url="" dest="" arg
 	local clone_args=()
 	local cmd=(git -c http.connectTimeout=10 clone --progress)
+
+	git config --global http.version HTTP/1.1
 
 	if [[ -n "$PROXY_IP" && -n "$PROXY_PORT" ]]; then
 		local proxy="${PROXY_TYPE:-socks5h}://${PROXY_IP}:${PROXY_PORT}"
