@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.20.0"
+tweaker_current_version="0.21.0"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -2525,6 +2525,17 @@ if nginx_exists_check_func; then
 			["tcp_nodelay"]="on"
 			["server_names_hash_bucket_size"]="512"
 			["server_names_hash_max_size"]="1024"
+			["send_timeout"]="300s"
+			["fastcgi_read_timeout"]="300s"
+			["fastcgi_send_timeout"]="300s"
+			["fastcgi_connect_timeout"]="300s"
+			["keepalive_timeout"]="300s"
+			["keepalive_requests"]="100"
+			["proxy_connect_timeout"]="300s"
+			["proxy_read_timeout"]="300s"
+			["proxy_send_timeout"]="300s"
+			["client_body_timeout"]="300s"
+			["client_header_timeout"]="300s"
 		)
 		
 		# Display parameters that will be checked and optimized
