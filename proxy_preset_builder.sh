@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.21.0"
+tweaker_current_version="0.22.0"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -2704,105 +2704,158 @@ disable_tls13_func() {
 # tweaker add nginx bad robot conf
 tweak_add_nginx_bad_robot_conf_func() {
 
-	# check nginx exists
-	if nginx_exists_check_func; then
+# check nginx exists
+if nginx_exists_check_func; then
 
-		local NGINX_BAD_ROBOT_MAP_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/tweaker_files/bad_robot_rate_limit.conf"
-		local NGINX_BAD_ROBOT_MAP_FILE_LOCAL=""
-		local NGINX_HTTP_UA_FILE
-		NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' /etc/nginx/* 2>/dev/null || printf "${RC}not found${NC}")
-		
-		# bad_robot.conf file path depending the environment
-		# if ISP Manager
-		if [[ -f $MGR_BIN ]]; then
-			local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_rate_limit.conf"
-		# if Bitrix
-		elif [[ $BITRIXALIKE == "yes" ]]; then
-			# Bitrix Env or GT
-			if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
-				local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/bx/maps/bad_robot_rate_limit.conf"
-				
-				# fix could not build optimal proxy_headers_hash
-				printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
-
-			# Other one bitrix "vanilla"
-			elif [[ $BITRIX == "VANILLA" ]]; then
-				local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_rate_limit.conf"
-			else
-				true
-			fi
+	local NGINX_BAD_ROBOT_MAP_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/tweaker_files/bad_robot_map.conf"
+	local NGINX_BAD_ROBOT_FILE_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/tweaker_files/bad_robot.conf"
+	local NGINX_BAD_ROBOT_MAP_FILE_LOCAL=""
+	local NGINX_BAD_ROBOT_FILE_LOCAL=""
+	local NGINX_HTTP_UA_FILE=$(grep -RliE '\s*if\s*\(\s*\$(http_user_agent|is_bad_robot)' /etc/nginx/* 2>/dev/null || printf "${LRV}not found${NCV}")
+	
+	# bad_robot.conf file path depending the environment
+	# if ISP Manager
+	if [[ -f $MGR_BIN ]]; then
+		local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/vhosts-includes/bad_robot.conf"
+		local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
+	# if Bitrix
+	elif [[ $BITRIXALIKE == "yes" ]]; then
+		# Bitrix Env or GT
+		if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
+			local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/bx/conf/bad_robot.conf"
+			local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/bx/maps/bad_robot_map.conf"
+		# Other one bitrix "vanilla"
+		elif [[ $BITRIX == "VANILLA" ]]; then
+			local NGINX_BAD_ROBOT_FILE_LOCAL="/etc/nginx/conf.d/bad_robot.conf"
+			local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
 		else
 			true
 		fi
-		
-		# if nginx check show no $http_user_agent or $is_bad_robot configs, proceed
-		if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*\$(http_user_agent)|map \$http_user_agent \$is_bad_robot' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
-		
-			echo
-			read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
-			echo
-			if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
-		
-				# checking nginx configuration sanity
-				if ! nginx_conf_sanity_check_fast; then
-					printf "\nNginx config test ${RC}failed${NC}. Aborting"
-					return 1
-				fi
-
-				# downloading NGINX_BAD_ROBOT_MAP_FILE_URL
-				if [[ -n $NGINX_BAD_ROBOT_MAP_FILE_URL ]]; then
-					if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
-						return 1
-					fi
-				fi
-
-				# checking bad_robot file exists in nginx config
-				printf "\nChecking bad robot rate limit file exists in nginx config"
-				if 2>&1 nginx -T | grep -iE 'map\s*\$http_user_agent\s*\$is_bad_robot' > /dev/null 2>&1; then
-					printf " - ${GC}OK${NC}"
-				else
-					printf " - ${RC}FAIL${NC}"
-				fi
-		
-				# checking nginx configuration sanity again
-				if ! nginx_conf_sanity_check_fast; then
-					printf "\nNginx config test ${RC}failed${NC}. Aborting"
-					return 1
-				fi
-			else
-				# user chose not to install bad_robot_rate_limit.conf in nginx 
-				printf "\n${YC}Nginx's bad_robot_rate_limit.conf include was skipped.${NC} \n"
+	else
+		true
+	fi
+	
+	# if nginx check show no $http_user_agent or $is_bad_robot configs, proceed
+	if ! 2>&1 nginx -T | grep -iE 'if\s*\(\s*\$(http_user_agent|is_bad_robot)' | grep -v '^[[:space:]]*#' > /dev/null 2>&1 ; then
+	
+		echo
+		read -p "Add nginx blocking of annoying bots ? [Y/n]" -n 1 -r
+		echo
+		if ! [[ $REPLY =~ ^[Nn]$ ]]; then
+	
+			# checking nginx configuration sanity
+			if ! nginx_conf_sanity_check_fast; then
+				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
+				return 1
 			fi
-		
-		# updating bad_robot_rate_limit.conf
-		elif ( [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE 'map\s*\$http_user_agent\s*\$is_bad_robot' > /dev/null 2>&1 ); then
 
-			local remote_bad_robot_map_file_size_bytes
-			remote_bad_robot_map_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_MAP_FILE_URL})
-			local local_bad_robot_map_file_size_bytes
-			local_bad_robot_map_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} 2>/dev/null || echo 0)
-		
-			if [[ ${remote_bad_robot_map_file_size_bytes} -gt 30 ]] && [[ ${remote_bad_robot_map_file_size_bytes} -ne ${local_bad_robot_map_file_size_bytes} ]]; then
-				printf "\n${YC}Updating${NC} existing ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} to the latest version "
-				# downloading nginx bad_robot_rate_limit.conf file
+			# if ISP Manager
+			if [[ -f $MGR_BIN ]]; then
+				true
+
+			# if Bitrix
+			elif [[ $BITRIXALIKE == "yes" ]]; then
+	
+				# Bitrix Env or GT
+				if [[ $BITRIX == "ENV" ]] || [[ $BITRIX == "GT" ]]; then
+					local bitrix_nginx_general_conf="/etc/nginx/bx/conf/bitrix_general.conf"
+	
+					# fix could not build optimal proxy_headers_hash
+					printf "proxy_headers_hash_max_size 1024;\nproxy_headers_hash_bucket_size 128;" > /etc/nginx/bx/settings/proxy_headers_hash.conf
+	
+				# Other one bitrix "vanilla"
+				elif [[ $BITRIX == "VANILLA" ]]; then
+					local bitrix_nginx_general_conf="/etc/nginx/conf.d/bitrix_general.conf"
+				else
+					printf "\n${LRV}Error.${NCV} Unknown bitrix environment. Link - ${NGINX_BAD_ROBOT_FILE_URL}\n"
+					return 1
+				fi
+	
+				if [[ ! -z $bitrix_nginx_general_conf ]]  && ! grep -q "bad_robot.conf" $bitrix_nginx_general_conf > /dev/null 2>&1; then
+						sed -i "1s@^@# bad robots block added $(date '+%d-%b-%Y-%H-%M-%Z') \ninclude ${NGINX_BAD_ROBOT_FILE_LOCAL};\n@" $bitrix_nginx_general_conf
+				else
+					printf "\n${LRV}Error.${NCV} bitrix_nginx_general_conf is not set or include already exists ( check grep -in \"bad_robot.conf\" $bitrix_nginx_general_conf ). Include failed.\n"
+					return 1
+				fi
+
+			# if default install
+			elif 2>&1 nginx -T | grep -iq "include /etc/nginx/conf.d/\*.conf;" > /dev/null 2>&1 && ! 2>&1 nginx -T | grep -iqE 'if\s*\(\s*\$(http_user_agent|is_bad_robot)' > /dev/null 2>&1; then
+				local NGINX_BAD_ROBOT_MAP_FILE_LOCAL="/etc/nginx/conf.d/bad_robot_map.conf"
+				printf "\n${YCV}Cannot detect this nginx environment${NCV}\n"
+				printf "\nBad bot map file will be placed in - ${GCV}${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}${NCV}\n"
+				printf "\nDownload ${GCV}${NGINX_BAD_ROBOT_FILE_URL}${NCV} to all servers includes yourself\n"
+			else
+				printf "\n${LRV}Error.${NCV}\nUnknown environment.\nDon't know where to place the include.\nLinks:\n ${NGINX_BAD_ROBOT_FILE_URL}\n ${NGINX_BAD_ROBOT_MAP_FILE_URL}\n"
+				return 1
+			fi
+
+			# downloading NGINX_BAD_ROBOT_FILE_URL and NGINX_BAD_ROBOT_MAP_FILE_URL
+			if [[ -n $NGINX_BAD_ROBOT_MAP_FILE_URL ]]; then
+
 				if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
+					return 1
+				fi
+			fi
+
+			if [[ -n $NGINX_BAD_ROBOT_FILE_LOCAL ]]; then
+				if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$NGINX_BAD_ROBOT_FILE_LOCAL"; then
+					return 1
+				fi
+			fi
+
+			# checking bad_robot files exist in nginx config
+			printf "\nChecking bad robot files exists in nginx config"
+			if 2>&1 nginx -T | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1; then
+				printf " - ${GCV}OK${NCV}"
+			else
+				printf " - ${LRV}FAIL${NCV}"
+			fi
+	
+			# checking nginx configuration sanity again
+			if ! nginx_conf_sanity_check_fast; then
+				printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
+				return 1
+			fi
+		else
+			# user chose not to install bad_robot.conf in nginx 
+			printf "\n${YCV}Nignx's bad_robot_map.conf and bad_robot.conf include was skipped.${NCV} \n"
+		fi
+	
+	# updating bad_robot_map.conf and bad_robot.conf
+	elif ( [[ -f "${NGINX_BAD_ROBOT_MAP_FILE_LOCAL}" ]] && [[ -f "${NGINX_BAD_ROBOT_FILE_LOCAL}" ]] && nginx -T 2>&1 | grep -iE '\s*if\s*\(\s*\$is_bad_robot' > /dev/null 2>&1 ) || grep -q '\$http_user_agent' "${NGINX_BAD_ROBOT_FILE_LOCAL}" 2>/dev/null; then
+
+		local remote_bad_robot_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_FILE_URL})
+		local local_bad_robot_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_FILE_LOCAL} 2>/dev/null || echo 0)
+
+		local remote_bad_robot_map_file_size_bytes=$(get_remote_file_size_bytes ${NGINX_BAD_ROBOT_MAP_FILE_URL})
+		local local_bad_robot_map_file_size_bytes=$(stat --printf="%s" ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} 2>/dev/null || echo 0)
+	
+		if [[ ${remote_bad_robot_map_file_size_bytes} -gt 30 ]] && [[ ${remote_bad_robot_map_file_size_bytes} -ne ${local_bad_robot_map_file_size_bytes} ]]; then
+			printf "\n${YCV}Updating${NCV} existing ${NGINX_BAD_ROBOT_MAP_FILE_LOCAL} to the latest version "
+			# downloading nginx bad_robot_map.conf and bad_robot.conf file
+			if ! download_file_func "$NGINX_BAD_ROBOT_MAP_FILE_URL" "$NGINX_BAD_ROBOT_MAP_FILE_LOCAL"; then
+				return 1
+			
+			else
+				if ! download_file_func "$NGINX_BAD_ROBOT_FILE_URL" "$NGINX_BAD_ROBOT_FILE_LOCAL"; then
 					return 1
 				else
 					# checking nginx configuration sanity
 					if ! nginx_conf_sanity_check_fast; then
-						printf "\nNginx config test ${RC}failed${NC}. Aborting"
+						printf "\nNginx config test ${LRV}failed${NCV}. Aborting"
 						return 1
 					fi
 				fi
-			else
-				printf "\nAdding nginx bad robot rate limit block was ${GC}already done${NC} in file ${NGINX_HTTP_UA_FILE}\n"
 			fi
 		else
-			printf "\nAdding nginx bad robot rate limit block was ${GC}already done${NC} in file ${NGINX_HTTP_UA_FILE}\n" 
+			printf "\nAdding nginx bad robot block was ${GCV}already done${NCV} in file ${NGINX_HTTP_UA_FILE}\n"
 		fi
 	else
-		return 1
-	fi	
+		printf "\nAdding nginx bad robot block was ${GCV}already done${NCV} in file ${NGINX_HTTP_UA_FILE}\n" 
+	fi
+else
+	return 1
+fi	
 }
 
 bitrix_reg_fix() {
