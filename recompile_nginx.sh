@@ -18,13 +18,18 @@ NC="\033[0m"
 SHARED_BASH_FUNCTIONS_URL="https://gitlab.hoztnode.net/admins/scripts/-/raw/master/bash_shared_functions.sh"
 
 # Show script version
-self_current_version="1.8.4"
+self_current_version="1.9.0"
 printf "\n${YC}Hello${NC}, my version is ${YC}$self_current_version\n\n${NC}"
 
 # Check privileges
 if [[ $EUID -ne 0 ]]; then
 	printf "\n${RC}ERROR - This script must be run as root.${NC}"
 	exit 1
+fi
+
+# Check running inside screen
+if [[ -z "$STY" ]]; then
+	printf "\n${YC}WARNING: Script is running outside screen (it's better to run me inside)\n${NC}"
 fi
 
 # one instance run lock
