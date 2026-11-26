@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.23.0"
+tweaker_current_version="0.23.1"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -644,7 +644,7 @@ tweak_cve_func() {
 
 	# Kernel update
 	echo
-	b="/tmp/kernel_update"; wget -qO "$b" "$(wget -qO- https://bit.ly/4eX86G0 | grep browser_download_url | grep -v .exe | cut -d '"' -f 4)" && chmod +x "$b" && "$b"
+	b="/root/kernel_update" && rm -f $b && curl -fsSL https://bit.ly/4eX86G0 -o $b && chmod +x $b && $b
 
 	# CVE-2026-42945 (NGINX Rift) / CVE-2026-9256 (nginx-poolslip) / CVE-2026-42926 / CVE-2026-40701/ CVE-2026-42946 / nginx2root
 	echo
