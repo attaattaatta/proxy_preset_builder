@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.23.1"
+tweaker_current_version="0.24.0"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -1535,7 +1535,7 @@ if [[ -f $MGR_BIN ]]; then
 		if [[ ! $REPLY =~ ^([Nn]|$'\xd1\x82'|$'\xd0\xa2')$ ]]; then
 			# Enable http/2 isp manager
 			printf "Running"
-			if $MGR_CTL websettings http2=on sok=ok > /dev/null 2>&1; then
+			if $MGR_CTL websettings http2=on external_ssl=on external_ssl_port=1501 sok=ok > /dev/null 2>&1; then
 				printf " - ${GC}OK${NC}\n"
 			else
 				printf " - ${RC}FAIL${NC}\n"
