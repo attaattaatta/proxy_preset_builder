@@ -17,7 +17,7 @@ printf "   ____  ____  ____        _ _     _           \n  |  _ \\|  _ \\| __ ) 
 
 # script version
 self_current_version="1.1.35"
-tweaker_current_version="0.24.0"
+tweaker_current_version="0.24.1"
 
 printf "\n   ${YC}v${YC}$self_current_version\n\n${NC}"
 
@@ -2537,19 +2537,15 @@ if nginx_exists_check_func; then
 			["client_body_timeout"]="300s"
 			["client_header_timeout"]="300s"
 		)
-		
+
 		# Display parameters that will be checked and optimized
 		echo "The following nginx parameters will be checked and optimized:"
 		echo
 		
-		# Display base nginx parameters
-		for param in "${!BASE_NGINX_PARAMS[@]}"; do
-			printf "  - %-35s %s\n" "$param" "(${BASE_NGINX_PARAMS[$param]})"
-		done
-		
-		# Display additional nginx parameters
-		for param in "${!NGINX_PARAMS[@]}"; do
-			printf "  - %-35s %s\n" "$param" "(${NGINX_PARAMS[$param]})"
+		# Display all nginx parameters in alphabetical order
+		for param in $(printf '%s\n' "${!BASE_NGINX_PARAMS[@]}" "${!NGINX_PARAMS[@]}" | sort); do
+			val="${BASE_NGINX_PARAMS[$param]:-${NGINX_PARAMS[$param]}}"
+			printf "  - %-35s %s\n" "$param" "($val)"
 		done
 		
 		echo
@@ -3273,12 +3269,12 @@ then
 	# execute recompilation script
 	bash "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" 
 	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
-	exit 0
+	return 0
 else
 	printf "\n${RLV}Download $GIT_THE_CHOSEN_ONE_DOMAIN_NAME$GIT_THE_CHOSEN_ONE_REQ_URI/$NGX_RECOMPILE_SCRIPT_NAME failed${NC}\n"
 	\rm -f "/tmp/$NGX_RECOMPILE_SCRIPT_NAME" > /dev/null 2>&1
 	EXIT_STATUS=1
-	exit 1
+	return 1
 fi
 }
 
